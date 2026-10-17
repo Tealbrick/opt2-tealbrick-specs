@@ -343,5 +343,11 @@ test("v0.1.45 (HOOK-CALLER-PRODUCT): hook call info carries the verified product
 test("v0.1.46 (GRANT-PRD): a companion grant may carry the signed product of its subject", async () => {
   const c: Pick<import("../src/credentials.ts").CompanionGrantClaims, "sub" | "mode" | "prd"> = { sub: "tb:ins:01M53BAEQSGKVVY4PRM2VE6FBF" as never, mode: "bound", prd: "observer" };
   assert.equal(c.prd, "observer");
-  assert.equal(SPEC_VERSION, "0.1.46");
+});
+
+test("v0.1.47 (SDK-INSTANCE-GRANT): person-op scope grants are typed; rows say who wrote them", async () => {
+  const row: import("../src/sdk.ts").ScopeGrantRow = { agent: "agt_01M4TNVDHPXJGTHATZV5SVJHX9" as never, type: "project", instanceId: "p1", access: "contribute", source: "app", grantedByOp: "draft_start" };
+  const api: import("../src/sdk.ts").ScopeGrantApi = { grant: async () => row, revoke: async () => {} };
+  assert.equal((await api.grant(row.agent, "project", "p1", "contribute")).source, "app");
+  assert.equal(SPEC_VERSION, "0.1.47");
 });

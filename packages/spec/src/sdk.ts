@@ -400,6 +400,11 @@ export interface OpContext {
   workspace: WorkspaceId;
   /** v0.1.3 (C31): create scope instances outside events.agentAdded (person ops, public routes) */
   scopes: Pick<ScopeStore, "instances">;
+  /** v0.1.47 (SDK-INSTANCE-GRANT): set ONLY when the caller is a person (person ops, SDK >= 0.1.31); undefined on agent and
+   *  app calls. An agent op may narrow its OWN access only through `ctx.scopeSelfRevoke`. */
+  scopeGrants?: ScopeGrantApi;
+  /** v0.1.47: agent callers only — drop the calling agent's own access to one instance (narrowing is always allowed). */
+  scopeSelfRevoke?: (type: string, instanceId: string) => Promise<void>;
   /** v0.1.3 (C31): THE app-secret mechanism */
   secrets: AppSecrets;
   /** v0.1.13 (C86): push the status (pendingHolds) now; debounced 1 s, at most one push per second */
@@ -700,6 +705,20 @@ export interface ScopeGrantRow {
   instanceId: string;
   /** access level id from manifest scopes[].access */
   access: string;
+  /** v0.1.47 (SDK-INSTANCE-GRANT): who wrote the row — manifest defaultGrants, the owner's Agents & scopes page
+   *  (tb.scopes_set), or the app inside a person op (`grantedByOp` = that op id). Absent from SDKs before 0.1.31. */
+  source?: "default" | "owner" | "app";
+  grantedByOp?: string;
+}
+/** v0.1.47 (SDK-INSTANCE-GRANT): an app gives one agent access to one scope instance inside a PERSON op the owner just
+ *  confirmed (the browser session + the op's own confirmation is the consent). Bounds (else refuse `scope_grant_invalid`
+ *  400): `type` is a manifest scope type, `instanceId` exists, `access` is a level of that type and not above the agent
+ *  ceiling the manifest allows agents (defaultGrants / scopes[].access), the agent is in the verified slice with an edge to
+ *  this app. Audited like tb.scopes_set (`scope.set`, person principal, op id, call id). Never available on agent or app
+ *  calls: an agent never widens its own or another card's access (L12, L13). */
+export interface ScopeGrantApi {
+  grant(agent: AgentId, type: string, instanceId: string, access: string): Promise<ScopeGrantRow>;
+  revoke(agent: AgentId, type: string, instanceId: string): Promise<void>;
 }
 export interface ScopeStore {
   instances: {
