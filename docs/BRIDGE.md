@@ -146,6 +146,7 @@ Licence-last (J1, REVIEW R4): an app deployed while unpaid is in `apps[]` with `
 The bridge sends tool inputs, grants, call proofs, hook envelopes and the owner's proxied UI traffic to `internalUrl`, so a compromised Portal must not be able to point it anywhere else. Accepted forms (`isPrivateInternalUrl`, `@opt2-tealbrick/manifest`):
 - deployed: `http://<name>.railway.internal:<port>` (schema `$defs/internalUrl`: `^http://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9-]+)*\.railway\.internal:[0-9]{1,5}$`, port 1–65535);
 - own infrastructure: any `http(s)://host[:port]` origin ONLY when the app entry has `ownInfra: true` AND the origin is listed in the bridge-local env `TB_OWN_INFRA_ORIGINS` (comma-separated origins, exact match after URL normalisation; set by the owner on their own infrastructure, never by Portal; Core never writes it at `bridge.deploy`).
+  C268: prefer an https internal origin; on plain http, anything on your network path can change hook calls until bridge 0.2.4 (hook proofs then bind the whole hook request, claim `bd`).
 Anything else: the app is not routed (no manifest fetch, no op/hook/launch/public-route forwarding; calls answer `app_unavailable`), the config is otherwise applied, and the status report counts `rejected {kind: "config", code: "internal_url_refused"}`. The same rule applies to a neighbour claim's `internalUrl` (§10.2), evaluated as own infrastructure: refused → `403 internal_url_refused`, claim not recorded.
 
 ## 6. Agent sign-in (K5 issuance, CREDENTIALS §8)
