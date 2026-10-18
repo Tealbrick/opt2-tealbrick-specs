@@ -365,5 +365,18 @@ test("v0.1.48 (SDK-COMPANION-CALLERS, C240): slice companion callers carry provi
   assert.equal(v({ ...c, provider: "Own Infra" }), false);
   const fn: NonNullable<import("../src/sdk.ts").OpContext["companionCallers"]> = () => [c];
   assert.equal(fn()[0]?.provider, "own_infra");
-  assert.equal(SPEC_VERSION, "0.1.48");
+});
+
+test("v0.1.49 (C240 S2 + C261): verified Caller.listed; slice appCallers \"verified\"", async () => {
+  const caller: import("../src/sdk.ts").Caller = { type: "app", id: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, name: "Observer", mode: null, product: "observer" as never, listed: true };
+  assert.equal(caller.listed, true);
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const slice = load("instance-slice.schema.json");
+  const v = ajv.compile({ ...slice.properties.appCallers, $id: new URL("tbtest-app-callers.json", slice.$id).href });
+  assert.equal(v("verified"), true);
+  assert.equal(v("lenient"), false);
+  const s: Pick<import("../src/bridge.ts").InstanceSlice, "appCallers"> = { appCallers: "verified" };
+  assert.equal(s.appCallers, "verified");
+  assert.equal(SPEC_VERSION, "0.1.49");
 });

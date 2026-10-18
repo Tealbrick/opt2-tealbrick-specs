@@ -211,6 +211,10 @@
         "held": { "type": "array", "uniqueItems": true, "items": { "enum": ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] } }
       }
     },
+    "appCallers": {
+      "enum": ["verified"],
+      "description": "v0.1.49 (C261): \"verified\" = every companion grant to this instance carries prd; the SDK refuses an app caller without a verified product (403 caller_unverified). Absent = the earlier lenient rule."
+    },
     "portalUrl": {
       "$ref": "workspace-config.schema.json#/$defs/httpsUrl",
       "description": "v0.1.13 (C86): the Portal GUI origin (no path); apps build owner links `<portalUrl>/w/<ws>/open?product=<p>&path=<path>`."
