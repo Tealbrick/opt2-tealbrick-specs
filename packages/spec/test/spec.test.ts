@@ -349,5 +349,21 @@ test("v0.1.47 (SDK-INSTANCE-GRANT): person-op scope grants are typed; rows say w
   const row: import("../src/sdk.ts").ScopeGrantRow = { agent: "agt_01M4TNVDHPXJGTHATZV5SVJHX9" as never, type: "project", instanceId: "p1", access: "contribute", source: "app", grantedByOp: "draft_start" };
   const api: import("../src/sdk.ts").ScopeGrantApi = { grant: async () => row, revoke: async () => {} };
   assert.equal((await api.grant(row.agent, "project", "p1", "contribute")).source, "app");
-  assert.equal(SPEC_VERSION, "0.1.47");
+});
+
+test("v0.1.48 (SDK-COMPANION-CALLERS, C240): slice companion callers carry provider; person ops read them", async () => {
+  const c: import("../src/bridge.ts").CompanionCaller = { product: "observer", ins: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, name: "Observer", provider: "own_infra" };
+  const old: import("../src/bridge.ts").CompanionCaller = { product: "observer", ins: c.ins, name: "Observer" };
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const slice = load("instance-slice.schema.json");
+  const item = slice.properties.companionCallers.items;
+  const v = ajv.compile({ ...item, $id: new URL("tbtest-companion-caller.json", slice.$id).href });
+  assert.equal(v(c), true, JSON.stringify(v.errors));
+  assert.equal(v(old), true);
+  assert.equal(v({ ...c, provider: null }), true);
+  assert.equal(v({ ...c, provider: "Own Infra" }), false);
+  const fn: NonNullable<import("../src/sdk.ts").OpContext["companionCallers"]> = () => [c];
+  assert.equal(fn()[0]?.provider, "own_infra");
+  assert.equal(SPEC_VERSION, "0.1.48");
 });

@@ -197,7 +197,8 @@
         "properties": {
           "product": { "$ref": "workspace-config.schema.json#/$defs/productId" },
           "ins": { "$ref": "workspace-config.schema.json#/$defs/insId" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 80 }
+          "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "provider": { "oneOf": [{ "type": "string", "pattern": "^[a-z][a-z0-9_]{1,31}$" }, { "type": "null" }], "description": "v0.1.48 (C240): where the calling instance runs (railway, own_infra, ...); null = unknown." }
         }
       }
     },

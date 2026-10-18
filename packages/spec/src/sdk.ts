@@ -11,6 +11,7 @@ import type {
   CallEnvelope,
   ClaimRequest,
   ClaimResponse,
+  CompanionCaller,
   HookRequest,
   HookResponseByPhase,
   InstanceSlice,
@@ -403,6 +404,9 @@ export interface OpContext {
   /** v0.1.47 (SDK-INSTANCE-GRANT): set ONLY when the caller is a person (person ops, SDK >= 0.1.31); undefined on agent and
    *  app calls. An agent op may narrow its OWN access only through `ctx.scopeSelfRevoke`. */
   scopeGrants?: ScopeGrantApi;
+  /** v0.1.48 (SDK-COMPANION-CALLERS, C240): person callers only (owner pages) — the verified apps that may call this app, from
+   *  the CURRENT signed slice `companionCallers` (frozen copies; [] when the slice is expired). Undefined on agent/app calls. */
+  companionCallers?: () => readonly CompanionCaller[];
   /** v0.1.47: agent callers only — drop the calling agent's own access to one instance (narrowing is always allowed). */
   scopeSelfRevoke?: (type: string, instanceId: string) => Promise<void>;
   /** v0.1.3 (C31): THE app-secret mechanism */

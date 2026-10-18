@@ -194,6 +194,16 @@ export type EnrolCodeEntry =
   | { digest: Sha256Digest; kind: "instance" | "neighbour"; ins: InstanceId; product: ProductId; exp: EpochS }
   | { digest: Sha256Digest; kind: "service"; ins: InstanceId; service: ServiceId; product?: ProductId; exp: EpochS };
 
+/** v0.1.14 (C102) entry of slice `companionCallers`: an app instance that holds a companion grant to this instance.
+ *  v0.1.48 (SDK-COMPANION-CALLERS, C240): `provider` = where that instance runs ("railway", "own_infra", another provider
+ *  key; null = unknown, Cores before the field). Display + binding data only; never grant material. */
+export interface CompanionCaller {
+  product: ProductId;
+  ins: InstanceId;
+  name: string;
+  provider?: string | null;
+}
+
 // ── Instance slice payload (`tb-slice+jws`) — instance-slice.schema.json ────
 export interface InstanceSlice extends SliceClaims {
   ins: InstanceId;
@@ -216,7 +226,7 @@ export interface InstanceSlice extends SliceClaims {
   companionTargets?: { product: ProductId; ins: InstanceId }[];
   /** v0.1.14 (C102): the instances holding companion grants that TARGET this instance (Core minted them); `name` = the
    *  caller's manifest name (≤ 80). The SDK sets `Caller.name` for app callers from it (verified grant `sub`), fallback the instance id. */
-  companionCallers?: { product: ProductId; ins: InstanceId; name: string }[];
+  companionCallers?: CompanionCaller[];
   /** v0.1.15 (C105a): the workspace apps policy (Core-filled; default DEFAULT_HELD_FAMILIES). Informational for the app
    *  (e.g. to say "this send waits for the owner"); enforcement is the companion grant `held` claim = this list (CORE I8). */
   appsPolicy?: { held: HoldFamily[] };
