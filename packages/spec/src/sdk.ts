@@ -3,7 +3,6 @@
 // Declarations only: no runtime code. Vocabularies and manifest/credential shapes are imported, never re-declared.
 
 import type {
-  CompanionCaller,
   AppAttention,
   AppStatus,
   BootFailure,
@@ -12,6 +11,7 @@ import type {
   CallEnvelope,
   ClaimRequest,
   ClaimResponse,
+  CompanionCaller,
   HookRequest,
   HookResponseByPhase,
   InstanceSlice,
