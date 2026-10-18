@@ -337,6 +337,11 @@ export interface Caller {
    *  calling app (data sharing, routing, "is this Observer?") key on `product` (and `id`), NEVER on `name`. Absent for
    *  agent and person callers, and for an app caller that is not in the slice (the SDK refuses such a call anyway). */
   product?: ProductId;
+  /** v0.1.49 (C240 S2, Connect): app callers only — true when the caller instance is in the CURRENT signed slice's
+   *  `companionCallers` under the same verified `product`; false when the slice is expired or the caller is not listed (an
+   *  edge removed since the grant was minted). Absent for agent and person callers. Apps that share data with a calling app
+   *  re-check `listed` (and `product` + `id`) at use time. */
+  listed?: boolean;
 }
 
 export interface Logger {

@@ -230,6 +230,10 @@ export interface InstanceSlice extends SliceClaims {
   /** v0.1.15 (C105a): the workspace apps policy (Core-filled; default DEFAULT_HELD_FAMILIES). Informational for the app
    *  (e.g. to say "this send waits for the owner"); enforcement is the companion grant `held` claim = this list (CORE I8). */
   appsPolicy?: { held: HoldFamily[] };
+  /** v0.1.49 (C261 = C243): `"verified"` = Core mints the grant `prd` claim for every companion grant to this instance, so
+   *  the SDK REFUSES an app call (or a resumed held app call) whose caller has no verified product (no `prd` and no
+   *  `companionCallers` entry): 403 `caller_unverified`, nothing runs, audited. Absent = the earlier lenient rule. */
+  appCallers?: "verified";
 }
 
 // ── Enrolment (BRIDGE §4) — op `bridge_api.enrol` ───────────────────────────
