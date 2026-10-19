@@ -196,14 +196,17 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
   best access), `bestOf`/`rank`, `ownerAdmits`, `ctx.scope` `access.crud`/`readable`/`writable`/`can`, the `scope_summary`
   `admittedOps`, the dynamic catalog `admitted` mark, `ScopeGrantRow.crud`. **Offer:** a row whose level now grants more lists
   `offer.adds` to the owner. **Accept** = `tb.scopes_set` with the same level and `acceptOffer: {adds}` equal to the current
-  `offer.adds` → new snapshot, audit `scope.offer_accepted` (adds); a different `adds` → 409 `offer_changed`; a plain re-set of
-  the same level without `acceptOffer` keeps the snapshot (does NOT accept). Setting a DIFFERENT level stores that level's
+  `offer.adds` (compared as SETS) → new snapshot, audit `scope.offer_accepted` (adds); a different set → 409 `offer_changed`;
+  with no offer only `adds: []` is accepted (a no-op re-set), anything else → 409 `offer_changed`; `acceptOffer` together with a
+  different level or `access: null` → 400 `invalid_input`; a plain re-set of the same level without `acceptOffer` keeps the
+  snapshot (does NOT accept). Setting a DIFFERENT level stores that level's
   crud now (the owner chose it). No agent, app, companion or `ctx.scopeGrants` path accepts (they write bounded rows).
   Known limit (C283b (4)): the SDK cannot prove that a person clicked; an app's owner UI MUST show `adds` and send
-  `acceptOffer` only on the owner's click (`useScopes().acceptOffer`). **Backfill:** on EVERY boot on schema 9 the SDK fills
-  each owner row whose snapshot is NULL from the CURRENT manifest and audits it (`scope.snapshot_backfill`, level + crud); this
-  also covers a retried update after an E3 restore to schema 8. A widening shipped in the SAME update as the first 0.1.36
-  boot is baked in (no older record exists); release policy (Coordinator C283c): apps go from SDK ≤ 0.1.34 straight to 0.1.36.
+  `acceptOffer` only on the owner's click (`useScopes().acceptOffer`). **Backfill:** ONCE, inside the schema-9 migration (same transaction): each owner row gets the snapshot of its level in
+  the manifest that runs the migration, audited (`scope.snapshot_backfill`, level + crud). After that a NULL snapshot on an owner
+  row means `[]` (corruption or a bug never widens). An E3 restore to schema 8 re-runs migration 9 on the retried update (the
+  same rule); a rollback to an older SDK without a restore is refused `sdk_schema_newer`. A widening shipped in the SAME update
+  as the first 0.1.36 migration is baked in (no older record exists); release policy (Coordinator C283c): apps go from SDK ≤ 0.1.34 straight to 0.1.36.
   Bounded rows: unchanged.
 
 ### 7.3 Backups, restore, export
@@ -456,16 +459,19 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 - `CallProofHookClaims.bd?` = sha256 of the exact hook request body bytes (CREDENTIALS §10; one meaning of `bd` everywhere).
   `ClaimRequest.proofClaims?` / `AppStatus.proofClaims?` (`PROOF_CLAIM_CAPS = ["bd"]`): the SDK (miniapp-sdk 0.1.36,
   manifest 0.1.28) declares `["bd"]`; the bridge sends `bd` only to an app whose current set lists it (BRIDGE hooks step 6:
-  dropped on a manifest/version change, a re-claim or a connect failure; never a retry without `bd`). The SDK hashes the raw
+  changed only by a config manifest/version/candidate change, a re-claim or a push with a new version or set — never by a
+  connect failure, timeout or 401; never a retry without `bd`; only app-instance claims/pushes set it). The SDK hashes the raw
   body before parsing and refuses a mismatch `call_proof_invalid`; absent = not compared (a later slice flag makes it required).
+- Hook route (SDK): read the raw body, hash it (`bd`), then `JSON.parse` the same bytes; the shape checks run after the hash;
+  an empty or non-JSON body is refused 400. The bridge sends the exact bytes it hashed.
 - Release order (C215): spec 0.1.52 → manifest 0.1.28 → miniapp-sdk 0.1.36 → conformance 0.1.25 → bridge 0.2.5.
 - Conformance rows (0.1.25), each fire-on-bad: (a) owner row at level L; an app update widens L; a call needing the added
   action is refused `scope_denied`, `ctx.scope.can` answers false for it, and the row lists `offer.adds`; a plain re-set of L
   does not accept; `acceptOffer` with other `adds` → 409 `offer_changed`; `acceptOffer` with the current `adds` → the call
-  runs. (b) Narrowing L applies at once (also via `can`). (c) An owner row with a NULL snapshot is backfilled once, audited,
-  and an unparsable one reads `[]`. (d) Hook proof whose `bd` does not match because a field OUTSIDE `ctx` and `in` changed
+  runs. (b) Narrowing L applies at once (also via `can`). (c) Migration 9 backfills owner rows once, audited; afterwards a NULL
+  or unparsable snapshot reads `[]`; `acceptOffer` with another level or `access: null` → 400; set comparison of `adds`. (d) Hook proof whose `bd` does not match because a field OUTSIDE `ctx` and `in` changed
   (e.g. `call.id` or `call.caller`) → `call_proof_invalid`; a malformed `bd` → refused; `bd` on an op proof or a bridge-op
   proof → refused (shape); a hook proof without `bd` → accepted.
 - Bridge tests (0.2.5): no `bd` to an app without `proofClaims` (an SDK 0.1.35 app), none when the set is absent or lists
-  something else, none after a manifest/version change until the next push, `bd` to an app that lists it; a 401 is not
-  retried without `bd`.
+  something else, none after a config manifest/version/candidate change until the next push, `bd` to an app that lists it;
+  a connect failure or a 401 does NOT drop the capability and is not retried without `bd`; a service claim never sets it.

@@ -545,7 +545,8 @@ export interface AppStatus {
   preUpdateSnapshot?: PreUpdateSnapshotRef | null;
   /** v0.1.39 (US-1): present only in failed mode (Health.status "failed"); readiness `degraded` + attention carry it too */
   failure?: BootFailure;
-  /** v0.1.52 (C268b): as ClaimRequest.proofClaims; every push states the current set (absent = none) */
+  /** v0.1.52 (C268b/C268c): as ClaimRequest.proofClaims; every push states the current set (absent, non-array or unknown entries
+   *  = none). Only an app-instance push (no service) sets the bridge's stored capability (BRIDGE hooks step 6). */
   proofClaims?: ProofClaimCap[];
 }
 /** v0.1.39 (US-1): highest applied migration per scope (0 = none). */

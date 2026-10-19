@@ -747,8 +747,8 @@ export interface ScopeGrantRow {
   crud?: CrudAction[];
   /** v0.1.52 (C283b/C283c): present ONLY on an owner row whose level now grants more than it was set with (an app update widened
    *  it): `adds` = the CRUD actions the owner has not accepted. They are NOT effective. Accept = `tb.scopes_set` with
-   *  `acceptOffer: {adds}` equal to the current `adds` (else 409 `offer_changed`); a plain re-set of the same level does NOT
-   *  accept. No agent, app or companion path can accept. Never silent (C107a pattern). */
+   *  `acceptOffer: {adds}` equal (as a set) to the current `adds` (else 409 `offer_changed`; with another level or null → 400); a
+   *  plain re-set of the same level does NOT accept. No agent, app or companion path can accept. Never silent (C107a pattern). */
   offer?: { adds: CrudAction[] };
 }
 /** v0.1.50 (C283 A1): which rule admits a scoped call: an owner-set primary row, or the Portal grant ceiling. */
