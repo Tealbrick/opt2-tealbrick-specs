@@ -135,6 +135,14 @@ export interface AppEntry {
   version: SemVer;
   sdkMajor: number;
   manifestDigest: Sha256Digest;
+  /** v0.1.51 (G2b, INC-20261019-04): present ONLY while a health-gated update attempt (E3) runs: the TARGET release's manifest
+   *  digest and version. `manifestDigest` stays the SERVING (old) release. A bridge ≥ 0.1.32 accepts a running service whose
+   *  manifest digest equals EITHER value and then uses the manifest the service actually serves (so a bridge restart during
+   *  the attempt does not refuse the new image as `manifest_mismatch`); its status report carries the version that runs, which
+   *  is how Core's gate sees the target become healthy. Older bridges ignore the fields (the config body is not
+   *  schema-validated by the bridge). Core drops both at the end of the attempt (switch, rollback or freeze). */
+  candidateManifestDigest?: Sha256Digest;
+  candidateVersion?: SemVer;
   /**
    * v0.1.11 (BSD-07): `http://<name>.railway.internal:<port>`, or — only with `ownInfra: true` — any http(s) origin,
    * which the bridge routes to ONLY when it is listed in its local `TB_OWN_INFRA_ORIGINS` (BRIDGE §5.7).

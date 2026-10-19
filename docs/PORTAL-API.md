@@ -504,6 +504,12 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 - `Order.amountDiscount` (minor units) and `Order.promotionCode` (C92).
 - `details.reason` and `lastError.reason` values Core sends (documented, open strings): `not_kept`, `data_shared`, `kept_data_in_the_way`, `destination_reserved`, `dev_only`, `not_newer`, `not_older`, `upgrade_path`, `rollback_needs_restore`, `apps_remain`, `workspace_deleting`, `agent_paused`, `harness_unknown`, `licence_active`, `terms_changed`, `portal_not_configured`, `no_billing_customer`, `buyer_required`, `idempotency_in_progress`.
 
+## v0.1.51 (RS-7.4 update safety + G2b, INC-20261019-04; additive)
+- `InstanceLastUpdate.outcome` + `kept_new` (the new version was kept, nothing undone) and `held` (frozen: the update could not be confirmed; an operator checks it; Core never puts old code on possibly migrated data).
+- `ErrorCode` + `update_held` (409 on instances.update / rollback / retry / remove and the deploy revive path while an instance is held) and `update_kept_new` (Instance.lastError code of a kept update).
+- `DeployPhase` + `waiting_bridge` (an app update waits for a running bridge update), `waiting_apps` (a bridge update waits for running app update attempts), `held`. Clients render unknown phases by their message.
+- Workspace config `apps[]` + optional `candidateManifestDigest` / `candidateVersion` during an update attempt (BRIDGE apps table; G2b).
+
 ## v0.1.41 (G3 R1 draft review, F126; additive)
 - `Draft.description?` (the recipe's own text, shown as its claim) and `Draft.loosening?: LooseningItem[]` (`id` = `<n>:<setting>`, `n`, `opId`, `subject`, `setting`, `before`, `after`, `detail?`); `DraftApplyInput.confirmLoosening?: string[]`; details.reason `loosening_unconfirmed` (with `details.loosening`). See the Apply line above.
 - `Draft.createdBy` gains `{kind: "device", id}`: the draft an agent device approval writes and applies at once (adopt, C96). Readers that do not know a kind show `createdByLabel`.

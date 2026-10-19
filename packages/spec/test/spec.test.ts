@@ -400,5 +400,31 @@ test("v0.1.50 (C283 A1): owner-set scope rows are primary; catalog admitted mark
   assert.equal(ai.authority, "owner");
   const a: import("../src/sdk.ts").ScopeAuthority[] = ["owner", "bounded"];
   assert.equal(a.length, 2);
-  assert.equal(SPEC_VERSION, "0.1.50");
+});
+
+test("v0.1.51 (RS-7.4 + G2b): held/kept_new vocabulary; config app entry candidate digest", () => {
+  const lu: import("../src/routes.ts").InstanceLastUpdate[] = [
+    { outcome: "kept_new", from: "0.5.10", to: "0.5.11", at: "2026-10-19T15:00:00Z" as never },
+    { outcome: "held", from: "0.1.12", to: "0.1.13", at: "2026-10-19T15:00:00Z" as never, reason: { code: "update_held", message: "x" } },
+  ];
+  assert.equal(lu.length, 2);
+  const codes: import("../src/routes.ts").ErrorCode[] = ["update_held", "update_kept_new"];
+  assert.equal(codes.length, 2);
+  const phases: import("../src/routes.ts").DeployPhase[] = ["waiting_bridge", "waiting_apps", "held"];
+  assert.equal(phases.length, 3);
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const cfg = load("workspace-config.schema.json");
+  const v = ajv.compile({ ...cfg.$defs.appEntry, $id: new URL("tbtest-app-entry.json", cfg.$id).href, $defs: cfg.$defs });
+  const digest = `sha256:${"a".repeat(64)}`;
+  const base = { ins: "ins_01M53BAEQSGKVVY4PRM2VE6FBF", product: "notes", version: "0.1.0", sdkMajor: 0, manifestDigest: digest, internalUrl: "http://notes.railway.internal:8080", entitled: true, slice: "aaa.bbb.ccc" };
+  const ok = v(base);
+  const withCand = v({ ...base, candidateManifestDigest: `sha256:${"b".repeat(64)}`, candidateVersion: "0.2.0" });
+  const bad = v({ ...base, candidateManifestDigest: "not-a-digest" });
+  assert.equal(ok, true, `base app entry must be valid: ${JSON.stringify(v.errors)}`);
+  assert.equal(withCand, true, JSON.stringify(v.errors));
+  assert.equal(bad, false);
+  const e: Pick<import("../src/bridge.ts").AppEntry, "candidateManifestDigest" | "candidateVersion"> = { candidateManifestDigest: digest as never, candidateVersion: "0.2.0" as never };
+  assert.ok(e.candidateManifestDigest);
+  assert.equal(SPEC_VERSION, "0.1.51");
 });

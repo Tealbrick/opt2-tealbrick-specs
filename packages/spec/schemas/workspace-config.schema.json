@@ -399,6 +399,14 @@
         "manifestDigest": {
           "$ref": "#/$defs/digest"
         },
+        "candidateManifestDigest": {
+          "$ref": "#/$defs/digest",
+          "description": "v0.1.51 (G2b): the TARGET release's manifest digest, only while a health-gated update attempt runs; manifestDigest stays the serving release. A bridge >= 0.1.32 accepts either."
+        },
+        "candidateVersion": {
+          "$ref": "#/$defs/semver",
+          "description": "v0.1.51 (G2b): the target release's version, with candidateManifestDigest."
+        },
         "internalUrl": {
           "type": "string",
           "description": "v0.1.11 (BSD-07): `$defs/internalUrl` (railway.internal form), or `$defs/ownInfraUrl` when `ownInfra` is true (see allOf)."
