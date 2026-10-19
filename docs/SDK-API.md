@@ -171,6 +171,19 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
 - First sight of an agent edge (agent appears in the slice `agents[]`, or first call — whichever is first): SDK calls `events.agentAdded` (the app creates per-agent instances, e.g. an "own" area), then applies manifest `defaultGrants` (`own` → the agent's own instance, `shared` → instances the app marked shared, `all` → every instance of the type). Applied once per (agent, type); later owner edits win.
 - Lookups: `access(agent, type, id)`, `best(agent, type)`, `list(agent)`; `summary(agent)` renders `summaryTemplate` (≤ 80 chars) for the `scope_summary` bridge op.
 - Agent removed from the slice: rows are kept (re-adding restores them); calls are refused anyway without a grant.
+- v0.1.50 (C283 A1, Martin C277): **the app's own access is primary; the Portal agent→app grant is the fallback.** A row the
+  OWNER wrote (`source = "owner"`, a person op: `tb.scopes_set` or the app's own owner page, e.g. Connect's account
+  assignment) after the app runs an SDK with this rule carries `authority = "owner"`; for a scoped op its access applies
+  even above the Portal grant's `crud`. Every other row — manifest `defaultGrants`, `app` rows (`ctx.scopeGrants`), and every
+  row written before the change — is `authority = "bounded"`: effective `crud = grant.crud ∩ row.crud` as before. Ops
+  without `scopeType` keep `op.crud ⊆ grant.crud`. Grant validity (pause, revoke, expiry, workflow binding `wf`), holds,
+  caps and `money` stay Portal-grant rules: an owner row never revives a paused or revoked agent and never skips a hold.
+  An agent op and an app (companion) call never write an owner row (refused); `ctx.scopeSelfRevoke` only narrows. Migration:
+  forward-only SDK schema step adds `authority` (default `bounded`); the app's owner UI may OFFER "make my existing settings
+  primary" per row (re-saving it as the owner), never automatically. Every scoped receipt records `admittedBy`
+  (`app_owner_row | portal_grant`). Dynamic ops: the bridge sends `agent` in the catalog body; the SDK marks entries an owner
+  row admits (`admitted: "owner"`), and the bridge lists them even when `crud ⊄ grant.crud` (display only; the SDK
+  authorizes each call).
 
 ### 7.3 Backups, restore, export
 - Runner: on manifest `backups.schedule` (cron, UTC), keep `backups.retain` archives in `TB_BACKUP_DIR`. v0.1.1 (C28): Railway mounts ONE volume per service, so the deploy recipe mounts one volume at the `data` volume's mountPath and sets `TB_BACKUP_DIR=<data mountPath>/backup` (a subdirectory); manifests keep declaring both volumes and Core merges them. Off-volume copies come from the provider's volume backup.
@@ -396,6 +409,13 @@ Person-op contexts carry `ctx.scopeGrants` (`grant(agent, type, instanceId, acce
 
 ## v0.1.48 — companion callers on owner pages (SDK-COMPANION-CALLERS, C240)
 Person-op contexts carry `ctx.companionCallers()`: the verified list of app instances that may call this app (`{product, ins, name, provider}`), taken from the CURRENT signed slice (`companionCallers`, frozen copies; `[]` when the slice is expired). `provider` (slice v0.1.48) says where the caller runs (`railway`, `own_infra`, …; null = unknown, older Core). Read-only, no grant material. Undefined on agent and app calls. Apps that share data with a calling app bind the share to `{product, ins}` at share time and re-check at use time that the call's `Caller.product` and `Caller.id` are that pair; an `own_infra` caller runs code the workspace owner operates (S3-4 residual), so the owner page should say so.
+
+## v0.1.50 — owner-set app access is primary (C283 A1, C277)
+- `ScopeGrantRow.authority` / `ScopeAccessView.access.authority`: `"owner" | "bounded"` (absent = bounded). Rule and migration: §7.2.
+- `DynamicCatalogEntry.admitted?: "owner"` and `BridgeOpCatalogBody.agent?` (display only, not proof-bound).
+- Security cases (C277 note §3): an agent never raises its own access (agent ops and companion calls cannot write owner rows;
+  self-revoke only narrows); an app never raises access without an owner action (`app` rows stay bounded); pause/revoke/expiry
+  still refuse first; holds unchanged; every owner-row write is audited (`scope.set`, person actor).
 
 ## v0.1.49 — verified `Caller.listed`; slice `appCallers` (C240 S2, C261)
 - `Caller.listed` (app callers only): `true` when the caller instance is in the CURRENT signed slice `companionCallers` under the same verified `product`; `false` when the slice is expired or the caller is not listed any more (edge removed after the grant was minted). Absent for agent and person callers. An app that shares data with a calling app checks `listed`, `product` and `id` at use time. First SDK: miniapp-sdk 0.1.32 (typed there as an extension until it pins 0.1.49).

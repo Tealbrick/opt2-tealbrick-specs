@@ -246,6 +246,10 @@ export interface DynamicCatalogEntry {
   crud: CrudAction[];
   effect: Effect;
   holdFamily?: HoldFamily;
+  /** v0.1.50 (C283 A1): set by the SDK on a catalog answer for one agent (BridgeOpCatalogBody.agent) when that agent's
+   *  OWNER-set primary scope row admits this entry's crud. The bridge then lists it even when crud ⊄ grant.crud. DISPLAY
+   *  only: the SDK still authorizes every call (decision.ts). Absent = admitted by the Portal grant only. */
+  admitted?: "owner";
 }
 
 /** Fixed input of every dynamic operation call (`POST /tb/v1/ops/<op>`). */

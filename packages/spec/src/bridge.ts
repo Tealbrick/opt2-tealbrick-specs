@@ -408,7 +408,10 @@ export interface HookResponseByPhase {
 // ── Bridge-only SDK calls (C16 B5): `POST <internalUrl>/tb/v1/bridge/<bop>` with a `CallProofBridgeOpClaims`
 //    proof (types/credentials.ts, verified by `verifyBridgeOpProof`); no grant, no hooks.
 export type BridgeOp = "catalog" | "resolve" | "mark" | "scope_summary";
-export interface BridgeOpCatalogBody { op: SnakeId; query?: string; limit?: number }
+/** v0.1.50 (C283 A1): `agent` = the agent the list/search is for; the SDK then marks entries its owner-set primary rows
+ *  admit (`DynamicCatalogEntry.admitted`). Not bound by the bridge-op proof (C91 binds {bop, op}): the answer only shapes
+ *  what the bridge DISPLAYS; every call is authorized by the SDK. Bridges before the change omit it (no marks). */
+export interface BridgeOpCatalogBody { op: SnakeId; query?: string; limit?: number; agent?: AgentId }
 export interface BridgeOpResolveBody { op: SnakeId; tool: string }
 export interface BridgeOpMarkBody { call: CallId; mark: "after_failed" }
 export type BridgeOpScopeSummaryBody = Record<string, never>;
