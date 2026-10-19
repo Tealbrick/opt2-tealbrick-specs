@@ -136,11 +136,9 @@ export interface AppEntry {
   sdkMajor: number;
   manifestDigest: Sha256Digest;
   /** v0.1.51 (G2b, INC-20261019-04): present ONLY while a health-gated update attempt (E3) runs: the TARGET release's manifest
-   *  digest and version. `manifestDigest` stays the SERVING (old) release. A bridge ≥ 0.1.32 accepts a running service whose
-   *  manifest digest equals EITHER value and then uses the manifest the service actually serves (so a bridge restart during
-   *  the attempt does not refuse the new image as `manifest_mismatch`); its status report carries the version that runs, which
-   *  is how Core's gate sees the target become healthy. Older bridges ignore the fields (the config body is not
-   *  schema-validated by the bridge). Core drops both at the end of the attempt (switch, rollback or freeze). */
+   *  digest and version (both or neither). `manifestDigest` stays the SERVING (old) release. Contract: the bridge releases that implement it (0.1.x line: 0.1.33; 0.2.x line: 0.2.4 — 0.1.32 and 0.2.0–0.2.3 do NOT) accept a running service whose manifest digest equals EITHER value, in every place that compares digests: building the routing table (boot, new config; the previous-manifest cache is looked up by both digests), the retry of a down app (the retry key includes the candidate), and the claim (`ClaimRequest.manifestDigest` may equal either; the claim is recorded as usual). The bridge then uses the manifest the service actually serves, never reports `manifest_mismatch` for the candidate, and reports the digest and version that RUN in `StatusReport.apps[]`; that is how Core's gate sees the target become healthy. A digest equal to neither still refuses `manifest_mismatch`.
+   *  Older bridges ignore the fields (the config body is not schema-validated by the bridge). Core drops both at the end of
+   *  the attempt (switch, rollback or freeze). */
   candidateManifestDigest?: Sha256Digest;
   candidateVersion?: SemVer;
   /**

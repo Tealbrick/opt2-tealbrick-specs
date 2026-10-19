@@ -424,6 +424,8 @@ test("v0.1.51 (RS-7.4 + G2b): held/kept_new vocabulary; config app entry candida
   assert.equal(ok, true, `base app entry must be valid: ${JSON.stringify(v.errors)}`);
   assert.equal(withCand, true, JSON.stringify(v.errors));
   assert.equal(bad, false);
+  assert.equal(v({ ...base, candidateManifestDigest: `sha256:${"b".repeat(64)}` }), false, "candidateManifestDigest needs candidateVersion");
+  assert.equal(v({ ...base, candidateVersion: "0.2.0" }), false, "candidateVersion needs candidateManifestDigest");
   const e: Pick<import("../src/bridge.ts").AppEntry, "candidateManifestDigest" | "candidateVersion"> = { candidateManifestDigest: digest as never, candidateVersion: "0.2.0" as never };
   assert.ok(e.candidateManifestDigest);
   assert.equal(SPEC_VERSION, "0.1.51");

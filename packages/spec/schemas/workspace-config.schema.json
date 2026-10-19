@@ -401,7 +401,7 @@
         },
         "candidateManifestDigest": {
           "$ref": "#/$defs/digest",
-          "description": "v0.1.51 (G2b): the TARGET release's manifest digest, only while a health-gated update attempt runs; manifestDigest stays the serving release. A bridge >= 0.1.32 accepts either."
+          "description": "v0.1.51 (G2b): the TARGET release's manifest digest, only while a health-gated update attempt runs; manifestDigest stays the serving release. Bridges 0.1.33 / 0.2.4 and later accept either (BRIDGE apps table)."
         },
         "candidateVersion": {
           "$ref": "#/$defs/semver",
@@ -450,7 +450,15 @@
             }
           }
         }
-      ]
+      ],
+      "dependentRequired": {
+        "candidateManifestDigest": [
+          "candidateVersion"
+        ],
+        "candidateVersion": [
+          "candidateManifestDigest"
+        ]
+      }
     },
     "agentEntry": {
       "type": "object",

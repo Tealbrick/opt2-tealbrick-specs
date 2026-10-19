@@ -490,7 +490,7 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 - CRA queue (`cra.*`): cases with source, awareness time (later only by owner + reason + step-up), kind (undecided counts as reportable), triage, Article 14 clocks (24 h, 72 h, final = fix + 14 days or notification + 1 month), JISKB submission RECORDS (stage, time, reference, evidence location), fix, advisory, user notice, evidence timeline. Core never submits anything. Records kept 10 years.
 
 ## v0.1.39 (C213 US-3, E3 health-gated update)
-- `Instance.lastUpdate?: {outcome: "updated" | "rolled_back" | "rollback_failed", from, to, at, reason?, dataRestoredTo?}` and `Instance.updating?: {from, to, rollingBack}`. A version-changing update switches the bridge to the new release only after the new version reports healthy (state `ok`, no failed-boot attention); a failure after the provider was touched puts back the old image, settings and env, plus the pre-update snapshot (`TB_RESTORE_FROM`) when the failed version may have migrated. `lastError.code`: `update_rolling_back`, `update_rolled_back`, `rollback_failed` (operator alerted, no further attempt), `rollback_needs_restore`.
+- `Instance.lastUpdate?: {outcome: "updated" | "rolled_back" | "rollback_failed" (+ `kept_new` | `held` since v0.1.51), from, to, at, reason?, dataRestoredTo?}` and `Instance.updating?: {from, to, rollingBack}`. A version-changing update switches the bridge to the new release only after the new version reports healthy (state `ok`, no failed-boot attention); a failure after the provider was touched puts back the old image, settings and env, plus the pre-update snapshot (`TB_RESTORE_FROM`) when the failed version may have migrated. `lastError.code`: `update_rolling_back`, `update_rolled_back`, `rollback_failed` (operator alerted, no further attempt), `rollback_needs_restore`.
 - `instances.rollback`: `release_not_deployable` with `details.reason` `not_older` (target newer than the running version) or `rollback_needs_restore` (target below the app's reported `minCompatibleCode`).
 
 ## v0.1.40 (Core/GUI fields that were Core-local; all additive, readers tolerate, L24)
@@ -506,7 +506,7 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## v0.1.51 (RS-7.4 update safety + G2b, INC-20261019-04; additive)
 - `InstanceLastUpdate.outcome` + `kept_new` (the new version was kept, nothing undone) and `held` (frozen: the update could not be confirmed; an operator checks it; Core never puts old code on possibly migrated data).
-- `ErrorCode` + `update_held` (409 on instances.update / rollback / retry / remove and the deploy revive path while an instance is held) and `update_kept_new` (Instance.lastError code of a kept update).
+- `ErrorCode` + `update_held` (409 on instances.update / rollback / retry / remove and the deploy revive path while an instance is held; also the `Instance.lastError.code` of a held instance, with the plain owner text in `message`) and `update_kept_new` (Instance.lastError code of a kept update).
 - `DeployPhase` + `waiting_bridge` (an app update waits for a running bridge update), `waiting_apps` (a bridge update waits for running app update attempts), `held`. Clients render unknown phases by their message.
 - Workspace config `apps[]` + optional `candidateManifestDigest` / `candidateVersion` during an update attempt (BRIDGE apps table; G2b).
 
