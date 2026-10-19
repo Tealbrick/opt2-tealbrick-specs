@@ -322,6 +322,13 @@ export interface CallProofHookClaims extends BaseClaims<BridgeRef, AgentRef | In
   phase: HookPhase;
   ctx: Sha256Digest;
   in?: Sha256Digest;
+  /** v0.1.52 (C268 B, C268b): sha256 of the EXACT hook request body bytes the bridge sends (the same meaning as `bd` on
+   *  bridge/instance/owner assertions: raw bytes, not a re-serialisation). Optional. The bridge sends it ONLY to a hook app whose
+   *  current claim or status lists `"bd"` in `proofClaims` (BRIDGE hooks step 6); never by version number. Older verifiers refuse
+   *  any unknown claim ("hook proof shape"), so sending it to them breaks every hook of that app. A verifier that knows `bd` hashes
+   *  the raw body it received BEFORE parsing, refuses a mismatch `call_proof_invalid`, and hands the handler the object parsed
+   *  from those same bytes. Absent = not compared (a later slice flag makes it required). */
+  bd?: Sha256Digest;
 }
 export const BRIDGE_OPS = ["catalog", "resolve", "mark", "scope_summary"] as const;
 export type BridgeOp = (typeof BRIDGE_OPS)[number];

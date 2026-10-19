@@ -508,7 +508,13 @@ export interface ClaimRequest {
   service?: ServiceId;
   /** neighbours (own infrastructure) only */
   internalUrl?: InternalUrl;
+  /** v0.1.52 (C268b): optional call-proof claims this app's verifier accepts (miniapp-sdk 0.1.36+: `["bd"]`). Absent = none. */
+  proofClaims?: ProofClaimCap[];
 }
+/** v0.1.52 (C268b): optional call-proof claims a verifier can declare it accepts. The bridge adds such a claim to proofs for an
+ *  app ONLY when the app's current claim or status lists it (capability, never inferred from a version number). */
+export const PROOF_CLAIM_CAPS = ["bd"] as const;
+export type ProofClaimCap = (typeof PROOF_CLAIM_CAPS)[number];
 export interface ClaimResponse {
   ins: InstanceId;
   bridge: { id: BridgeId; publicKey: Ed25519PublicJwk; internalUrl: InternalUrl };
@@ -539,6 +545,9 @@ export interface AppStatus {
   preUpdateSnapshot?: PreUpdateSnapshotRef | null;
   /** v0.1.39 (US-1): present only in failed mode (Health.status "failed"); readiness `degraded` + attention carry it too */
   failure?: BootFailure;
+  /** v0.1.52 (C268b/C268c): as ClaimRequest.proofClaims; every push states the current set (absent, non-array or unknown entries
+   *  = none). Only an app-instance push (no service) sets the bridge's stored capability (BRIDGE hooks step 6). */
+  proofClaims?: ProofClaimCap[];
 }
 /** v0.1.39 (US-1): highest applied migration per scope (0 = none). */
 export interface SchemaVersion {

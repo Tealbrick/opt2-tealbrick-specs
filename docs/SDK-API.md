@@ -153,7 +153,7 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
 | `tb.holds_decide` | person | update / write | §4.5 |
 | `tb.receipts_list` | person | read / read | `{ caller?, op?, status?, cursor? }` → receipts |
 | `tb.agents_list` | person | read / read | `{}` → slice agents with their scope access |
-| `tb.scopes_set` | person | update / write | `{ agent, type, id, access \| null }` → updated access (audited) |
+| `tb.scopes_set` | person | update / write | `{ agent, type, id, access \| null, acceptOffer? }` → updated access (audited; v0.1.52 `acceptOffer: {adds}` accepts an offer, §7.2) |
 | `tb.keys_status` | person | read / read | `{}` → `[{ name, required, present, source }]` |
 | `tb.key_set` / `tb.key_delete` | person | update / write · delete / write | `{ name, value }` / `{ name }` — app-own keys only; the value is never returned or logged |
 | `tb.export` | person | read / read | `{}` → writes and streams a `tb-export-<timestamp>.tar.gz` (§7.3) |
@@ -188,6 +188,26 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
   row admits (`admitted: "owner"`), and the bridge lists them even when `crud ⊄ grant.crud`; static scoped ops: the
   `scope_summary` answer names them per agent (`admittedOps`). Display only; the SDK authorizes each call. The bridge
   `gate()` skips `op.crud ⊆ grant.crud` for ops WITH a `scopeType` (the SDK enforces); unscoped ops keep it.
+- v0.1.52 (C283b/C283c): **an owner row keeps the CRUD it was set with.** `tb.scopes_set` by the owner stores a crud snapshot
+  = the level's crud in the manifest that runs at write time (SDK schema 9 `sdk_scope_crud_snapshot`: `crud_snapshot` text,
+  JSON array, NULL on bounded rows). Effective crud of an owner row (`rowCrud`) = snapshot ∩ the level's crud now: a narrowed
+  level applies at once; a widened level does NOT apply. NULL, unparsable or non-array snapshot on an owner row → `[]` (fail
+  closed); a level removed from the manifest → `[]`. EVERY reader of a row's crud uses `rowCrud`: `resolve` (one instance and
+  best access), `bestOf`/`rank`, `ownerAdmits`, `ctx.scope` `access.crud`/`readable`/`writable`/`can`, the `scope_summary`
+  `admittedOps`, the dynamic catalog `admitted` mark, `ScopeGrantRow.crud`. **Offer:** a row whose level now grants more lists
+  `offer.adds` to the owner. **Accept** = `tb.scopes_set` with the same level and `acceptOffer: {adds}` equal to the current
+  `offer.adds` (compared as SETS) → new snapshot, audit `scope.offer_accepted` (adds); a different set → 409 `offer_changed`;
+  with no offer only `adds: []` is accepted (a no-op re-set), anything else → 409 `offer_changed`; `acceptOffer` together with a
+  different level or `access: null` → 400 `input_invalid`; a plain re-set of the same level without `acceptOffer` keeps the
+  snapshot (does NOT accept). Setting a DIFFERENT level stores that level's
+  crud now (the owner chose it). No agent, app, companion or `ctx.scopeGrants` path accepts (they write bounded rows).
+  Known limit (C283b (4)): the SDK cannot prove that a person clicked; an app's owner UI MUST show `adds` and send
+  `acceptOffer` only on the owner's click (`useScopes().acceptOffer`). **Backfill:** ONCE, inside the schema-9 migration (same transaction): each owner row gets the snapshot of its level in
+  the manifest that runs the migration, audited (`scope.snapshot_backfill`, level + crud). After that a NULL snapshot on an owner
+  row means `[]` (corruption or a bug never widens). An E3 restore to schema 8 re-runs migration 9 on the retried update (the
+  same rule); a rollback to an older SDK without a restore is refused `sdk_schema_newer`. A widening shipped in the SAME update
+  as the first 0.1.36 migration is baked in (no older record exists); release policy (Coordinator C283c): apps go from SDK ≤ 0.1.34 straight to 0.1.36.
+  Bounded rows: unchanged.
 
 ### 7.3 Backups, restore, export
 - Runner: on manifest `backups.schedule` (cron, UTC), keep `backups.retain` archives in `TB_BACKUP_DIR`. v0.1.1 (C28): Railway mounts ONE volume per service, so the deploy recipe mounts one volume at the `data` volume's mountPath and sets `TB_BACKUP_DIR=<data mountPath>/backup` (a subdirectory); manifests keep declaring both volumes and Core merges them. Off-volume copies come from the provider's volume backup.
@@ -431,3 +451,27 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 ## v0.1.49 — verified `Caller.listed`; slice `appCallers` (C240 S2, C261)
 - `Caller.listed` (app callers only): `true` when the caller instance is in the CURRENT signed slice `companionCallers` under the same verified `product`; `false` when the slice is expired or the caller is not listed any more (edge removed after the grant was minted). Absent for agent and person callers. An app that shares data with a calling app checks `listed`, `product` and `id` at use time. First SDK: miniapp-sdk 0.1.32 (typed there as an extension until it pins 0.1.49).
 - Slice `appCallers: "verified"` (Core sets it exactly when it mints the grant `prd` claim for every companion grant to this instance: bridge ≥ 0.2.3, SDK ≥ 0.1.28). With it, the SDK refuses an app call, or a resumed held app call, whose caller has no verified product (no `prd` and no `companionCallers` entry): 403 `caller_unverified`, nothing runs, the refusal is audited. The message names the fix: "the calling app is not verified for this workspace yet: update the bridge, or retry after the workspace config refreshes". Absent = the earlier lenient rule (the call runs with `product` absent). First SDK: miniapp-sdk 0.1.34.
+
+## v0.1.52 — owner rows keep their CRUD; hook proofs bind the whole request (C283c, C268 B / C268b)
+- `ScopeGrantRow.crud?` (effective) and `ScopeGrantRow.offer?: {adds}`; `tb.scopes_set` input `acceptOffer?: {adds}`;
+  `useScopes().acceptOffer`; audit actions `scope.snapshot_backfill`, `scope.offer_accepted`; error `offer_changed` (409).
+  Rule: §7.2.
+- `CallProofHookClaims.bd?` = sha256 of the exact hook request body bytes (CREDENTIALS §10; one meaning of `bd` everywhere).
+  `ClaimRequest.proofClaims?` / `AppStatus.proofClaims?` (`PROOF_CLAIM_CAPS = ["bd"]`): the SDK (miniapp-sdk 0.1.36,
+  manifest 0.1.28) declares `["bd"]`; the bridge sends `bd` only to an app whose current set lists it (BRIDGE hooks step 6:
+  changed only by a config manifest/version/candidate change, a re-claim or a push with a new version or set — never by a
+  connect failure, timeout or 401; never a retry without `bd`; only app-instance claims/pushes set it). The SDK hashes the raw
+  body before parsing and refuses a mismatch `call_proof_invalid`; absent = not compared (a later slice flag makes it required).
+- Hook route (SDK): read the raw body, hash it (`bd`), then `JSON.parse` the same bytes; the shape checks run after the hash;
+  an empty or non-JSON body is refused 400. The bridge sends the exact bytes it hashed.
+- Release order (C215): spec 0.1.52 → manifest 0.1.28 → miniapp-sdk 0.1.36 → conformance 0.1.25 → bridge 0.2.5.
+- Conformance rows (0.1.25), each fire-on-bad: (a) owner row at level L; an app update widens L; a call needing the added
+  action is refused `scope_denied`, `ctx.scope.can` answers false for it, and the row lists `offer.adds`; a plain re-set of L
+  does not accept; `acceptOffer` with other `adds` → 409 `offer_changed`; `acceptOffer` with the current `adds` → the call
+  runs. (b) Narrowing L applies at once (also via `can`). (c) Migration 9 backfills owner rows once, audited; afterwards a NULL
+  or unparsable snapshot reads `[]`; `acceptOffer` with another level or `access: null` → 400 `input_invalid`; set comparison of `adds`. (d) Hook proof whose `bd` does not match because a field OUTSIDE `ctx` and `in` changed
+  (e.g. `call.id` or `call.caller`) → `call_proof_invalid`; a malformed `bd` → refused; `bd` on an op proof or a bridge-op
+  proof → refused (shape); a hook proof without `bd` → accepted.
+- Bridge tests (0.2.5): no `bd` to an app without `proofClaims` (an SDK 0.1.35 app), none when the set is absent or lists
+  something else, none after a config manifest/version/candidate change until the next push, `bd` to an app that lists it;
+  a connect failure or a 401 does NOT drop the capability and is not retried without `bd`; a service claim never sets it.
