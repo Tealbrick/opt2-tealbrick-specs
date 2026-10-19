@@ -421,7 +421,9 @@ export interface BridgeOpBodies {
   mark: BridgeOpMarkBody;
   scope_summary: BridgeOpScopeSummaryBody;
 }
-export interface ScopeSummaryResult { agent: AgentId; label: string }
+/** v0.1.50 (C283 A1): `admittedOps` = this agent's STATIC ops with a scopeType whose crud an owner-set primary row admits
+ *  (possibly above grant.crud); the bridge lists those tools too. Display only (the SDK authorizes each call). */
+export interface ScopeSummaryResult { agent: AgentId; label: string; admittedOps?: string[] }
 
 // ── MCP surface (BRIDGE §7) ──────────────────────────────────────────────────
 export const TOOL_NAME_RULE = {

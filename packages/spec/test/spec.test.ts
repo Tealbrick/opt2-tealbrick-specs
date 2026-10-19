@@ -391,6 +391,13 @@ test("v0.1.50 (C283 A1): owner-set scope rows are primary; catalog admitted mark
   assert.equal(entry.admitted, "owner");
   const body: import("../src/bridge.ts").BridgeOpCatalogBody = { op: "tools" as never, query: "x", agent: row.agent };
   assert.equal(body.agent, row.agent);
+  const sum: import("../src/bridge.ts").ScopeSummaryResult = { agent: row.agent, label: "2 accounts", admittedOps: ["account_post"] };
+  assert.deepEqual(sum.admittedOps, ["account_post"]);
+  const rcp: Pick<import("../src/sdk.ts").Receipt, "admittedBy"> = { admittedBy: "app_owner_row" };
+  const dec: Pick<import("../src/sdk.ts").Decision, "admittedBy"> = { admittedBy: "portal_grant" };
+  assert.notEqual(rcp.admittedBy, dec.admittedBy);
+  const ai: NonNullable<import("../src/sdk.ts").AuthorizeInput["access"]> = { level: "editor", crud: ["update"], authority: "owner" };
+  assert.equal(ai.authority, "owner");
   const a: import("../src/sdk.ts").ScopeAuthority[] = ["owner", "bounded"];
   assert.equal(a.length, 2);
   assert.equal(SPEC_VERSION, "0.1.50");
