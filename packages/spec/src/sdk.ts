@@ -283,7 +283,8 @@ export interface AuthorizeInput {
   /** caller's access on the targeted scope instance (or best access when the op spans instances); null when the op has no scopeType.
    *  v0.1.50 (C283 A1): `authority` "owner" → step (2) is `op.crud ⊆ access.crud` (the owner row's crud, also above
    *  grant.crud; a narrower owner row still narrows); "bounded"/absent → `op.crud ⊆ grant.crud ∩ access.crud`. For an op
-   *  that spans instances (best access, id null) it is "owner" only when EVERY row involved is an owner row. */
+   *  that spans instances (best access, id null) it is "owner" only when EVERY row involved is an owner row.
+   *  v0.1.52 (C283c): `crud` is the row's EFFECTIVE crud (ScopeGrantRow.crud). */
   access: { level: string; crud: CrudAction[]; authority?: ScopeAuthority } | null;
   /** receipts (status run|approved) per effect over each cap's sliding window (`per`), computed by the SDK (CORE I14) */
   usage: Partial<Record<Effect, number>>;
@@ -319,6 +320,8 @@ export declare const SDK_AUDIT_ACTIONS: readonly [
   "backup.restore",
   "migration.apply",
   "claim.complete",
+  "scope.snapshot_backfill",
+  "scope.offer_accepted",
 ];
 export type SdkAuditAction = (typeof SDK_AUDIT_ACTIONS)[number];
 
@@ -380,7 +383,8 @@ export interface ReceiptHelpers {
 export interface ScopeAccessView {
   /** access for this call's scope instance (null if the op has no scopeType). v0.1.50 (C283 A1): `authority` = "owner"
    *  when an OWNER-set primary row gave it (it may be wider than the Portal grant's crud), "bounded" otherwise (the Portal
-   *  grant stays the ceiling). Absent = "bounded" (SDKs before the change). */
+   *  grant stays the ceiling). Absent = "bounded" (SDKs before the change). v0.1.52 (C283c): `crud`, `readable`, `writable` and
+   *  `can` use the row's EFFECTIVE crud (ScopeGrantRow.crud). */
   access: { type: string; id: string | null; level: string; crud: CrudAction[]; authority?: ScopeAuthority } | null;
   readable(type: string): Promise<string[]>;
   writable(type: string): Promise<string[]>;
@@ -737,12 +741,14 @@ export interface ScopeGrantRow {
    *  are "bounded" (SDK schema 8 column default). Absent = "bounded". */
   authority?: ScopeAuthority;
   /** v0.1.52 (C283b/C283c): the EFFECTIVE crud of the row. For an owner row = the crud snapshot stored when the owner set it ∩ the
-   *  level's crud in the running manifest (a narrowed level applies at once; a widened level does not). For a bounded row = the
-   *  level's crud (the Portal grant still caps it at call time). Absent from SDKs before 0.1.36. */
+   *  level's crud in the running manifest (a narrowed level applies at once; a widened level does not; NULL or unparsable
+   *  snapshot = []). For a bounded row = the level's crud (the Portal grant still caps it at call time). Every reader uses it
+   *  (SDK-API §7.2). Absent from SDKs before 0.1.36. */
   crud?: CrudAction[];
   /** v0.1.52 (C283b/C283c): present ONLY on an owner row whose level now grants more than it was set with (an app update widened
-   *  it): `adds` = the CRUD actions the owner has not accepted. They are NOT effective. The owner accepts by setting the same
-   *  level again with `tb.scopes_set` (new snapshot); no agent, app or companion path can accept. Never silent (C107a pattern). */
+   *  it): `adds` = the CRUD actions the owner has not accepted. They are NOT effective. Accept = `tb.scopes_set` with
+   *  `acceptOffer: {adds}` equal to the current `adds` (else 409 `offer_changed`); a plain re-set of the same level does NOT
+   *  accept. No agent, app or companion path can accept. Never silent (C107a pattern). */
   offer?: { adds: CrudAction[] };
 }
 /** v0.1.50 (C283 A1): which rule admits a scoped call: an owner-set primary row, or the Portal grant ceiling. */
@@ -968,6 +974,8 @@ export interface UseScopes {
   access: ScopeGrantRow[];
   loading: boolean;
   set(agent: AgentId, type: string, instanceId: string, access: string | null): Promise<void>;
+  /** v0.1.52 (C283c): accept a row's `offer` (the UI MUST show `adds` and call this only on the owner's click) */
+  acceptOffer(agent: AgentId, type: string, instanceId: string, adds: CrudAction[]): Promise<void>;
 }
 export declare function useScopes(agent?: AgentId): UseScopes;
 
