@@ -163,6 +163,10 @@ export type ErrorCode =
    *  back / could not be put back (operator alerted) / the data needs newer code and no snapshot restore was possible.
    *  `release_not_deployable` details.reason adds "not_older" and "rollback_needs_restore" (instances.rollback). */
   | "update_rolling_back" | "update_rolled_back" | "rollback_failed" | "rollback_needs_restore"
+  /** v0.1.51 (RS-7.4, INC-20261019-04): the update could not be confirmed and is FROZEN for an operator (old SDK < 0.1.25 or
+   *  unknown: Core never puts old code on possibly migrated data); 409 on instances.update / rollback / retry / remove and the
+   *  revive path while frozen. `update_kept_new`: the new version was kept (it reported and did not fail its boot). */
+  | "update_held" | "update_kept_new"
   | "internal";
 /** CORE §8: the one error envelope. */
 export interface ErrorEnvelope { error: { code: ErrorCode; message: string; requestId: string; details?: Record<string, unknown> } }
@@ -800,7 +804,8 @@ export interface Instance {
 }
 /** v0.1.39 (US-3) */
 export interface InstanceLastUpdate {
-  outcome: "updated" | "rolled_back" | "rollback_failed";
+  /** v0.1.51 (RS-7.4): + `kept_new` (the new version was kept, nothing undone) and `held` (frozen for an operator; ops 409). */
+  outcome: "updated" | "rolled_back" | "rollback_failed" | "kept_new" | "held";
   from: string;
   to: string;
   at: IsoTime;
@@ -854,7 +859,10 @@ export interface RemoveResult {
   lastError?: { code: string; message: string } | null;
 }
 /** `register` = instance claim via the bridge, or bridge enrolment for bridge.deploy. */
-export type DeployPhase = "provision" | "image" | "start" | "register" | "health" | "ready";
+/** v0.1.51 (RS-7.4): + `waiting_bridge` (an app update waits for a running bridge update, G1), `waiting_apps` (a bridge
+ *  update waits for running app update attempts), `held` (frozen update, see ErrorCode `update_held`). Clients render unknown
+ *  phases by their message. */
+export type DeployPhase = "provision" | "image" | "start" | "register" | "health" | "ready" | "waiting_bridge" | "waiting_apps" | "held";
 /** SSE `data:` payloads; event name = `type`. Heartbeat comment every 15 s; resumable with Last-Event-ID. */
 export type DeployProgressEvent =
   | { type: "phase"; phase: DeployPhase; status: "started" | "done" | "failed"; message: string; elapsedMs: number }
