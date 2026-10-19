@@ -198,7 +198,7 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
   `offer.adds` to the owner. **Accept** = `tb.scopes_set` with the same level and `acceptOffer: {adds}` equal to the current
   `offer.adds` (compared as SETS) → new snapshot, audit `scope.offer_accepted` (adds); a different set → 409 `offer_changed`;
   with no offer only `adds: []` is accepted (a no-op re-set), anything else → 409 `offer_changed`; `acceptOffer` together with a
-  different level or `access: null` → 400 `invalid_input`; a plain re-set of the same level without `acceptOffer` keeps the
+  different level or `access: null` → 400 `input_invalid`; a plain re-set of the same level without `acceptOffer` keeps the
   snapshot (does NOT accept). Setting a DIFFERENT level stores that level's
   crud now (the owner chose it). No agent, app, companion or `ctx.scopeGrants` path accepts (they write bounded rows).
   Known limit (C283b (4)): the SDK cannot prove that a person clicked; an app's owner UI MUST show `adds` and send
@@ -469,7 +469,7 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
   action is refused `scope_denied`, `ctx.scope.can` answers false for it, and the row lists `offer.adds`; a plain re-set of L
   does not accept; `acceptOffer` with other `adds` → 409 `offer_changed`; `acceptOffer` with the current `adds` → the call
   runs. (b) Narrowing L applies at once (also via `can`). (c) Migration 9 backfills owner rows once, audited; afterwards a NULL
-  or unparsable snapshot reads `[]`; `acceptOffer` with another level or `access: null` → 400; set comparison of `adds`. (d) Hook proof whose `bd` does not match because a field OUTSIDE `ctx` and `in` changed
+  or unparsable snapshot reads `[]`; `acceptOffer` with another level or `access: null` → 400 `input_invalid`; set comparison of `adds`. (d) Hook proof whose `bd` does not match because a field OUTSIDE `ctx` and `in` changed
   (e.g. `call.id` or `call.caller`) → `call_proof_invalid`; a malformed `bd` → refused; `bd` on an op proof or a bridge-op
   proof → refused (shape); a hook proof without `bd` → accepted.
 - Bridge tests (0.2.5): no `bd` to an app without `proofClaims` (an SDK 0.1.35 app), none when the set is absent or lists
