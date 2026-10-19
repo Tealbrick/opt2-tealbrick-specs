@@ -266,7 +266,10 @@ export interface GateDecision {
   decision: "pass" | "refuse";
   reason: string;
 }
-/** Bridge only. `tb.hold_status` skips the CRUD check (valid grant suffices, CORE I4). */
+/** Bridge only. `tb.hold_status` skips the CRUD check (valid grant suffices, CORE I4). v0.1.50 (C283 A1): for an op WITH a
+ *  `scopeType` the bridge also skips the `op.crud ⊆ grant.crud` check (step 3) — the app's SDK enforces it with the
+ *  owner/bounded rule (`authorize`). Every other gate step (pause, verifyGrant, audience, declared scope type, `wf`) is
+ *  unchanged, and ops WITHOUT a scopeType keep the crud check. */
 export declare function gate(input: GateInput): GateDecision;
 
 export interface AuthorizeInput {
@@ -277,8 +280,11 @@ export interface AuthorizeInput {
   trust: TrustContext;
   /** effective op (dynamic ops: crud/effect/holdFamily from `resolve`) */
   op: { id: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; scopeType?: string };
-  /** caller's access on the targeted scope instance (or best access when the op spans instances); null when the op has no scopeType */
-  access: { level: string; crud: CrudAction[] } | null;
+  /** caller's access on the targeted scope instance (or best access when the op spans instances); null when the op has no scopeType.
+   *  v0.1.50 (C283 A1): `authority` "owner" → step (2) is `op.crud ⊆ access.crud` (the owner row's crud, also above
+   *  grant.crud; a narrower owner row still narrows); "bounded"/absent → `op.crud ⊆ grant.crud ∩ access.crud`. For an op
+   *  that spans instances (best access, id null) it is "owner" only when EVERY row involved is an owner row. */
+  access: { level: string; crud: CrudAction[]; authority?: ScopeAuthority } | null;
   /** receipts (status run|approved) per effect over each cap's sliding window (`per`), computed by the SDK (CORE I14) */
   usage: Partial<Record<Effect, number>>;
   /** "approved" only when an approved, unconsumed hold matches (caller, op, inputDigest) — SDK-API §4.3 */
@@ -288,6 +294,8 @@ export interface AuthorizeInput {
 }
 export interface Decision {
   decision: "run" | "hold" | "refuse";
+  /** v0.1.50 (C283 A1): for a scoped op that passed step (2): which rule admitted it. Recorded on the receipt. */
+  admittedBy?: AdmittedBy;
   reason: string;
   holdFamily?: HoldFamily | "caps" | "policy";
   /** v0.1.13 (G1): `<product>/<hookId>` when a before-hook verdict caused the hold */
@@ -370,8 +378,10 @@ export interface ReceiptHelpers {
 }
 
 export interface ScopeAccessView {
-  /** access for this call's scope instance (null if the op has no scopeType) */
-  access: { type: string; id: string | null; level: string; crud: CrudAction[] } | null;
+  /** access for this call's scope instance (null if the op has no scopeType). v0.1.50 (C283 A1): `authority` = "owner"
+   *  when an OWNER-set primary row gave it (it may be wider than the Portal grant's crud), "bounded" otherwise (the Portal
+   *  grant stays the ceiling). Absent = "bounded" (SDKs before the change). */
+  access: { type: string; id: string | null; level: string; crud: CrudAction[]; authority?: ScopeAuthority } | null;
   readable(type: string): Promise<string[]>;
   writable(type: string): Promise<string[]>;
   can(type: string, id: string, crud: CrudAction): Promise<boolean>;
@@ -607,6 +617,8 @@ export interface Receipt {
   op: string;
   effect: Effect;
   holdFamily: HoldFamily | "caps" | "policy" | null;
+  /** v0.1.50 (C283 A1): scoped ops only — which rule admitted the call (absent before the change and for unscoped ops) */
+  admittedBy?: AdmittedBy;
   /** v0.1.13 (G1): `<product>/<hookId>` of the before hook whose verdict held this call, else null */
   heldBy: string | null;
   status: ReceiptStatus;
@@ -718,7 +730,17 @@ export interface ScopeGrantRow {
    *  (tb.scopes_set), or the app inside a person op (`grantedByOp` = that op id). Absent from SDKs before 0.1.31. */
   source?: "default" | "owner" | "app";
   grantedByOp?: string;
+  /** v0.1.50 (C283 A1): "owner" ONLY for a row written by `tb.scopes_set` with the owner's person principal (an app's own
+   *  owner page writes access through that op) after the app runs an SDK with this rule — such a row is PRIMARY: its access
+   *  applies even above the Portal grant's crud. EVERY other write path sets "bounded": manifest defaults, `ctx.scopeGrants`
+   *  (also when it overwrites an owner row), `ctx.scopeSelfRevoke`, agent ops, companion calls. Rows written before the change
+   *  are "bounded" (SDK schema 8 column default). Absent = "bounded". */
+  authority?: ScopeAuthority;
 }
+/** v0.1.50 (C283 A1): which rule admits a scoped call: an owner-set primary row, or the Portal grant ceiling. */
+export type ScopeAuthority = "owner" | "bounded";
+/** v0.1.50 (C283 A1): the rule that admitted a scoped call (Decision, Receipt). */
+export type AdmittedBy = "app_owner_row" | "portal_grant";
 /** v0.1.47 (SDK-INSTANCE-GRANT): an app gives one agent access to one scope instance inside a PERSON op the owner just
  *  confirmed (the browser session + the op's own confirmation is the consent). Bounds (else refuse `scope_grant_invalid`
  *  400): `type` is a manifest scope type, `instanceId` exists, `access` is a level of that type and not above the agent

@@ -35,7 +35,7 @@ Scope: the public surface of three packages in `opt2-tealbrick-sdk` (REPOS.md): 
 | `authorize(input)` | `→ { decision: "run" \| "hold" \| "refuse", reason, holdFamily? }` | app SDK only (CORE §7); exact input in `types/sdk.ts` `AuthorizeInput` |
 | Vocabularies | re-exported from `types/manifest.ts` (`CRUD_ACTIONS`, `EFFECTS`, `HOLD_FAMILIES`, `AGENT_MODES`, `STANDARD_OPERATIONS`, …) and `types/credentials.ts` (`TYP`, `PROOF_HEADER`); owned here: `RECEIPT_STATUSES`, `SDK_AUDIT_ACTIONS` | declared once; Core stores values, holds no literals |
 
-`authorize()` order (CORE §7 + I1, restated so this file is checkable): (0) the latest slice marks the workspace, the instance or the calling agent paused → refuse `paused`; (1) `verifyGrant` again; (2) `op.crud ⊆ grant.crud ∩ access.crud` (when the op has a `scopeType`) → else refuse `scope_denied`; (3) `op.effect === "money"` or `op.holdFamily ∈ grant.held` → hold, unless `approval = "approved"` for this exact call (§4.3); (4) Free caps: for the op's effect, `usage[effect] ≥ grant.caps[effect].max` → hold `caps` (I14: `caps: { write?, outward?, destructive? }`, each `{ max, per: "hour" | "day" }`; the SDK counts this caller's runs of that effect over a sliding window of `per` — v0.1.31 (SDK-02): one cap slot per run, receipt or not, reserved in the same transaction as the decision BEFORE the handler, given back when the run fails or is refused, kept when it ran or its outcome is unknown; plus its approved, unconsumed holds of that effect; `money` has no cap, it is always held); (5) run. Pure: the SDK passes `now`, trust context, resolved access and counters in; nothing is read inside.
+`authorize()` order (CORE §7 + I1, restated so this file is checkable): (0) the latest slice marks the workspace, the instance or the calling agent paused → refuse `paused`; (1) `verifyGrant` again; (2) `op.crud ⊆ grant.crud ∩ access.crud` (when the op has a `scopeType`; v0.1.50 C283 A1: `op.crud ⊆ access.crud` when `access.authority` is `owner`, §7.2) → else refuse `scope_denied`; (3) `op.effect === "money"` or `op.holdFamily ∈ grant.held` → hold, unless `approval = "approved"` for this exact call (§4.3); (4) Free caps: for the op's effect, `usage[effect] ≥ grant.caps[effect].max` → hold `caps` (I14: `caps: { write?, outward?, destructive? }`, each `{ max, per: "hour" | "day" }`; the SDK counts this caller's runs of that effect over a sliding window of `per` — v0.1.31 (SDK-02): one cap slot per run, receipt or not, reserved in the same transaction as the decision BEFORE the handler, given back when the run fails or is refused, kept when it ran or its outcome is unknown; plus its approved, unconsumed holds of that effect; `money` has no cap, it is always held); (5) run. Pure: the SDK passes `now`, trust context, resolved access and counters in; nothing is read inside.
 
 ## 3. Server: `defineApp` and `startApp`
 ```ts
@@ -171,6 +171,23 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
 - First sight of an agent edge (agent appears in the slice `agents[]`, or first call — whichever is first): SDK calls `events.agentAdded` (the app creates per-agent instances, e.g. an "own" area), then applies manifest `defaultGrants` (`own` → the agent's own instance, `shared` → instances the app marked shared, `all` → every instance of the type). Applied once per (agent, type); later owner edits win.
 - Lookups: `access(agent, type, id)`, `best(agent, type)`, `list(agent)`; `summary(agent)` renders `summaryTemplate` (≤ 80 chars) for the `scope_summary` bridge op.
 - Agent removed from the slice: rows are kept (re-adding restores them); calls are refused anyway without a grant.
+- v0.1.50 (C283 A1, Martin C277): **the app's own access is primary; the Portal agent→app grant is the fallback.** A row the
+  OWNER wrote through `tb.scopes_set` (person principal; an app's own owner page, e.g. Connect's account assignment, writes
+  access through that op) after the app runs an SDK with this rule carries `authority = "owner"`; for a scoped op its
+  access applies even above the Portal grant's `crud` (effective crud = the row's crud; a narrower owner row still narrows).
+  EVERY other write path sets `bounded`, also when it overwrites an owner row: defaults, `ctx.scopeGrants`,
+  `ctx.scopeSelfRevoke`. An op spanning instances (best access) is `owner` only when every row involved is. Every other row — manifest `defaultGrants`, `app` rows (`ctx.scopeGrants`), and every
+  row written before the change — is `authority = "bounded"`: effective `crud = grant.crud ∩ row.crud` as before. Ops
+  without `scopeType` keep `op.crud ⊆ grant.crud`. Grant validity (pause, revoke, expiry, workflow binding `wf`), holds,
+  caps and `money` stay Portal-grant rules: an owner row never revives a paused or revoked agent and never skips a hold.
+  An agent op and an app (companion) call never write an owner row (refused); `ctx.scopeSelfRevoke` only narrows. Migration:
+  forward-only SDK schema 8 migration `sdk_scope_authority` adds `authority text NOT NULL DEFAULT 'bounded'`; the app's
+  owner UI may OFFER "make my existing settings primary" per row = the owner re-saves it with `tb.scopes_set`, which sets
+  `owner` even when the access level is unchanged; never automatically. Every scoped receipt records `admittedBy`
+  (`app_owner_row | portal_grant`). Dynamic ops: the bridge sends `agent` in the catalog body; the SDK marks entries an owner
+  row admits (`admitted: "owner"`), and the bridge lists them even when `crud ⊄ grant.crud`; static scoped ops: the
+  `scope_summary` answer names them per agent (`admittedOps`). Display only; the SDK authorizes each call. The bridge
+  `gate()` skips `op.crud ⊆ grant.crud` for ops WITH a `scopeType` (the SDK enforces); unscoped ops keep it.
 
 ### 7.3 Backups, restore, export
 - Runner: on manifest `backups.schedule` (cron, UTC), keep `backups.retain` archives in `TB_BACKUP_DIR`. v0.1.1 (C28): Railway mounts ONE volume per service, so the deploy recipe mounts one volume at the `data` volume's mountPath and sets `TB_BACKUP_DIR=<data mountPath>/backup` (a subdirectory); manifests keep declaring both volumes and Core merges them. Off-volume copies come from the provider's volume backup.
@@ -396,6 +413,20 @@ Person-op contexts carry `ctx.scopeGrants` (`grant(agent, type, instanceId, acce
 
 ## v0.1.48 — companion callers on owner pages (SDK-COMPANION-CALLERS, C240)
 Person-op contexts carry `ctx.companionCallers()`: the verified list of app instances that may call this app (`{product, ins, name, provider}`), taken from the CURRENT signed slice (`companionCallers`, frozen copies; `[]` when the slice is expired). `provider` (slice v0.1.48) says where the caller runs (`railway`, `own_infra`, …; null = unknown, older Core). Read-only, no grant material. Undefined on agent and app calls. Apps that share data with a calling app bind the share to `{product, ins}` at share time and re-check at use time that the call's `Caller.product` and `Caller.id` are that pair; an `own_infra` caller runs code the workspace owner operates (S3-4 residual), so the owner page should say so.
+
+## v0.1.50 — owner-set app access is primary (C283 A1, C277)
+- `ScopeGrantRow.authority` / `ScopeAccessView.access.authority`: `"owner" | "bounded"` (absent = bounded). Rule and migration: §7.2.
+- `DynamicCatalogEntry.admitted?: "owner"`, `BridgeOpCatalogBody.agent?`, `ScopeSummaryResult.admittedOps?` (display only,
+  not proof-bound).
+- `gate()` (bridge): step (3) `op.crud ⊆ grant.crud` is skipped for ops with a `scopeType`; `AuthorizeInput.access.authority`;
+  `Decision.admittedBy` / `Receipt.admittedBy` (`AdmittedBy = "app_owner_row" | "portal_grant"`).
+- Conformance rows to add (conformance 0.1.25+): owner row above the grant runs; bounded row above the grant refused
+  `scope_denied`; an agent op and a companion call each try to write an owner row → refused; `ctx.scopeGrants` over an owner
+  row → bounded; bridge lists an admitted dynamic entry and an `admittedOps` static op; gate passes a scoped op above grant.crud
+  to the SDK; paused agent with an owner row refused.
+- Security cases (C277 note §3): an agent never raises its own access (agent ops and companion calls cannot write owner rows;
+  self-revoke only narrows); an app never raises access without an owner action (`app` rows stay bounded); pause/revoke/expiry
+  still refuse first; holds unchanged; every owner-row write is audited (`scope.set`, person actor).
 
 ## v0.1.49 — verified `Caller.listed`; slice `appCallers` (C240 S2, C261)
 - `Caller.listed` (app callers only): `true` when the caller instance is in the CURRENT signed slice `companionCallers` under the same verified `product`; `false` when the slice is expired or the caller is not listed any more (edge removed after the grant was minted). Absent for agent and person callers. An app that shares data with a calling app checks `listed`, `product` and `id` at use time. First SDK: miniapp-sdk 0.1.32 (typed there as an extension until it pins 0.1.49).

@@ -378,5 +378,27 @@ test("v0.1.49 (C240 S2 + C261): verified Caller.listed; slice appCallers \"verif
   assert.equal(v("lenient"), false);
   const s: Pick<import("../src/bridge.ts").InstanceSlice, "appCallers"> = { appCallers: "verified" };
   assert.equal(s.appCallers, "verified");
-  assert.equal(SPEC_VERSION, "0.1.49");
+});
+
+test("v0.1.50 (C283 A1): owner-set scope rows are primary; catalog admitted marks; catalog body agent", () => {
+  const row: import("../src/sdk.ts").ScopeGrantRow = { agent: "agt_01M53BAEQSGKVVY4PRM2VE6FBF" as never, type: "account", instanceId: "acc1", access: "editor", source: "owner", authority: "owner" };
+  assert.equal(row.authority, "owner");
+  const old: import("../src/sdk.ts").ScopeGrantRow = { agent: row.agent, type: "account", instanceId: "acc1", access: "viewer" };
+  assert.equal(old.authority ?? "bounded", "bounded", "absent = bounded");
+  const view: NonNullable<import("../src/sdk.ts").ScopeAccessView["access"]> = { type: "account", id: "acc1", level: "editor", crud: ["read", "update"], authority: "owner" };
+  assert.equal(view.authority, "owner");
+  const entry: import("../src/manifest.ts").DynamicCatalogEntry = { name: "send_mail", title: "Send", description: "d", inputSchema: { type: "object" } as never, crud: ["create"], effect: "outward", holdFamily: "outward", admitted: "owner" };
+  assert.equal(entry.admitted, "owner");
+  const body: import("../src/bridge.ts").BridgeOpCatalogBody = { op: "tools" as never, query: "x", agent: row.agent };
+  assert.equal(body.agent, row.agent);
+  const sum: import("../src/bridge.ts").ScopeSummaryResult = { agent: row.agent, label: "2 accounts", admittedOps: ["account_post"] };
+  assert.deepEqual(sum.admittedOps, ["account_post"]);
+  const rcp: Pick<import("../src/sdk.ts").Receipt, "admittedBy"> = { admittedBy: "app_owner_row" };
+  const dec: Pick<import("../src/sdk.ts").Decision, "admittedBy"> = { admittedBy: "portal_grant" };
+  assert.notEqual(rcp.admittedBy, dec.admittedBy);
+  const ai: NonNullable<import("../src/sdk.ts").AuthorizeInput["access"]> = { level: "editor", crud: ["update"], authority: "owner" };
+  assert.equal(ai.authority, "owner");
+  const a: import("../src/sdk.ts").ScopeAuthority[] = ["owner", "bounded"];
+  assert.equal(a.length, 2);
+  assert.equal(SPEC_VERSION, "0.1.50");
 });
