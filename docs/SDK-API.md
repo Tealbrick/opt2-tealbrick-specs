@@ -189,7 +189,7 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
   `scope_summary` answer names them per agent (`admittedOps`). Display only; the SDK authorizes each call. The bridge
   `gate()` skips `op.crud ⊆ grant.crud` for ops WITH a `scopeType` (the SDK enforces); unscoped ops keep it.
 - v0.1.52 (C283b/C283c): **an owner row keeps the CRUD it was set with.** `tb.scopes_set` by the owner stores a crud snapshot
-  = the level's crud in the manifest that runs at write time (SDK schema 9 `sdk_scope_crud_snapshot`: `crud_snapshot` text,
+  = the level's crud in the manifest that runs at write time (SDK schema 10 `sdk_scope_crud_snapshot`; 9 is `sdk_receipt_admitted_by`: `crud_snapshot` text,
   JSON array, NULL on bounded rows). Effective crud of an owner row (`rowCrud`) = snapshot ∩ the level's crud now: a narrowed
   level applies at once; a widened level does NOT apply. NULL, unparsable or non-array snapshot on an owner row → `[]` (fail
   closed); a level removed from the manifest → `[]`. EVERY reader of a row's crud uses `rowCrud`: `resolve` (one instance and
@@ -202,9 +202,9 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
   snapshot (does NOT accept). Setting a DIFFERENT level stores that level's
   crud now (the owner chose it). No agent, app, companion or `ctx.scopeGrants` path accepts (they write bounded rows).
   Known limit (C283b (4)): the SDK cannot prove that a person clicked; an app's owner UI MUST show `adds` and send
-  `acceptOffer` only on the owner's click (`useScopes().acceptOffer`). **Backfill:** ONCE, inside the schema-9 migration (same transaction): each owner row gets the snapshot of its level in
+  `acceptOffer` only on the owner's click (`useScopes().acceptOffer`). **Backfill:** ONCE, inside the schema-10 migration (same transaction): each owner row gets the snapshot of its level in
   the manifest that runs the migration, audited (`scope.snapshot_backfill`, level + crud). After that a NULL snapshot on an owner
-  row means `[]` (corruption or a bug never widens). An E3 restore to schema 8 re-runs migration 9 on the retried update (the
+  row means `[]` (corruption or a bug never widens). An E3 restore to schema 9 or lower re-runs migration 10 on the retried update (the
   same rule); a rollback to an older SDK without a restore is refused `sdk_schema_newer`. A widening shipped in the SAME update
   as the first 0.1.36 migration is baked in (no older record exists); release policy (Coordinator C283c): apps go from SDK ≤ 0.1.34 straight to 0.1.36.
   Bounded rows: unchanged.
@@ -468,7 +468,7 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 - Conformance rows (0.1.25), each fire-on-bad: (a) owner row at level L; an app update widens L; a call needing the added
   action is refused `scope_denied`, `ctx.scope.can` answers false for it, and the row lists `offer.adds`; a plain re-set of L
   does not accept; `acceptOffer` with other `adds` → 409 `offer_changed`; `acceptOffer` with the current `adds` → the call
-  runs. (b) Narrowing L applies at once (also via `can`). (c) Migration 9 backfills owner rows once, audited; afterwards a NULL
+  runs. (b) Narrowing L applies at once (also via `can`). (c) Migration 10 backfills owner rows once, audited; afterwards a NULL
   or unparsable snapshot reads `[]`; `acceptOffer` with another level or `access: null` → 400 `input_invalid`; set comparison of `adds`. (d) Hook proof whose `bd` does not match because a field OUTSIDE `ctx` and `in` changed
   (e.g. `call.id` or `call.caller`) → `call_proof_invalid`; a malformed `bd` → refused; `bd` on an op proof or a bridge-op
   proof → refused (shape); a hook proof without `bd` → accepted.
