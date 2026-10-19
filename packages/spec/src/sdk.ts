@@ -736,6 +736,14 @@ export interface ScopeGrantRow {
    *  (also when it overwrites an owner row), `ctx.scopeSelfRevoke`, agent ops, companion calls. Rows written before the change
    *  are "bounded" (SDK schema 8 column default). Absent = "bounded". */
   authority?: ScopeAuthority;
+  /** v0.1.52 (C283b/C283c): the EFFECTIVE crud of the row. For an owner row = the crud snapshot stored when the owner set it ∩ the
+   *  level's crud in the running manifest (a narrowed level applies at once; a widened level does not). For a bounded row = the
+   *  level's crud (the Portal grant still caps it at call time). Absent from SDKs before 0.1.36. */
+  crud?: CrudAction[];
+  /** v0.1.52 (C283b/C283c): present ONLY on an owner row whose level now grants more than it was set with (an app update widened
+   *  it): `adds` = the CRUD actions the owner has not accepted. They are NOT effective. The owner accepts by setting the same
+   *  level again with `tb.scopes_set` (new snapshot); no agent, app or companion path can accept. Never silent (C107a pattern). */
+  offer?: { adds: CrudAction[] };
 }
 /** v0.1.50 (C283 A1): which rule admits a scoped call: an owner-set primary row, or the Portal grant ceiling. */
 export type ScopeAuthority = "owner" | "bounded";

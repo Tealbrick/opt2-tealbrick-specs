@@ -188,6 +188,14 @@ A dynamic op has no `handlers[op]`, so it cannot use the synchronous `holdView(i
   row admits (`admitted: "owner"`), and the bridge lists them even when `crud ⊄ grant.crud`; static scoped ops: the
   `scope_summary` answer names them per agent (`admittedOps`). Display only; the SDK authorizes each call. The bridge
   `gate()` skips `op.crud ⊆ grant.crud` for ops WITH a `scopeType` (the SDK enforces); unscoped ops keep it.
+- v0.1.52 (C283b/C283c): **an owner row keeps the CRUD it was set with.** `tb.scopes_set` by the owner stores a crud snapshot
+  = the level's crud in the manifest that runs at write time (SDK schema 9 `sdk_scope_crud_snapshot`: `crud_snapshot` text,
+  JSON array, NULL on bounded rows). Effective crud of an owner row = snapshot ∩ the level's crud now: a narrowed level applies at
+  once; a widened level does NOT apply. The row then lists `offer.adds` (the not-accepted actions) to the owner; the owner accepts
+  by setting the same level again (new snapshot). No agent, app, companion or `ctx.scopeGrants` path accepts (they write bounded
+  rows). A level removed from the manifest → `[]`. An unparsable snapshot → `[]` (fail closed). Upgrade: the first boot on schema 9
+  fills a NULL snapshot of an owner row from the CURRENT manifest and audits each row (`scope.snapshot_backfill`, level + crud);
+  apps go from SDK ≤ 0.1.34 straight to 0.1.36 (skip 0.1.35), so no owner rows exist before the snapshot. Bounded rows: unchanged.
 
 ### 7.3 Backups, restore, export
 - Runner: on manifest `backups.schedule` (cron, UTC), keep `backups.retain` archives in `TB_BACKUP_DIR`. v0.1.1 (C28): Railway mounts ONE volume per service, so the deploy recipe mounts one volume at the `data` volume's mountPath and sets `TB_BACKUP_DIR=<data mountPath>/backup` (a subdirectory); manifests keep declaring both volumes and Core merges them. Off-volume copies come from the provider's volume backup.
@@ -431,3 +439,14 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 ## v0.1.49 — verified `Caller.listed`; slice `appCallers` (C240 S2, C261)
 - `Caller.listed` (app callers only): `true` when the caller instance is in the CURRENT signed slice `companionCallers` under the same verified `product`; `false` when the slice is expired or the caller is not listed any more (edge removed after the grant was minted). Absent for agent and person callers. An app that shares data with a calling app checks `listed`, `product` and `id` at use time. First SDK: miniapp-sdk 0.1.32 (typed there as an extension until it pins 0.1.49).
 - Slice `appCallers: "verified"` (Core sets it exactly when it mints the grant `prd` claim for every companion grant to this instance: bridge ≥ 0.2.3, SDK ≥ 0.1.28). With it, the SDK refuses an app call, or a resumed held app call, whose caller has no verified product (no `prd` and no `companionCallers` entry): 403 `caller_unverified`, nothing runs, the refusal is audited. The message names the fix: "the calling app is not verified for this workspace yet: update the bridge, or retry after the workspace config refreshes". Absent = the earlier lenient rule (the call runs with `product` absent). First SDK: miniapp-sdk 0.1.34.
+
+## v0.1.52 — owner rows keep their CRUD; hook proofs bind the whole request (C283c, C268 B / C268b)
+- `ScopeGrantRow.crud?` (effective) and `ScopeGrantRow.offer?: {adds}` (owner rows whose level was widened). Rule: §7.2.
+- `CallProofHookClaims.bd?` = sha256(JCS(HookRequest)) (CREDENTIALS §10). The bridge sends it only to hook apps whose
+  `AppStatus.sdkVersion` ≥ 0.1.36; unknown or absent → no `bd`. The SDK (manifest 0.1.28+) refuses a mismatching `bd`
+  `call_proof_invalid`; absent = not compared (a later slice flag makes it required).
+- Release order (C215): spec 0.1.52 → manifest 0.1.28 → miniapp-sdk 0.1.36 → conformance 0.1.25 → bridge 0.2.5.
+- Conformance rows (0.1.25): (a) owner row set at level L; an app update widens L; a call needing the added action is refused
+  `scope_denied` and the row lists `offer.adds`; `tb.scopes_set` same level → the call runs. (b) Narrowing L applies at once.
+  (c) Hook proof with a tampered body (`bd` mismatch) → `call_proof_invalid`; hook proof without `bd` → accepted.
+  Bridge tests (0.2.5): no `bd` to an app on SDK 0.1.35; no `bd` when sdkVersion is unknown or absent; `bd` to SDK 0.1.36.

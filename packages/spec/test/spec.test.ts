@@ -428,5 +428,17 @@ test("v0.1.51 (RS-7.4 + G2b): held/kept_new vocabulary; config app entry candida
   assert.equal(v({ ...base, candidateVersion: "0.2.0" }), false, "candidateVersion needs candidateManifestDigest");
   const e: Pick<import("../src/bridge.ts").AppEntry, "candidateManifestDigest" | "candidateVersion"> = { candidateManifestDigest: digest as never, candidateVersion: "0.2.0" as never };
   assert.ok(e.candidateManifestDigest);
-  assert.equal(SPEC_VERSION, "0.1.51");
+});
+
+test("v0.1.52 (C283c + C268 B): owner row effective crud and offer; hook proof body digest bd", () => {
+  const row: import("../src/sdk.ts").ScopeGrantRow = { agent: "agt_01M53BAEQSGKVVY4PRM2VE6FBF" as never, type: "notebook", instanceId: "nb1", access: "editor", source: "owner", authority: "owner", crud: ["read", "update"], offer: { adds: ["delete"] } };
+  assert.deepEqual(row.offer?.adds, ["delete"]);
+  assert.ok(!row.crud?.includes("delete"), "an offered action is not in the effective crud");
+  const bounded: import("../src/sdk.ts").ScopeGrantRow = { agent: "agt_01M53BAEQSGKVVY4PRM2VE6FBF" as never, type: "notebook", instanceId: "nb1", access: "editor" };
+  assert.equal(bounded.offer, undefined);
+  const hp: Pick<import("../src/credentials.ts").CallProofHookClaims, "hook" | "phase" | "bd"> = { hook: "h1", phase: "before", bd: `sha256:${"c".repeat(64)}` as never };
+  assert.ok(hp.bd);
+  const old: Pick<import("../src/credentials.ts").CallProofHookClaims, "hook" | "phase" | "bd"> = { hook: "h1", phase: "before" };
+  assert.equal(old.bd, undefined);
+  assert.equal(SPEC_VERSION, "0.1.52");
 });
