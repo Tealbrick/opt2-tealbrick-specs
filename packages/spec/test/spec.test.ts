@@ -478,5 +478,13 @@ test("v0.1.54 (C292 + C290): bridge capabilities in the status report and the sl
   assert.equal(v({ ...base, caps: Array.from({ length: 17 }, (_, i) => `cap_${i}`) }), false, "at most 16");
   const w: import("../src/routes.ts").AdoptResolved["grants"][number]["write"][number] = { opId: "note_create", title: "Create a note", effect: "write", crud: ["create"], checked: false };
   assert.deepEqual(w.crud, ["create"]);
-  assert.equal(SPEC_VERSION, "0.1.54");
+});
+
+test("v0.1.55 (C296): a setting choice view carries the manifest note and disabled flag", () => {
+  const f: import("../src/routes.ts").SettingFieldView = {
+    key: "engine", type: "enum", label: "Memory engine", help: null, required: true, default: "gbrain", mutable: false,
+    choices: [{ value: "gbrain", label: "GBrain" }, { value: "hindsight", label: "Hindsight", note: "soon", disabled: true }],
+  };
+  assert.equal(f.choices?.find((c) => c.disabled)?.note, "soon");
+  assert.equal(SPEC_VERSION, "0.1.55");
 });

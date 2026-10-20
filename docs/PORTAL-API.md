@@ -507,6 +507,14 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 - `Order.amountDiscount` (minor units) and `Order.promotionCode` (C92).
 - `details.reason` and `lastError.reason` values Core sends (documented, open strings): `not_kept`, `data_shared`, `kept_data_in_the_way`, `destination_reserved`, `dev_only`, `not_newer`, `not_older`, `upgrade_path`, `rollback_needs_restore`, `rollback_restore_unavailable` (v0.1.53), `apps_remain`, `workspace_deleting`, `agent_paused`, `harness_unknown`, `licence_active`, `terms_changed`, `portal_not_configured`, `no_billing_customer`, `buyer_required`, `idempotency_in_progress`.
 
+## v0.1.55 (C296 disabled setting choices; additive)
+- `SettingFieldView.choices[]` is the manifest `SettingChoice {value, label, note?, disabled?}`: Core copies `note` and `disabled`. The GUI shows a disabled choice greyed with its note (e.g. "soon") and never lets it be selected.
+- Core refuses a disabled choice in `instances.deploy` and `instances.update {settings}` when it is a NEW value: 400 `validation_failed`, `details {pointer: "/settings/<key>", reason: "choice_disabled"}`. A stored disabled value (written before this rule) does not block an update that does not change that field.
+- Repair of a stored disabled value: when a `mutable: false` enum field holds a value that BOTH the running release's manifest and the target manifest mark `disabled` (so it never ran), a settings-only `instances.update {settings: {<key>: <enabled choice>}}` (no version change: `releaseId` absent or the running release) may change it; the next deploy adds the services and keys whose `when` now holds. A repair together with a version change is refused (`reason: immutable`): a failed health-gated update would roll the settings back. Any other change of a fixed field stays refused (`reason: immutable`). The GUI offers the repair on such a field (it is not shown read-only) with a needs-you notice.
+- A manifest default that is a disabled choice is refused like a sent one (publisher tooling already refuses it, M-ST-2).
+- Cost estimates (C225): a sent disabled choice is dropped, so the field is quoted at its manifest default's cost; a disabled choice never quotes a lower cost.
+- `details.reason` + `choice_disabled`.
+
 ## v0.1.51 (RS-7.4 update safety + G2b, INC-20261019-04; additive)
 - `InstanceLastUpdate.outcome` + `kept_new` (the new version was kept, nothing undone) and `held` (frozen: the update could not be confirmed; an operator checks it; Core never puts old code on possibly migrated data).
 - `ErrorCode` + `update_held` (409 on instances.update / rollback / retry / remove and the deploy revive path while an instance is held; also the `Instance.lastError.code` of a held instance, with the plain owner text in `message`) and `update_kept_new` (Instance.lastError code of a kept update).
