@@ -798,6 +798,9 @@ export interface Instance {
   companionIssues?: { target: ProductId | "*"; edge: EdgeId | null; state: "blocked" | "not_deployed" | "unlicensed" | "paused" | "disabled"; reason: "companion_op_missing" | "target_not_deployed" | null; detail: string }[];
   provider: ProviderKey | "own_infra";
   settings: Record<string, SettingValue>;
+  /** v0.1.56 (C296 INFO-1): the app's own attention as the bridge reported it (AppStatus.attention: code + plain reason,
+   *  ≤ 200 chars, cleaned by Core), so the owner sees WHY an app is degraded (e.g. engine_missing). Absent when none. */
+  attention?: { code: string; reason: string } | null;
   lastError: InstanceError | null;
   createdAt: IsoTime;
   /** v0.1.13 (C82): consents the release asks for (wildcard companion → `holds_pending_all`) and their state */
