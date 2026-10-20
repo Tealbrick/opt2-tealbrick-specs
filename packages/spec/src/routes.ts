@@ -143,6 +143,8 @@ export type ErrorCode =
   | "expired_token" | "enrolment_code_invalid" | "bridge_key_revoked" | "stripe_signature_invalid"
   | "clerk_signature_invalid" | "account_disabled"
   | "offer_unavailable" | "checkout_failed" | "upstream_timeout"
+  /** v0.1.56 (C296): Instance.lastError of a companion that could not start because a required key it uses is not set */
+  | "needs_keys"
   /** v0.1.13 (C86): tickets.launch `path` outside the target app */
   | "path_invalid"
   /** v0.1.13 (C82): instances.consent for a consent the release does not ask for */

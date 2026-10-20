@@ -507,6 +507,9 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 - `Order.amountDiscount` (minor units) and `Order.promotionCode` (C92).
 - `details.reason` and `lastError.reason` values Core sends (documented, open strings): `not_kept`, `data_shared`, `kept_data_in_the_way`, `destination_reserved`, `dev_only`, `not_newer`, `not_older`, `upgrade_path`, `rollback_needs_restore`, `rollback_restore_unavailable` (v0.1.53), `apps_remain`, `workspace_deleting`, `agent_paused`, `harness_unknown`, `licence_active`, `terms_changed`, `portal_not_configured`, `no_billing_customer`, `buyer_required`, `idempotency_in_progress`.
 
+## v0.1.56 (C296 companion waiting for a key; additive)
+- `ErrorCode` + `needs_keys`: `Instance.lastError` when a companion service could not start because a required key it uses (manifest `settings.keys[].usedBy` names the service, `when` holds) is reported unset by the bridge. The message names the service and the key(s) and says to enter them on the bridge key page, then Retry. Core deploys such a companion WITHOUT a provider healthcheck when the bridge already reports the key unset (tb-exec holds the upstream until the key arrives; it then starts by itself), so `needs_keys` remains only for a deploy that started before the key report.
+
 ## v0.1.55 (C296 disabled setting choices; additive)
 - `SettingFieldView.choices[]` is the manifest `SettingChoice {value, label, note?, disabled?}`: Core copies `note` and `disabled`. The GUI shows a disabled choice greyed with its note (e.g. "soon") and never lets it be selected.
 - Core refuses a disabled choice in `instances.deploy` and `instances.update {settings}` when it is a NEW value: 400 `validation_failed`, `details {pointer: "/settings/<key>", reason: "choice_disabled"}`. A stored disabled value (written before this rule) does not block an update that does not change that field.
