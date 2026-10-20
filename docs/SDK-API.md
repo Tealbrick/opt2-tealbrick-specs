@@ -480,7 +480,7 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 - `StatusReport.bridge.caps?: BridgeCap[]` (`BRIDGE_CAPS = ["owner_rows"]`): a bridge declares ONLY what it implements;
   `"owner_rows"` = the C283 A1 owner-row filter (catalog `admitted`, scope_summary `admittedOps`, gate skips `op.crud ⊆ grant.crud`
   for scoped ops). It first ships in bridge 0.2.5; bridge 0.2.4 (G2b only) and the 0.1.x line do NOT implement A1 and never
-  declare it. Core NORMALISES the reported list (keeps entries matching `^[a-z][a-z0-9_]{0,39}$`, dedupes, sorts, at most 16; a
+  declare it. Core NORMALISES the reported list (keeps every entry matching `^[a-z][a-z0-9_]{0,39}$`, also ones it does not know, so a newer bridge's caps pass through; dedupes, sorts, at most 16; a
   missing or non-array member = `[]`), compares it with the stored set AS A SET, and in ONE transaction stores it and issues a
   new slice revision when the set changed; every slice Core signs carries the stored set as `slice.bridge.caps`. A STANDALONE
   bridge (no Core) sets `slice.bridge.caps` itself from its own implemented set. The SDK exposes `ctx.bridgeCaps()` (from the
