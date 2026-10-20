@@ -845,7 +845,19 @@ export interface BridgeDeployResult { bridge: BridgeStatus; outcome?: BridgeDepl
 export type BridgeDeployOutcome = "started" | "in_progress" | "up_to_date" | "unchanged" | "revived";
 /** S6: settings reach the app only as env at (re)deploy; a settings change redeploys. Never in the slice. */
 export interface InstanceUpdateInput { ws: WorkspaceId; ins: InstanceId; releaseId?: ReleaseId; settings?: Record<string, SettingValue> }
-export interface RollbackInput { ws: WorkspaceId; ins: InstanceId; releaseId?: ReleaseId }
+export interface RollbackInput {
+  ws: WorkspaceId;
+  ins: InstanceId;
+  releaseId?: ReleaseId;
+  /** v0.1.53 (QA INFO-1, C291): go back AND restore the data from the pre-update snapshot the running version took when it was updated
+   *  from the target. Only when the refusal's `details.restorable` was non-null; `acceptDataLoss` must be `true` (changes since the
+   *  snapshot are lost). `snapshot` = `details.restorable.snapshot`; Core re-checks it (the snapshot may have changed) and refuses
+   *  `release_not_deployable` `details.reason` `rollback_restore_unavailable` otherwise. */
+  restore?: { snapshot: string; acceptDataLoss: true };
+}
+/** v0.1.53 (QA INFO-1): `details.restorable` of a `release_not_deployable` `rollback_needs_restore` refusal: the pre-update snapshot the
+ *  owner can restore with `RollbackInput.restore`, or `null` (no usable snapshot: the owner contacts support; ops RUNBOOK §6b). */
+export interface RollbackRestorable { snapshot: string; createdAt: IsoTime }
 /** I15: deleteData defaults to false (services stopped, volumes and backups kept). */
 export interface RemoveInput { ws: WorkspaceId; ins: InstanceId; deleteData: boolean }
 export interface RemoveResult {

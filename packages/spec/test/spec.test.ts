@@ -448,10 +448,14 @@ test("v0.1.52 (C283c + C268 B): owner row effective crud and offer; hook proof b
   assert.equal(acts.length, 2);
 });
 
-test("v0.1.53 (C289): TBD device-flow owner sessions have a 7-day idle limit; CLI stays 24 h; absolute 30 d", async () => {
+test("v0.1.53 (C289 + C291): TBD device-flow owner sessions have a 7-day idle limit; owner rollback with restore", async () => {
   const { LIFETIME_S } = await import("../src/credentials.ts");
   assert.equal(LIFETIME_S.ownerDeviceSessionIdle, 604800);
   assert.equal(LIFETIME_S.ownerCliSessionIdle, 86400);
   assert.ok(LIFETIME_S.ownerDeviceSessionIdle < LIFETIME_S.ownerCliSessionAbsolute, "idle never exceeds the absolute life");
+  const rb: import("../src/routes.ts").RollbackInput = { ws: "ws_01M53BAEQSGKVVY4PRM2VE6FBF" as never, ins: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, restore: { snapshot: "pre-update-0.2.13-0.3.0.tar.gz", acceptDataLoss: true } };
+  assert.equal(rb.restore?.acceptDataLoss, true);
+  const r: import("../src/routes.ts").RollbackRestorable = { snapshot: "pre-update-0.2.13-0.3.0.tar.gz", createdAt: "2026-10-19T12:00:00Z" as never };
+  assert.ok(r.snapshot);
   assert.equal(SPEC_VERSION, "0.1.53");
 });
