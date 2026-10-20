@@ -475,3 +475,19 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 - Bridge tests (0.2.5): no `bd` to an app without `proofClaims` (an SDK 0.1.35 app), none when the set is absent or lists
   something else, none after a config manifest/version/candidate change until the next push, `bd` to an app that lists it;
   a connect failure or a 401 does NOT drop the capability and is not retried without `bd`; a service claim never sets it.
+
+## v0.1.54 — bridge capabilities (C292); adopt write-op crud (C290); rollback wording (C291b)
+- `StatusReport.bridge.caps?: BridgeCap[]` (`BRIDGE_CAPS = ["owner_rows"]`): a bridge declares ONLY what it implements;
+  `"owner_rows"` = the C283 A1 owner-row filter. Core copies the bridge's last AUTHENTICATED report into every slice it signs as
+  `slice.bridge.caps` and issues a new slice revision when the set changes; absent = none. The SDK exposes
+  `ctx.bridgeCaps()` (from the current verified slice; `[]` when the slice is absent, expired or has none). Apps decide by
+  capability, never by bridge version (C268c reasoning). Compatible without a gate: Core's `bridge_api.ack` input accepts
+  unknown members (an older Core ignores `caps`), `verifySlice` checks only `bridge.id`/`keys` (an older SDK accepts the field).
+  Bridge 0.2.4 implements A1 but does not declare it; bridge 0.2.5 declares `owner_rows`; the 0.1.x line never does.
+- `AdoptResolved.grants[].write[].crud` (C290): the op's manifest crud (absent → `["read"]`, the same default the grant uses).
+- `instances.rollback`: `acceptDataLoss` not `true` → 400 `validation_failed` (was written `input_invalid` in 0.1.53; Core's code
+  is `validation_failed`). `TB_RESTORE_FROM` after a failed restore: C291b (PORTAL-API).
+- Release order (C215): spec 0.1.54 → Core (copies caps into slices) → miniapp-sdk 0.1.37 (`ctx.bridgeCaps`) + conformance 0.1.27
+  → bridge 0.2.5 (declares `owner_rows`; with `bd`, C268c). manifest stays 0.1.28.
+- Conformance rows (0.1.27): the app's `ctx.bridgeCaps()` equals the slice's `bridge.caps`; absent → `[]`; an expired slice → `[]`.
+  Bridge tests (0.2.5): caps declared in every StatusReport; never `owner_rows` without the A1 filter.

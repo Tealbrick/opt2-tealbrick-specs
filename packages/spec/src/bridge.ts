@@ -216,7 +216,16 @@ export interface InstanceSlice extends SliceClaims {
   product: ProductId;
   portalKeys: PortalKeyEntry[];
   /** keys the app accepts for call proofs; v0.1.10 (C64) `publicUrl` = bridge public origin (OpContext.publicUrl) */
-  bridge: { id: BridgeId; keys: Ed25519PublicJwk[]; publicUrl?: string; /** v0.1.43 (LA-1): tb-views origin or null */ viewUrl?: string | null };
+  bridge: {
+    id: BridgeId;
+    keys: Ed25519PublicJwk[];
+    publicUrl?: string;
+    /** v0.1.43 (LA-1): tb-views origin or null */
+    viewUrl?: string | null;
+    /** v0.1.54 (C292): what the workspace bridge declared it implements (BRIDGE_CAPS), copied by Core from the bridge's last
+     *  authenticated StatusReport; absent or [] = none. Apps decide by capability, never by bridge version. */
+    caps?: string[];
+  };
   pause: PauseState;
   revoked: RevokedSet;
   personNbf: EpochS;
@@ -277,6 +286,9 @@ export type ConfigPullResponse = { status: 200; body: CompactJws } | { status: 3
 
 // ── Status report = ack (BRIDGE §5.6) — op `bridge_api.ack` ─────────────────
 export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" | "paused";
+/** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps). */
+export const BRIDGE_CAPS = ["owner_rows"] as const;
+export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
   appliedAt: IsoTime;
@@ -288,6 +300,9 @@ export interface StatusReport {
     boot: string;
     sdkMajors: number[];
     mcpVersions: string[];
+    /** v0.1.54 (C292): the capabilities this bridge implements (BRIDGE_CAPS). "owner_rows" = the C283 A1 owner-row filter
+     *  (catalog `admitted`, scope_summary `admittedOps`, gate skips op.crud ⊆ grant.crud for scoped ops). Absent = none. */
+    caps?: BridgeCap[];
   };
   portalReachable: boolean;
   /** v0.1.14: connections that authenticated (agent assertion / pairing session) since the previous report, latest time each, ≤ 500 */
