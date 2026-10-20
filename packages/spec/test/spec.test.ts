@@ -446,5 +446,12 @@ test("v0.1.52 (C283c + C268 B): owner row effective crud and offer; hook proof b
   assert.deepEqual(st.proofClaims, ["bd"]);
   const acts: import("../src/sdk.ts").SdkAuditAction[] = ["scope.snapshot_backfill", "scope.offer_accepted"];
   assert.equal(acts.length, 2);
-  assert.equal(SPEC_VERSION, "0.1.52");
+});
+
+test("v0.1.53 (C289): TBD device-flow owner sessions have a 7-day idle limit; CLI stays 24 h; absolute 30 d", async () => {
+  const { LIFETIME_S } = await import("../src/credentials.ts");
+  assert.equal(LIFETIME_S.ownerDeviceSessionIdle, 604800);
+  assert.equal(LIFETIME_S.ownerCliSessionIdle, 86400);
+  assert.ok(LIFETIME_S.ownerDeviceSessionIdle < LIFETIME_S.ownerCliSessionAbsolute, "idle never exceeds the absolute life");
+  assert.equal(SPEC_VERSION, "0.1.53");
 });

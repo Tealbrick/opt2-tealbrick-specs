@@ -74,6 +74,10 @@ export const LIFETIME_S = {
   pairingCode: 600,
   ownerCliSessionAbsolute: 30 * 86400,
   ownerCliSessionIdle: 86400,
+  /** v0.1.53 (C289): idle limit of an owner session created by the TBD device flow (`client: tbd`); slides on every use like the
+   *  CLI idle limit and never passes `ownerCliSessionAbsolute` (30 d). CLI sessions keep `ownerCliSessionIdle` (24 h). Revoke,
+   *  account disable and the absolute life end it as before. */
+  ownerDeviceSessionIdle: 7 * 86400,
   agentAccess: 900,
   agentRefreshSliding: 30 * 86400,
   /** previous refresh token accepted once within this window (CORE I12) */
