@@ -474,6 +474,8 @@ test("v0.1.54 (C292 + C290): bridge capabilities in the status report and the sl
   assert.equal(plain, true, `the base slice bridge must be valid: ${JSON.stringify(v.errors)}`);
   assert.equal(v({ ...base, caps: ["owner_rows"] }), true, JSON.stringify(v.errors));
   assert.equal(v({ ...base, caps: ["Bad Cap"] }), false);
+  assert.equal(v({ ...base, caps: ["owner_rows", "owner_rows"] }), false, "duplicates are refused (Core dedupes)");
+  assert.equal(v({ ...base, caps: Array.from({ length: 17 }, (_, i) => `cap_${i}`) }), false, "at most 16");
   const w: import("../src/routes.ts").AdoptResolved["grants"][number]["write"][number] = { opId: "note_create", title: "Create a note", effect: "write", crud: ["create"], checked: false };
   assert.deepEqual(w.crud, ["create"]);
   assert.equal(SPEC_VERSION, "0.1.54");

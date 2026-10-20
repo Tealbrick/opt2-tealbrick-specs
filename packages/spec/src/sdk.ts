@@ -427,8 +427,9 @@ export interface OpContext {
    *  the CURRENT signed slice `companionCallers` (frozen copies; [] when the slice is expired). Undefined on agent/app calls. */
   companionCallers?: () => readonly CompanionCaller[];
   /** v0.1.54 (C292): the capabilities the workspace bridge declared, from the CURRENT verified slice (`slice.bridge.caps`; [] when
-   *  the slice is absent, expired or has none). Decide by capability (e.g. "owner_rows"), never by bridge version. */
-  bridgeCaps: () => readonly string[];
+   *  the slice is absent, expired or has none). Decide by capability (e.g. "owner_rows"), never by bridge version. Advisory: a cap
+   *  never widens access (the SDK authorizes every call). Optional in this type (hand-built contexts); the SDK always sets it. */
+  bridgeCaps?: () => readonly string[];
   /** v0.1.47: agent callers only — drop the calling agent's own access to one instance (narrowing is always allowed). */
   scopeSelfRevoke?: (type: string, instanceId: string) => Promise<void>;
   /** v0.1.3 (C31): THE app-secret mechanism */

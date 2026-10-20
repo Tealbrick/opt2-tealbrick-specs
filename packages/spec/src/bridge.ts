@@ -223,7 +223,8 @@ export interface InstanceSlice extends SliceClaims {
     /** v0.1.43 (LA-1): tb-views origin or null */
     viewUrl?: string | null;
     /** v0.1.54 (C292): what the workspace bridge declared it implements (BRIDGE_CAPS), copied by Core from the bridge's last
-     *  authenticated StatusReport; absent or [] = none. Apps decide by capability, never by bridge version. */
+     *  authenticated StatusReport (normalised: SDK-API v0.1.54); absent or [] = none. Apps decide by capability, never by bridge
+     *  version. Advisory: it MUST NOT widen access (display and feature switches only; the SDK authorizes every call). */
     caps?: string[];
   };
   pause: PauseState;
