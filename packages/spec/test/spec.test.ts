@@ -486,5 +486,12 @@ test("v0.1.55 (C296): a setting choice view carries the manifest note and disabl
     choices: [{ value: "gbrain", label: "GBrain" }, { value: "hindsight", label: "Hindsight", note: "soon", disabled: true }],
   };
   assert.equal(f.choices?.find((c) => c.disabled)?.note, "soon");
-  assert.equal(SPEC_VERSION, "0.1.55");
+});
+
+test("v0.1.56 (C296): needs_keys is an instance error code (a companion waits for a required key)", () => {
+  const e: import("../src/routes.ts").InstanceError = { code: "needs_keys", message: "The gbrain service waits for OPENAI_API_KEY. Enter it on the bridge key page, then use Retry." };
+  assert.equal(e.code, "needs_keys");
+  const attention: import("../src/routes.ts").Instance["attention"] = { code: "engine_missing", reason: "No memory engine runs." };
+  assert.equal(attention?.code, "engine_missing");
+  assert.equal(SPEC_VERSION, "0.1.56");
 });

@@ -143,6 +143,8 @@ export type ErrorCode =
   | "expired_token" | "enrolment_code_invalid" | "bridge_key_revoked" | "stripe_signature_invalid"
   | "clerk_signature_invalid" | "account_disabled"
   | "offer_unavailable" | "checkout_failed" | "upstream_timeout"
+  /** v0.1.56 (C296): Instance.lastError of a companion that could not start because a required key it uses is not set */
+  | "needs_keys"
   /** v0.1.13 (C86): tickets.launch `path` outside the target app */
   | "path_invalid"
   /** v0.1.13 (C82): instances.consent for a consent the release does not ask for */
@@ -796,6 +798,9 @@ export interface Instance {
   companionIssues?: { target: ProductId | "*"; edge: EdgeId | null; state: "blocked" | "not_deployed" | "unlicensed" | "paused" | "disabled"; reason: "companion_op_missing" | "target_not_deployed" | null; detail: string }[];
   provider: ProviderKey | "own_infra";
   settings: Record<string, SettingValue>;
+  /** v0.1.56 (C296 INFO-1): the app's own attention as the bridge reported it (AppStatus.attention: code + plain reason,
+   *  ≤ 200 chars, cleaned by Core), so the owner sees WHY an app is degraded (e.g. engine_missing). Absent when none. */
+  attention?: { code: string; reason: string } | null;
   lastError: InstanceError | null;
   createdAt: IsoTime;
   /** v0.1.13 (C82): consents the release asks for (wildcard companion → `holds_pending_all`) and their state */
