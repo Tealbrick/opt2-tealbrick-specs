@@ -486,7 +486,9 @@ export interface AdoptResolved {
     licensed: boolean;
     requestedCrud: Crud[];
     read: { opId: string; title: string; checked: boolean }[];
-    write: { opId: string; title: string; effect: Effect; holdFamily?: HoldFamily; checked: false }[];
+    /** v0.1.54 (C290): `crud` = the op's manifest crud (absent in the manifest → ["read"], the grant rule); the owner form's
+     *  "Tick what the agent asked for" ticks the write ops whose crud ⊆ requestedCrud and contains a write verb (never money). */
+    write: { opId: string; title: string; effect: Effect; holdFamily?: HoldFamily; crud: Crud[]; checked: false }[];
   }[];
   channel?: AdoptChannel;
   wake?: AdoptWake;
@@ -856,7 +858,7 @@ export interface RollbackInput {
    *  from the target. Accepted ONLY when the same call without `restore` would be refused `rollback_needs_restore` and
    *  `details.restorable` is non-null; `snapshot` + `sha256` must equal the instance's CURRENT reported `preUpdateSnapshot` exactly
    *  (`acceptDataLoss` literal `true`: changes since the snapshot are lost). Anything else → `release_not_deployable`
-   *  `details.reason` `rollback_restore_unavailable` (acceptDataLoss not true → 400 `input_invalid`). Not allowed in drafts. */
+   *  `details.reason` `rollback_restore_unavailable` (acceptDataLoss not true → 400 `validation_failed`). Not allowed in drafts. */
   restore?: { snapshot: string; sha256: string; acceptDataLoss: true };
 }
 /** v0.1.53 (QA INFO-1): `details.restorable` of a `release_not_deployable` `rollback_needs_restore` refusal: the pre-update snapshot the

@@ -95,6 +95,7 @@
             "$ref": "workspace-config.schema.json#/$defs/ed25519Jwk"
           }
         },
+        "caps": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" }, "description": "v0.1.54 (C292): capabilities the workspace bridge declared (BRIDGE_CAPS), normalised by Core from its last authenticated status report; absent or [] = none. Advisory: never widens access." },
         "viewUrl": {
           "oneOf": [{ "$ref": "workspace-config.schema.json#/$defs/httpsUrl" }, { "type": "null" }],
           "description": "v0.1.43 (LA-1, C232): the origin of the workspace views service (tb-views) or null when none exists yet; apps answer view_origin_missing (409) while null."

@@ -475,3 +475,27 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 - Bridge tests (0.2.5): no `bd` to an app without `proofClaims` (an SDK 0.1.35 app), none when the set is absent or lists
   something else, none after a config manifest/version/candidate change until the next push, `bd` to an app that lists it;
   a connect failure or a 401 does NOT drop the capability and is not retried without `bd`; a service claim never sets it.
+
+## v0.1.54 — bridge capabilities (C292); adopt write-op crud (C290); rollback wording (C291b)
+- `StatusReport.bridge.caps?: BridgeCap[]` (`BRIDGE_CAPS = ["owner_rows"]`): a bridge declares ONLY what it implements;
+  `"owner_rows"` = the C283 A1 owner-row filter (catalog `admitted`, scope_summary `admittedOps`, gate skips `op.crud ⊆ grant.crud`
+  for scoped ops). It first ships in bridge 0.2.5; bridge 0.2.4 (G2b only) and the 0.1.x line do NOT implement A1 and never
+  declare it. Core NORMALISES the reported list (keeps every entry matching `^[a-z][a-z0-9_]{0,39}$`, also ones it does not know, so a newer bridge's caps pass through; dedupes, sorts, at most 16; a
+  missing or non-array member = `[]`), compares it with the stored set AS A SET, and in ONE transaction stores it and issues a
+  new slice revision when the set changed; every slice Core signs carries the stored set as `slice.bridge.caps`. A STANDALONE
+  bridge (no Core) sets `slice.bridge.caps` itself from its own implemented set. The SDK exposes `ctx.bridgeCaps()` (from the
+  current verified slice; `[]` when the slice is absent, expired or has none; unknown entries are passed through). Caps are
+  ADVISORY: they MUST NOT widen access anywhere (a bridge that declares a cap it lacks only changes display/feature switches; the
+  SDK authorizes every call, and a bridge without the A1 gate refuses above-grant scoped ops, so it fails closed). Apps decide
+  by capability, never by bridge version (C268c). Compatible without a gate: Core's `bridge_api.ack` input accepts unknown
+  members (an older Core ignores `caps`), `verifySlice` checks only `bridge.id`/`keys` (an older SDK accepts the field).
+- `AdoptResolved.grants[].write[].crud` (C290): the op's manifest crud (absent → `["read"]`, the same default the grant uses).
+- `instances.rollback`: `acceptDataLoss` not `true` → 400 `validation_failed` (was written `input_invalid` in 0.1.53; Core's code
+  is `validation_failed`). `TB_RESTORE_FROM` after a failed restore: C291b (PORTAL-API).
+- Release order (C215): spec 0.1.54 → Core (copies caps into slices) → miniapp-sdk 0.1.37 (`ctx.bridgeCaps`) + conformance 0.1.27
+  → bridge 0.2.5 (the A1 owner-row filter + declares `owner_rows`; with `bd`, C268c). manifest stays 0.1.28.
+- Conformance rows (0.1.27): the app's `ctx.bridgeCaps()` equals the slice's `bridge.caps`; absent → `[]`; an expired slice → `[]`.
+  The bridge suite gates its A1 rows (B5) by the bridge's reported `owner_rows` cap, NOT by version (a version gate ≥ 0.2.4
+  would fail a real 0.2.4 bridge, which has no A1). Bridge tests (0.2.5): caps declared in every StatusReport; never
+  `owner_rows` without the A1 filter. Core tests: normalisation (bad entry dropped, duplicates, order flip = no new revision,
+  > 16 truncated), downgrade (caps disappear → new revision without them).

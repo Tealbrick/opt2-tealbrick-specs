@@ -459,5 +459,24 @@ test("v0.1.53 (C289 + C291): TBD device-flow owner sessions have a 7-day idle li
   const { AUDIT_ACTIONS } = await import("../src/routes.ts");
   assert.ok((AUDIT_ACTIONS as readonly string[]).includes("instance.rollback_restore"));
   assert.ok(r.snapshot);
-  assert.equal(SPEC_VERSION, "0.1.53");
+});
+
+test("v0.1.54 (C292 + C290): bridge capabilities in the status report and the slice; adopt write-op crud", async () => {
+  const { BRIDGE_CAPS } = await import("../src/bridge.ts");
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows"]);
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const slice = load("instance-slice.schema.json");
+  const v = ajv.compile({ ...slice.properties.bridge, $id: new URL("tbtest-slice-bridge.json", slice.$id).href, $defs: slice.$defs });
+  const key = { kty: "OKP", crv: "Ed25519", x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo", kid: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo" };
+  const base = { id: "brg_01M53BAEQSGKVVY4PRM2VE6FBF", keys: [key] };
+  const plain = v(base);
+  assert.equal(plain, true, `the base slice bridge must be valid: ${JSON.stringify(v.errors)}`);
+  assert.equal(v({ ...base, caps: ["owner_rows"] }), true, JSON.stringify(v.errors));
+  assert.equal(v({ ...base, caps: ["Bad Cap"] }), false);
+  assert.equal(v({ ...base, caps: ["owner_rows", "owner_rows"] }), false, "duplicates are refused (Core dedupes)");
+  assert.equal(v({ ...base, caps: Array.from({ length: 17 }, (_, i) => `cap_${i}`) }), false, "at most 16");
+  const w: import("../src/routes.ts").AdoptResolved["grants"][number]["write"][number] = { opId: "note_create", title: "Create a note", effect: "write", crud: ["create"], checked: false };
+  assert.deepEqual(w.crud, ["create"]);
+  assert.equal(SPEC_VERSION, "0.1.54");
 });
