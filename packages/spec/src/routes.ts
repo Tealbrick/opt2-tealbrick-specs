@@ -12,7 +12,7 @@ import type {
   AgentId, BridgeId, ConnectionId, DeviceClientId, DeviceRequestId, DeviceScope, Ed25519PublicJwk,
   FreeCaps, InstanceId, OwnerSessionClient, PersonId, WorkspaceId,
 } from "./credentials.ts";
-import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingType } from "./manifest.ts";
+import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
 
 export type Crud = CrudAction;
 /** I14 shape `{write?, outward?, destructive?: {max, per}}` — owned by ./credentials.ts (FreeCaps). */
@@ -536,7 +536,9 @@ export interface SettingFieldView {
   help: string | null;
   required: boolean;
   default: SettingValue | null;
-  choices: { value: string; label: string }[] | null;
+  /** v0.1.55 (C296): Core copies the manifest choice `note` and `disabled`. A disabled choice is shown greyed with its note
+   *  ("soon") and can never be chosen: `instances.deploy` / `instances.update` refuse it (`validation_failed`, reason `choice_disabled`). */
+  choices: SettingChoice[] | null;
   /** v0.1.11 (C69c): manifest `mutable` (default true); `false` = fixed at install, the GUI renders it read-only after deploy. */
   mutable?: boolean;
 }
