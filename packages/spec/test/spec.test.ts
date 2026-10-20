@@ -450,12 +450,14 @@ test("v0.1.52 (C283c + C268 B): owner row effective crud and offer; hook proof b
 
 test("v0.1.53 (C289 + C291): TBD device-flow owner sessions have a 7-day idle limit; owner rollback with restore", async () => {
   const { LIFETIME_S } = await import("../src/credentials.ts");
-  assert.equal(LIFETIME_S.ownerDeviceSessionIdle, 604800);
+  assert.equal(LIFETIME_S.ownerTbdSessionIdle, 604800);
   assert.equal(LIFETIME_S.ownerCliSessionIdle, 86400);
-  assert.ok(LIFETIME_S.ownerDeviceSessionIdle < LIFETIME_S.ownerCliSessionAbsolute, "idle never exceeds the absolute life");
-  const rb: import("../src/routes.ts").RollbackInput = { ws: "ws_01M53BAEQSGKVVY4PRM2VE6FBF" as never, ins: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, restore: { snapshot: "pre-update-0.2.13-0.3.0.tar.gz", acceptDataLoss: true } };
+  assert.ok(LIFETIME_S.ownerTbdSessionIdle < LIFETIME_S.ownerCliSessionAbsolute, "idle never exceeds the absolute life");
+  const rb: import("../src/routes.ts").RollbackInput = { ws: "ws_01M53BAEQSGKVVY4PRM2VE6FBF" as never, ins: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, restore: { snapshot: "tb-preupdate-to-0.3.0.tar.gz", sha256: "a".repeat(64), acceptDataLoss: true } };
   assert.equal(rb.restore?.acceptDataLoss, true);
-  const r: import("../src/routes.ts").RollbackRestorable = { snapshot: "pre-update-0.2.13-0.3.0.tar.gz", createdAt: "2026-10-19T12:00:00Z" as never };
+  const r: import("../src/routes.ts").RollbackRestorable = { snapshot: "tb-preupdate-to-0.3.0.tar.gz", sha256: "a".repeat(64), createdAt: "2026-10-19T12:00:00Z" as never };
+  const { AUDIT_ACTIONS } = await import("../src/routes.ts");
+  assert.ok((AUDIT_ACTIONS as readonly string[]).includes("instance.rollback_restore"));
   assert.ok(r.snapshot);
   assert.equal(SPEC_VERSION, "0.1.53");
 });

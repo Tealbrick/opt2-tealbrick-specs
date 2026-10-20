@@ -112,7 +112,7 @@ export const AUDIT_ACTIONS = [
   "connection.create", "connection.revoke",
   "device.approve", "device.deny", "device.redeem",
   "canvas.save", "edge.create", "edge.update", "edge.delete", "hook.set",
-  "instance.deploy", "instance.retry", "instance.cancel", "instance.update", "instance.rollback",
+  "instance.deploy", "instance.retry", "instance.cancel", "instance.update", "instance.rollback", "instance.rollback_restore",
   "instance.remove", "instance.register_own_infra", "instance.registered", "bridge.deploy",
   /** v0.1.13 (C82): owner grants / revokes a consent (wildcard companion `tb.holds_pending`) */
   "instance.consent",
@@ -453,7 +453,7 @@ export interface DeviceStart {
   interval: number;
 }
 export interface DeviceTokenInput { grant_type: "urn:ietf:params:oauth:grant-type:device_code"; device_code: string; client_id: DeviceClientId }
-/** K3 owner native session (opaque `tbo_`); idle timeout 24 h (S1). */
+/** K3 owner native session (opaque `tbo_`); idle timeout 24 h for client cli, 7 d for client tbd (v0.1.53 C289); 30 d absolute. */
 export interface DeviceOwnerTokenResult { scope: "owner"; access_token: string; token_type: "Bearer"; expires_in: number; session_id: OwnerSessionId }
 /** No token: each agent then signs a K4 assertion at the bridge `token_endpoint`. */
 export interface DeviceAgentTokenResult {
@@ -812,6 +812,9 @@ export interface InstanceLastUpdate {
   reason?: { code: string; message: string };
   /** rolled_back with a snapshot restore: the data is as it was when the update started; null = data kept */
   dataRestoredTo?: IsoTime | null;
+  /** v0.1.53 (C291): the miniapp-sdk version the OLD (`from`) version reported before the update; absent on updates before Core
+   *  stored it (then an owner rollback-with-restore is not offered: restorable null). */
+  fromSdkVersion?: string;
 }
 /** v0.1.13 (C82). GUI text for `holds_pending_all`: "This app can see the pending approvals of all apps". */
 export type ConsentKind = "holds_pending_all";
@@ -850,14 +853,15 @@ export interface RollbackInput {
   ins: InstanceId;
   releaseId?: ReleaseId;
   /** v0.1.53 (QA INFO-1, C291): go back AND restore the data from the pre-update snapshot the running version took when it was updated
-   *  from the target. Only when the refusal's `details.restorable` was non-null; `acceptDataLoss` must be `true` (changes since the
-   *  snapshot are lost). `snapshot` = `details.restorable.snapshot`; Core re-checks it (the snapshot may have changed) and refuses
-   *  `release_not_deployable` `details.reason` `rollback_restore_unavailable` otherwise. */
-  restore?: { snapshot: string; acceptDataLoss: true };
+   *  from the target. Accepted ONLY when the same call without `restore` would be refused `rollback_needs_restore` and
+   *  `details.restorable` is non-null; `snapshot` + `sha256` must equal the instance's CURRENT reported `preUpdateSnapshot` exactly
+   *  (`acceptDataLoss` literal `true`: changes since the snapshot are lost). Anything else → `release_not_deployable`
+   *  `details.reason` `rollback_restore_unavailable` (acceptDataLoss not true → 400 `input_invalid`). Not allowed in drafts. */
+  restore?: { snapshot: string; sha256: string; acceptDataLoss: true };
 }
 /** v0.1.53 (QA INFO-1): `details.restorable` of a `release_not_deployable` `rollback_needs_restore` refusal: the pre-update snapshot the
  *  owner can restore with `RollbackInput.restore`, or `null` (no usable snapshot: the owner contacts support; ops RUNBOOK §6b). */
-export interface RollbackRestorable { snapshot: string; createdAt: IsoTime }
+export interface RollbackRestorable { snapshot: string; sha256: string; createdAt: IsoTime }
 /** I15: deleteData defaults to false (services stopped, volumes and backups kept). */
 export interface RemoveInput { ws: WorkspaceId; ins: InstanceId; deleteData: boolean }
 export interface RemoveResult {

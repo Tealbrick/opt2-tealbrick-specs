@@ -74,10 +74,11 @@ export const LIFETIME_S = {
   pairingCode: 600,
   ownerCliSessionAbsolute: 30 * 86400,
   ownerCliSessionIdle: 86400,
-  /** v0.1.53 (C289): idle limit of an owner session created by the TBD device flow (`client: tbd`); slides on every use like the
+  /** v0.1.53 (C289): idle limit of an owner session whose stored `owner_sessions.client` is `tbd` (TBD device flow; the CLI uses the
+   *  device flow too but is stored as `cli`); slides on every use like the
    *  CLI idle limit and never passes `ownerCliSessionAbsolute` (30 d). CLI sessions keep `ownerCliSessionIdle` (24 h). Revoke,
    *  account disable and the absolute life end it as before. */
-  ownerDeviceSessionIdle: 7 * 86400,
+  ownerTbdSessionIdle: 7 * 86400,
   agentAccess: 900,
   agentRefreshSliding: 30 * 86400,
   /** previous refresh token accepted once within this window (CORE I12) */
@@ -475,7 +476,7 @@ export const CREDENTIAL_REGISTRY = [
     storage: ["issuer_digest", "holder_keychain"], maxLifetimeS: 30 * 86400, oneTime: false,
     audienceRule: "Core route rows marked owner-CLI-allowed only (reads, drafts); never apply, any K11, K2b/K6 codes, device approval, confirm rows; no K3-reachable output carries a credential",
     verifier: "Core (digest)",
-    checks: ["digest match", "absolute 30 d", "idle 24 h", "route allows owner CLI"],
+    checks: ["digest match", "absolute 30 d", "idle 24 h (client cli) / 7 d (client tbd, C289)", "route allows owner CLI"],
     acceptedAt: ["Portal gateway → Core (owner-CLI-allowed rows)"],
     revocation: "tealbrick logout or Portal session list deletes the digest", revocationLatency: "immediate", pause: "n/a (person; drafts never act)",
   },
