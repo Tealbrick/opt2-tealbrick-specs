@@ -501,18 +501,23 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
   > 16 truncated), downgrade (caps disappear → new revision without them).
 
 ## 20. App events — `ctx.emit` and the outbox (v0.1.57; C274c, C274d; miniapp-sdk 0.1.38)
-`ctx.emit(name, data, {subject, to?, instanceId?, summary?, key?})` on OpContext, EventContext and StartContext (types:
-`EmitFn`, `EmitOptions`). The manifest declares each `name` (MANIFEST §16); the bridge delivers (BRIDGE §14).
+`ctx.emit(name, data, {subject, to?, instanceId?, summary?, untrusted?, key?})` and `ctx.purgeEvents(instanceId)` on
+OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `PurgeEventsFn`). The manifest declares each `name` (MANIFEST §16); the bridge delivers (BRIDGE §14).
 - **Synchronous, transactional.** `emit` validates, then writes ONE outbox row with `ctx.db` inside the transaction that
-  is open, so a rolled-back change never emits. Apps that change state and emit do both in one `ctx.db.transaction`.
-  Rows written during an op call are released only when the handler returns; a handler that throws discards them unsent
-  (a failed call wakes nobody). Held calls run the handler only on replay, so they emit then.
+  is open, so a rolled-back change never emits and a committed one always does. The outbox row shares the fate of its
+  transaction ONLY (a handler that commits and then throws still sends the event; a crash after commit sends it after
+  restart). Apps that change state and emit do both in one `ctx.db.transaction`; an emit outside a transaction is its own
+  write. Held calls run the handler only on replay, so they emit then.
 - **Validation (throws TbError 400, before any write):** undeclared name → `event_undeclared`; a `tb.*` name →
-  `event_reserved` (only the SDK emits platform events); `data` fails the `payloadSchema` → `event_payload_invalid`;
-  `data` > 2 KiB (JCS) or `summary` > 280 chars → `event_too_large`; `instanceId` missing on a scoped event or present on an
+  `event_reserved` (only the SDK emits platform events); `data` fails the `payloadSchema` or `key` fails
+  `^[A-Za-z0-9._:-]{8,128}$` → `event_payload_invalid`; `data` > 2 KiB (JCS) or `summary` > 280 chars → `event_too_large`; `instanceId` missing on a scoped event or present on an
   unscoped one → `event_instance_invalid`; `to` missing/empty/> 100 for `target` or present for `granted` →
   `event_target_invalid`; `subject.kind`/`subject.id` shape → `event_payload_invalid`. Tests catch these; the SDK does not
   swallow them in production (an emit bug is a code bug).
+- **Key.** Default = a new ULID made at emit (unique across restores and reinstalls); an app key is for cross-emit dedupe.
+  The bridge dedupes per (app instance, key) for 7 days.
+- **`untrusted: true`** is REQUIRED when `summary` contains third-party text (a message body, a sender's name); it is
+  copied to the envelope.
 - **`causedBy`** = the calling agent of the current op call (from the verified call, never from app code); absent for
   person calls, EventContext and StartContext.
 - **Sender.** A background sender drains the outbox in row order to `POST /tb/v1/events` (≤ 100 items per batch), ONLY
@@ -522,9 +527,11 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
 - **Scoped events.** At SEND time the sender computes `eligible` = agents with a row on (`scopeType`, `instanceId`) whose
   effective crud ⊇ `visibleWith.crud`, with each row's authority (MANIFEST §16.2 rule 2); for `target` it is intersected
   with `to`. The bridge never delivers outside it.
-- **Purge.** When a row of agent A on an instance is removed or its effective crud narrows (`tb.scopes_set`,
-  `ctx.scopeGrants.grant/revoke`, `ctx.scopeSelfRevoke`), the SDK writes a `purge {agent, instanceId}` row in the same
-  transaction as the row change; it drains in order with the events.
+- **Purge.** When a row of agent A on an instance is removed, its effective crud narrows, or its authority changes from
+  `owner` to `bounded` (`tb.scopes_set`, `ctx.scopeGrants.grant/revoke`, `ctx.scopeSelfRevoke`), the SDK writes a
+  `purge {agent, instanceId}` row in the same transaction as the row change; it drains in order with the events.
+  `ctx.purgeEvents(instanceId)` (synchronous, outbox) writes `purge {instanceId}` for every agent: apps call it in the
+  transaction that deletes or disconnects an instance.
 - **`tb.hold.decided`.** The SDK emits it after a hold decision (`tb.holds_decide`, after `receipts.decide`) and from the
   expiry sweep, `to` = the hold's caller when that caller is an agent; data `{holdId, op, decision}`; subject
   `{kind: "hold", id: holdId}`; no summary.
@@ -532,4 +539,5 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
   throwing handler emit nothing; an invalid payload or an undeclared name throws; bridge 503 then retry → delivered once
   (same key); a slice without `"events"` → nothing sent, then the cap appears → the backlog is sent in order; a scoped
   emit carries the right `eligible` (owner row above the grant → `owner`; `apps_only`-style row is still listed, so the app
-  must not emit there — MANIFEST §16.2); a row removal sends a purge after the earlier events.
+  must not emit there — MANIFEST §16.2); a row removal, narrowing or owner→bounded change sends a purge after the earlier
+  events; `ctx.purgeEvents` sends an all-agent purge; a committed transaction followed by a throw still sends.

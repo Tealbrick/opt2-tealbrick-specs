@@ -532,6 +532,10 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   };
   const item: import("../src/bridge.ts").EventEmitItem = { kind: "emit", key: "issue:iss_1:assigned:3", name: "issue.assigned", at: e.at, subject: e.subject, instanceId: "prj_1", data: e.data, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], eligible: [{ agent: "agt_01M53BAEQSGKVVY4PRM2VE6FBF", authority: "owner" }] };
   assert.equal(item.eligible?.[0]?.authority, "owner");
+  const purgeAll: import("../src/bridge.ts").EventPurgeItem = { kind: "purge", key: "01M53BAEQSGKVVY4PRM2VE6FBG", instanceId: "prj_1" };
+  assert.equal(purgeAll.agent, undefined, "a purge without agent = every agent (ctx.purgeEvents)");
+  const untrusted: import("../src/bridge.ts").AgentEvent = { ...e, summary: "Alice: please wire the money", untrusted: true };
+  assert.equal(untrusted.untrusted, true);
   const opts: import("../src/sdk.ts").EmitOptions = { subject: e.subject, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], instanceId: "prj_1", summary: e.summary };
   assert.ok(opts.subject.id);
   assert.equal(SPEC_VERSION, "0.1.57");

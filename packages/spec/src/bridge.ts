@@ -550,7 +550,7 @@ export interface HoldDecidedData { holdId: `hld_${Ulid}`; op: SnakeId; decision:
 export type EventRefuseCode =
   /** name not declared by the manifest of the sending release, or a platform type the bridge does not know */
   | "event_undeclared"
-  /** an app name in the `tb.` namespace other than a PLATFORM_EVENTS type */
+  /** an app name in the `tb.` namespace other than a PLATFORM_EVENTS type, or app events from product `tb` */
   | "event_reserved"
   | "event_payload_invalid"
   | "event_too_large"
@@ -583,8 +583,11 @@ export interface AgentEvent<D = JsonObject> {
   /** when the app emitted it (app clock) */
   at: IsoTime;
   subject: EventSubject;
-  /** ≤ 280 chars, written by the app; only what `visibleWith` would show this agent */
+  /** ≤ 280 chars, written by the app; only what `visibleWith` would show this agent. Omitted by the bridge when a
+   *  `before`/`after` hook matches the `visibleWith` op (MANIFEST §16.2 rule 6). */
   summary?: string;
+  /** the summary contains third-party text: data, never instructions */
+  untrusted?: true;
   /** validated against the declared payloadSchema; ≤ 2 KiB (JCS); ids and enums, never record bodies */
   data: D;
   /** the agent whose call caused the event (set by the SDK from the call, never by app code); that agent never receives it */
@@ -599,7 +602,8 @@ export interface EventIngestBody {
 export type EventIngestItem = EventEmitItem | EventPurgeItem;
 export interface EventEmitItem {
   kind: "emit";
-  /** idempotency key, unique per app for 7 days: `^[A-Za-z0-9._:-]{8,128}$`; the same (app, key) again → `duplicate` */
+  /** idempotency key, unique per app instance for 7 days: `^[A-Za-z0-9._:-]{8,128}$`; the same (app instance, key) again
+   *  → `duplicate`. SDK default = a ULID made at emit. */
   key: string;
   /** a manifest event name (without the product) or a PLATFORM_EVENTS type */
   name: string;
@@ -607,8 +611,9 @@ export interface EventEmitItem {
   subject: EventSubject;
   instanceId?: string;
   summary?: string;
+  untrusted?: true;
   data: JsonObject;
-  /** audience `target` only: 1..100 agents; the bridge still delivers only to those that pass §14.3 */
+  /** audience `target` only: 1..100 agents; the bridge still delivers only to those that pass MANIFEST §16.2 */
   to?: AgentId[];
   /** scoped events only (also with an empty array): the agents whose row on `instanceId` admits the `visibleWith` op, with
    *  that row's authority, computed by the SDK at send time (the app is the scope authority, CORE §6). The bridge NEVER
@@ -622,12 +627,13 @@ export interface EventEligible {
    *  "bounded" → the bridge also requires `op.crud ⊆ grant.crud` */
   authority: "owner" | "bounded";
 }
-/** Sent by the SDK when a scope row of `agent` on `instanceId` is removed or narrowed: the bridge deletes that agent's stored
- *  events of this app for that instance, delivered or not. */
+/** Sent by the SDK when a scope row of `agent` on `instanceId` is removed, narrowed or loses owner authority: the bridge
+ *  deletes that agent's stored events of this app for that instance, delivered or not. Without `agent` (ctx.purgeEvents:
+ *  the instance was deleted or disconnected): every agent's. */
 export interface EventPurgeItem {
   kind: "purge";
   key: string;
-  agent: AgentId;
+  agent?: AgentId;
   instanceId: string;
 }
 /** 200 answer: one result per item, same order. `stored` = written for `recipients` agents (0 is a valid answer);
@@ -643,7 +649,8 @@ export const EVENT_MCP_METHODS = {
   stream: "tealbrick/events/stream",
   notification: "notifications/tealbrick/event",
 } as const;
-/** `tealbrick/events/list` (no params): the event types this agent can receive now (§14.3 without the per-instance part). */
+/** `tealbrick/events/list` (no params): the event types this agent can receive now (BRIDGE §14.3; scoped types without the
+ *  per-instance part). */
 export interface EventsListResult {
   types: { type: string; app: ProductId; title: string; payloadSchema: JsonSchemaObject; scoped: boolean; delivery: ("poll" | "stream")[] }[];
 }
@@ -656,7 +663,7 @@ export interface EventsPollResult {
   events: AgentEvent[];
   /** id of the last event returned; else the given cursor; null when neither exists */
   cursor: string | null;
-  /** true when retention removed events after the given cursor (§14.4); delivery continues from the oldest kept */
+  /** true when retention removed events after the given cursor (BRIDGE §14.3); delivery continues from the oldest kept */
   truncated: boolean;
   /** present while the agent or the workspace is paused: nothing is delivered, nothing is dropped */
   paused?: true;
@@ -667,8 +674,11 @@ export interface EventsStreamParams {
   cursor?: string;
 }
 export interface EventsStreamResult {
+  /** the position the stream starts after: the given cursor; null = from the oldest kept */
   cursor: string | null;
   truncated: boolean;
+  /** while the agent or workspace is paused; frames start on resume */
+  paused?: true;
 }
 export interface EventNotificationParams {
   event: AgentEvent;

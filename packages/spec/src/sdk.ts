@@ -433,6 +433,8 @@ export interface OpContext {
   /** v0.1.57 (C274c/C274d): emit one declared app event (SDK-API §20). Optional in this type (hand-built contexts); SDKs from
    *  0.1.38 always set it. */
   emit?: EmitFn;
+  /** v0.1.57: write an all-agent purge for an instance the app deletes or disconnects (SDK-API §20) */
+  purgeEvents?: PurgeEventsFn;
   /** v0.1.47: agent callers only — drop the calling agent's own access to one instance (narrowing is always allowed). */
   scopeSelfRevoke?: (type: string, instanceId: string) => Promise<void>;
   /** v0.1.3 (C31): THE app-secret mechanism */
@@ -467,6 +469,7 @@ export interface StartContext {
   ownerLink(path: string): string | null;
   /** v0.1.57 (C274c): as OpContext.emit (timers, background work); no call, so no `causedBy`. Usable for the app's lifetime. */
   emit?: EmitFn;
+  purgeEvents?: PurgeEventsFn;
 }
 /** v0.1.13: the ctx every event handler gets (C85: callApp outside an op handler; C86: statusChanged). */
 export interface EventContext {
@@ -479,13 +482,17 @@ export interface EventContext {
   ownerLink(path: string): string | null;
   /** v0.1.57 (C274c): as OpContext.emit; no call, so no `causedBy` */
   emit?: EmitFn;
+  purgeEvents?: PurgeEventsFn;
 }
 
 /** v0.1.57 (C274c/C274d, SDK-API §20): `emit(name, data, opts)`. SYNCHRONOUS: validates, then writes one outbox row with
- *  `ctx.db` in the transaction that is open (a rolled-back transaction emits nothing). Throws TbError (400) on
- *  `event_undeclared`, `event_reserved`, `event_payload_invalid`, `event_too_large`, `event_instance_invalid`,
- *  `event_target_invalid`. Rows of a call whose handler throws are discarded unsent. */
+ *  `ctx.db` in the transaction that is open; the row shares that transaction's fate only (rolled back → never sent,
+ *  committed → sent). Throws TbError (400) on `event_undeclared`, `event_reserved`, `event_payload_invalid`,
+ *  `event_too_large`, `event_instance_invalid`, `event_target_invalid`. */
 export type EmitFn = (name: string, data: Json, opts: EmitOptions) => void;
+/** v0.1.57: synchronous outbox write of `purge {instanceId}` (every agent); call it in the transaction that deletes or
+ *  disconnects the instance. */
+export type PurgeEventsFn = (instanceId: string) => void;
 export interface EmitOptions {
   subject: { kind: string; id: string };
   /** audience `target`: the agents to wake (1..100); refused for `granted` */
@@ -494,7 +501,9 @@ export interface EmitOptions {
   instanceId?: string;
   /** ≤ 280 chars; only what `visibleWith` would show the recipients (C274d ruling 2) */
   summary?: string;
-  /** idempotency key across emits (`^[A-Za-z0-9._:-]{8,128}$`); default = the outbox row id */
+  /** REQUIRED when `summary` contains third-party text (message body, sender name) */
+  untrusted?: true;
+  /** idempotency key across emits (`^[A-Za-z0-9._:-]{8,128}$`); default = a new ULID made at emit */
   key?: string;
 }
 

@@ -374,7 +374,7 @@ disagree with the op; a derived one cannot). A scoped event names one instance o
 
 | Rule | Check |
 |---|---|
-| M-EV-1 | Names unique within the manifest; pattern above; any `tb.` name refused (the `tb.` event namespace is the platform's: `PLATFORM_EVENTS`, types/bridge.ts) → `event_name_invalid`. |
+| M-EV-1 | Names unique within the manifest; pattern above; any `tb.` name refused (the `tb.` event namespace is the platform's: `PLATFORM_EVENTS`, types/bridge.ts); a manifest whose `id` is `tb` declares no events (its wire types would read as platform types) → `event_name_invalid`. |
 | M-EV-2 | `payloadSchema` compiles (Ajv 2020, strict), object root, ≤ 8 KiB (JCS); embedded-schema limits of M-OP-8 (no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType`) → `event_schema_invalid`. |
 | M-EV-3 | `visibleWith` names an op of this manifest with `audience: agent` and no `dynamic` → `event_visible_with_invalid`. |
 | M-EV-4 | `payloadSchema` declares no top-level `summary` property (the summary travels in the envelope, set by `ctx.emit`, ≤ 280 chars) → `event_schema_invalid`. |
@@ -393,23 +393,35 @@ An event reaches agent A only when ALL of these hold, checked when the bridge st
 3. **Not the cause:** A ≠ `causedBy` (the SDK sets it from the call; app code cannot).
 4. **Audience:** `target` → A ∈ `to`.
 5. **Pause:** while A, the workspace or the app instance is paused, A's rows are KEPT and not delivered; delivery resumes
-   on resume (retention still applies). Every other failed check at delivery DROPS the row (grant revoked or narrowed).
+   on resume (retention still applies; an instance pause re-ids the held rows on release, BRIDGE §14.2, so a cursor that
+   moved past them meanwhile still gets them). Every other failed check at delivery DROPS the row (grant revoked or narrowed).
+6. **Hooks:** hooks run on `visibleWith` calls but not on events. When an enabled `before` or `after` hook matches the
+   `visibleWith` op (BRIDGE §8.1 steps 6 and 12: it may refuse, hold or redact what the op shows), the bridge delivers the
+   event WITHOUT `summary` (ids only); the agent reads the details through the op, where the hooks run.
 
 The SDK and the bridge can only see `authorize()` (CORE §7). A handler that refuses agents for its own reasons (beyond
 `authorize()`) is invisible to both: **an app MUST NOT emit an event to an agent that its `visibleWith` handler would refuse
-for that instance.** The summary may contain only what `visibleWith` would show that agent (C274d ruling 2).
+for that instance.** For a target event the app names in `to` only agents that its handler admits (e.g. the owner agent
+of the instance); the bridge still intersects with `eligible`. The summary may contain only what `visibleWith` would show
+that agent (C274d ruling 2). A summary that contains third-party text (a message body, a sender's display name) MUST set
+`untrusted: true` (the same marker the ops put on such content); runtimes treat it as data, never as instructions.
 
 Revocation: the bridge re-checks rule 1 at delivery, so a Portal grant change applies at once. A scope-row change is the
 app's: when a row of A on an instance is removed or its effective crud narrows (`tb.scopes_set`, `ctx.scopeGrants`,
-`ctx.scopeSelfRevoke`), the SDK sends a `purge` for (A, instance) through the same ordered outbox, and the bridge deletes
-A's stored events of that app and instance, delivered or not. A level narrowed by an app update (C283c, no row write) sends
-no purge: such events stay until retention, and they expose at most their summary (every detail read is authorized per call).
+`ctx.scopeSelfRevoke`), or its authority changes from `owner` to `bounded`, the SDK sends a `purge` for (A, instance)
+through the same ordered outbox, and the bridge deletes A's stored events of that app and instance, delivered or not. When
+the app deletes or disconnects an instance it calls `ctx.purgeEvents(instanceId)` (a purge for every agent). A level
+narrowed by an app update (C283c, no row write) sends no purge: such events stay until retention, and they expose at most
+their summary (every detail read is authorized per call).
 
 **Connect accounts (the settled case, C274d open point).** Connect's scope type is `account`.
-- An event about a connected account (e.g. a message arrives in a conversation of a bot/mail account) is scoped:
-  `visibleWith: "channel_conversations"` (scopeType `account`), `instanceId` = the account id. It reaches the agents whose
-  row on THAT account admits `read` (owner rows above the grant; bounded rows also within the Portal grant). An agent with
-  access to another account sees nothing.
+- A CHANNEL account (Slack/Teams/Telegram/Discord bot) belongs to one agent: `channel_conversations` refuses every other
+  agent (`scope_denied`, "This channel bot belongs to another agent"), whatever its row says. So a channel event is scoped
+  (`visibleWith: "channel_conversations"`, scopeType `account`, `instanceId` = the account id) AND `audience: "target"` with
+  `to: [account.ownerAgent]`; the bridge also requires that agent in `eligible` (its row on that account admits `read`).
+  A row alone never makes a channel event reach an agent. Summaries with message text set `untrusted: true`.
+- Mail and tool accounts (`channel_conversations` answers 404 for them) name their own `visibleWith` op when they get
+  events; none in the first wave.
 - The workspace sender instances `sender:<service>` are shared and app-only: the manifest default (`shared` → `apps_only`,
   no `callers`) gives every caller, agents included, an `apps_only` row with crud read/create/update, and only the handler
   refuses agents (`sender_reserved_for_apps`). The row check would therefore admit agents, so **Connect MUST NOT emit any
@@ -426,4 +438,5 @@ no purge: such events stay until retention, and they expose at most their summar
   release manifest with its pinned validator and SKIPS a release it refuses, and each bridge validates at claim. So Core
   re-pins manifest ≥ 0.1.30 before any app release with `events` is published, and `requiredBridgeVersion` gains the row
   "events declared → bridge ≥ 0.2.7" (the first bridge that pins it and declares the `events` cap), which Core's C104 gate
-  already applies at deploy.
+  already applies at deploy. Consequence: an app release WITH `events` cannot deploy to a workspace whose bridge is older
+  than 0.2.7; the app ships it after bridge 0.2.7 is available on that channel (not "harmless before the bridge").
