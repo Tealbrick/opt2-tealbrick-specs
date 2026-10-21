@@ -75,6 +75,12 @@
         "produces": { "type": "array", "uniqueItems": true, "maxItems": 16, "items": { "$ref": "#/$defs/contractId" } },
         "consumes": { "type": "array", "uniqueItems": true, "maxItems": 16, "items": { "$ref": "#/$defs/contractId" } }
       }
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 64,
+      "description": "v0.1.57 (C274c/C274d): event types this app emits (ctx.emit); the bridge delivers them to agents on the /mcp session (MANIFEST §16). Names unique (M-EV-1).",
+      "items": { "$ref": "#/$defs/eventDecl" }
     }
   },
   "$defs": {
@@ -235,6 +241,19 @@
         "mode": { "enum": ["list", "search"] },
         "crudCeiling": { "$ref": "#/$defs/crudSet" },
         "effectCeiling": { "$ref": "#/$defs/effect" }
+      }
+    },
+    "eventDecl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "payloadSchema", "visibleWith", "audience"],
+      "properties": {
+        "name": { "type": "string", "maxLength": 64, "pattern": "^(?!tb\\.)[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "payloadSchema": { "$ref": "#/$defs/jsonSchemaObject" },
+        "visibleWith": { "$ref": "#/$defs/snakeId" },
+        "audience": { "enum": ["target", "granted"] }
       }
     },
     "operation": {

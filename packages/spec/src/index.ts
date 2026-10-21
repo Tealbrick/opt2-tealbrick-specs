@@ -7,4 +7,4 @@ export * as credentials from "./credentials.ts";
 export * as manifest from "./manifest.ts";
 export * as routes from "./routes.ts";
 export * as sdk from "./sdk.ts";
-export const SPEC_VERSION = "0.1.56" as const;
+export const SPEC_VERSION = "0.1.57" as const;

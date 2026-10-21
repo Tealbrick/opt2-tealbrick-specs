@@ -81,6 +81,7 @@ v0.1.10 (C59) — key page on its own origin. The public listener answers two ho
 | `POST /tb/v1/status` | instance (`TB-Assert`) | status push + long-poll for slice/keys changes (§10.3) |
 | `GET /tb/v1/keys/<name>` | instance / service / `tb-exec` (`TB-Assert`) | key fetch (§9.4) |
 | `POST /tb/v1/call` | instance (`TB-Assert` + `TB-Grant`) | app→app companion call (§8.3) |
+| `POST /tb/v1/events` | app instance (`TB-Assert`) | v0.1.57: app event ingest (§14.1) |
 | `GET /metrics` | private scrape | counters, no payloads (§12) |
 
 ## 4. Enrolment
@@ -414,3 +415,95 @@ None open for the bridge after C15/C16 and CORE §14. Settled items recorded for
 
 ## v0.1.45 — hook caller product (HOOK-CALLER-PRODUCT)
 Hook requests (`before`, `context`, `after`) carry `call.caller.product` for an APP caller: the calling instance's product from the bridge's signed configuration (instance table), never from input or a manifest name. Policy apps (Rules) match "calls from product X" on it; an instance id changes on reinstall. Absent for agents and for an app caller the bridge cannot map — treat that as unverified (fail closed for product-keyed rules).
+
+## 14. App events (v0.1.57; C274c, C274d; MANIFEST §16, SDK-API §20)
+One event stream per agent, filtered by that agent's grants, with an opaque cursor and replay; delivered on the agent's
+EXISTING `/mcp` session (one connection, one auth, one grant check). Shape-compatible with MCP SEP-3415 (C274b): our
+`tealbrick/events/{list,poll,stream}` map to `events/{list,poll,stream}`, the envelope `id` is the opaque cursor, overflow
+answers `truncated: true`. Types: types/bridge.ts "App events". A bridge declares the cap `"events"` (with `"owner_rows"`)
+ONLY in the release that implements all of §14.
+
+### 14.1 Ingest — `POST /tb/v1/events` (internal)
+- Auth: instance assertion `TB-Assert` (`htm`, `htu`, `bd` required) of a claimed APP instance; a companion service → 403.
+  Body `EventIngestBody {items}` (1..100 items, ≤ 512 KiB), processed IN ORDER; answer 200 `EventIngestResult` (one result
+  per item, same order). Whole-request failures: 401 `unauthenticated`, 413 `payload_too_large`, 429 `rate_limited`
+  (companion-call bucket of that instance), 503 `app_not_claimed`. 4xx per item never fails the batch. A paused instance
+  may send: its events are stored and held (MANIFEST §16.2 rule 5).
+- Per `emit` item, in this order (first failure → `refused` with the code, nothing stored):
+  1. The declaration: a `tb.*` name must be a `PLATFORM_EVENTS` type (else `event_reserved`); app events from product `tb`
+     → `event_reserved`. Otherwise the SERVING manifest's declaration when it has the name, else (only while a G2b attempt
+     runs) the candidate manifest's (`candidateManifestDigest`); neither → `event_undeclared`. The row records which
+     manifest digest it was checked against; fan-out uses that declaration.
+  2. Shape: `key` `^[A-Za-z0-9._:-]{8,128}$`, `subject.kind` `^[a-z][a-z0-9_]{0,31}$`, `subject.id` 1..256, `data`
+     validates against the `payloadSchema` → else `event_payload_invalid`; `summary` > 280 chars, `data` > 2 KiB (JCS) or
+     item > 4 KiB → `event_too_large`.
+  3. Scoped (the `visibleWith` op has a `scopeType`) ⇔ `instanceId` present (1..256) and `eligible` present →
+     else `event_instance_invalid`.
+  4. `audience: target` ⇔ `to` present with 1..100 agents → else `event_target_invalid`.
+  5. `(app instance, key)` seen in the last 7 days → `duplicate` (nothing stored, not an error). (`eligible` has at most
+     500 entries because a slice has at most 500 agents; more → `event_payload_invalid`.)
+- Fan-out at write time: candidates = `to` (target) or every agent with a grant to this instance (granted); keep those
+  that pass MANIFEST §16.2 rules 1–4 now (scoped: ∩ `eligible`, with the per-entry authority); write one row per
+  recipient. `stored` with `recipients` (0 is a valid answer). Paused recipients get their row (rule 5).
+- `purge` items: delete every stored row of (`agent`, this app, `instanceId`), delivered or not; without `agent` (an
+  instance deleted or disconnected) the rows of EVERY agent for that app and instance; answer `stored`.
+
+### 14.2 Per-agent log
+- Row id = ULID, strictly increasing per bridge (the cursor). Order per agent = id order = ingest order (the SDK outbox
+  drains in emit order, so one app's events keep their order).
+- Retention (C274d ruling 3): per agent, 7 days or 10 000 rows, whichever comes first; the oldest rows by INGEST time go first. The bridge
+  keeps per agent `droppedThrough` = the highest id it removed BY RETENTION.
+- At delivery the bridge re-checks MANIFEST §16.2 rules 1, 5 and 6 against the current table, using the op named by the
+  row's RECORDED declaration, looked up in the CURRENT serving manifest; if that op's `scopeType` differs from the
+  recorded one (present vs absent, or another type) the row is dropped. Otherwise: a paused agent/workspace/instance keeps the row; an op missing from the serving
+  manifest while a G2b attempt runs keeps the row (the candidate may become serving); a failed grant check, or an op that
+  is missing once no attempt runs (rollback), drops it (not delivered, not counted as truncation). Rule 6: an enabled
+  `before` or `after` hook that matches the op → the event goes out without `summary`.
+- Held rows and the cursor: an agent's cursor is one sequence over all apps. A row held because its INSTANCE was paused (or
+  its op was waiting on a G2b attempt) gets a NEW id when it is released, so a cursor that moved past it meanwhile still
+  receives it. Every row keeps `origin` = its first id; it may have been delivered before under its old id, so consumers
+  dedupe by `origin` (never by `id`). The re-id happens in the same transaction that applies the resume (or the G2b
+  switch), in old-id order, before any later ingest from that instance, so one app's order holds. Agent and workspace
+  pauses hold the whole stream, so no re-id is needed.
+- Retention age counts from INGEST (a re-id does not extend it). When retention removes a HELD row (its old id may be below
+  the agent's cursor, so `droppedThrough` would not show it), the bridge sets a per-agent flag and answers `truncated: true`
+  on that agent's next `poll` or `stream` call, whatever the cursor; the flag clears once answered. (A runtime holding an
+  open stream sees it on its next reconnect or fallback poll.)
+- Presence (D6) is out of scope of 0.1.57 (no wire field).
+
+### 14.3 Delivery on `/mcp` (JSON-RPC on the agent's session)
+- `tealbrick/events/list` → `EventsListResult`: the types this agent can receive NOW, plus `tb.hold.decided` for each app
+  with a valid grant. Unscoped type: rule 1. Scoped type (`scoped: true`, the `visibleWith` op has a `scopeType`): a valid
+  grant to the app, an agent op, and the `wf` rule (the per-instance crud part depends on scope rows the bridge never
+  sees). Delivery modes `["poll","stream"]`.
+- `tealbrick/events/poll {cursor?, limit?}` → `EventsPollResult`: rows with id > cursor (absent = from the oldest kept),
+  ≤ limit (1..100, default 50). `truncated` = `cursor` is absent or < `droppedThrough` AND `droppedThrough` exists — i.e.
+  retention removed events the agent had not read. While the agent or the workspace is paused: `{events: [], cursor:
+  <unchanged>, truncated: false, paused: true}`.
+- `tealbrick/events/stream {cursor?}` → `EventsStreamResult {cursor, truncated, paused?}`: `cursor` = the position the
+  stream starts after (the given cursor; null = from the oldest kept), same `truncated` rule, `paused: true` while the
+  agent or workspace is paused (frames start on resume; the subscription stays). Then the session's SSE stream
+  (`GET /mcp`) carries `notifications/tealbrick/event {event}` frames: first the backlog after `cursor`, then live events
+  within 1 s of ingest. Frames go only on an open GET stream; while none is open nothing is lost (the next GET with
+  `Last-Event-ID`, or a poll, picks up from there). Each such frame has SSE `id:` = `event.id`; other frames on that stream carry no
+  `id:`, so `Last-Event-ID` always names the last event. A GET reconnect with `Last-Event-ID` resumes after it. An
+  unknown session (404) → the client re-initializes and calls `stream` with its stored cursor. One subscription per
+  session; a second `stream` call replaces it.
+- A cursor this bridge did not issue (not a ULID) → JSON-RPC error -32602 with `data.code: "cursor_invalid"`. A ULID
+  cursor newer than every row = nothing yet (not an error).
+- Delivery is at-least-once; consumers dedupe by `event.origin` and store their cursor (`event.id`) only after they
+  handled the event.
+- `tools/list_changed` is unchanged (§7.2). A bridge without the cap answers these methods with JSON-RPC -32601
+  (method not found); runtimes then keep their own polls (no user step).
+
+### 14.4 Tests (bridge 0.2.7; conformance B-EV-*, gated by the reported `"events"` cap, never by version)
+Emit → subscribed agent < 3 s; agent without a visible op → nothing and no `events/list` entry; scoped event to an agent
+not in `eligible` (e.g. its row lacks the op's crud) → nothing;
+the causing agent → nothing; disconnect, 3 emits, reconnect with the cursor → exactly those 3 in order; grant revoked
+between write and read → not delivered; instance paused while another app's events advance the cursor, then resumed →
+the held events arrive (new ids, same `origin`, in their old order before any later event of that instance); a held row
+removed by retention → `truncated: true` on the next poll; a matching `before`/`after` hook → no `summary`; a product `tb` → refused; > 10 000 rows or older than 7 days → `truncated` + oldest kept; undeclared type,
+app `tb.*`, invalid payload → refused, nothing stored; same `(app instance, key)` twice → one event; scoped event to an
+agent outside `eligible` → nothing; purge → stored rows of that agent and instance gone; purge without agent → every
+agent's rows for that instance gone; `"events"` in every StatusReport of a bridge that
+passes all of these, never otherwise.

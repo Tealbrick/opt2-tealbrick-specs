@@ -198,3 +198,19 @@ A bridge or SDK build pins its channel's Portal Root Keys; a conformance run can
 - (C117, Bridge lead) In the bridge-target worlds, "hooks off" lists every declared hook with `enabled: false` (never omits it), so checks that switch hooks off stay valid against a C117 bridge.
 - package 0.1.15 (Knowledge sweep): `narrowing.itemsPath` (JSON pointer) names the result items array in the op output; default = the output itself when it is an array, else its ONLY array field; several array fields and no `itemsPath` → `not_run` naming them (0.1.14 counted every array field, so a status list gave a false FAIL).
 - package 0.1.16 (C133): the CLI flags `--keyset-transitional` and `--keyset-required` and the `keysetRequired` run option are removed (no transition rules to test); the strict key-set checks always run. Breaks earlier opt2 dev formats.
+
+## v0.1.57 — package 0.1.28: app events (C274c, C274d)
+Rows (normative text: MANIFEST §16, BRIDGE §14, SDK-API §20):
+- **Manifest (M2 block, from `validateManifest`):** `M-EV-1` names unique, pattern, no `tb.`, no events in a manifest `tb`; `M-EV-2` payloadSchema
+  compiles, object root, ≤ 8 KiB, M-OP-8 limits; `M-EV-3` `visibleWith` = an agent op of the manifest, not dynamic;
+  `M-EV-4` no top-level `summary` in the payloadSchema.
+- **App (A-EV, fake bridge):** `A-EV-1` a declared change emits exactly one event; `A-EV-2` a rolled-back transaction emits
+  nothing, a committed one followed by a throw still emits; `A-EV-3` invalid payload / undeclared name / `tb.*` name throws; `A-EV-4` bridge 503
+  then retry → stored once (same key); `A-EV-5` slice without `"events"` → nothing sent, cap appears → backlog in order;
+  `A-EV-6` scoped emit: `eligible` lists exactly the agents whose row admits `visibleWith.crud`, with the row's authority;
+  `A-EV-7` a scope row removal, narrowing or owner→bounded change sends a `purge` after the earlier events, and
+  `ctx.purgeEvents` sends an all-agent purge; `A-EV-8` `tb.hold.decided` to the agent caller on
+  approve, deny and expiry, never to an app caller.
+- **Bridge (B-EV, gated by the reported `"events"` cap, never by version):** one row per case listed in BRIDGE §14.4
+  (numbered B-EV-1.. in that order by the conformance package).
+- **Runtime (R-EV, Agents lane, against the fake bridge):** as PLAN-P2-PORT-WAKE §5 (`R-EV-1`..`R-EV-6`).
