@@ -397,7 +397,10 @@ An event reaches agent A only when ALL of these hold, checked when the bridge st
    moved past them meanwhile still gets them). Every other failed check at delivery DROPS the row (grant revoked or narrowed).
 6. **Hooks:** hooks run on `visibleWith` calls but not on events. When an enabled `before` or `after` hook matches the
    `visibleWith` op (BRIDGE §8.1 steps 6 and 12: it may refuse, hold or redact what the op shows), the bridge delivers the
-   event WITHOUT `summary` (ids only); the agent reads the details through the op, where the hooks run.
+   event WITHOUT `summary` (ids only); the agent reads the details through the op, where the hooks run. A wildcard hook
+   (e.g. a Rules policy hook on `products: ["*"]`) therefore strips every summary in that workspace: runtimes MUST NOT
+   depend on `summary`. Accepted residue: an agent a before-hook would refuse still receives the event's ids and timing
+   (not its content); the hook runs when it tries to read.
 
 The SDK and the bridge can only see `authorize()` (CORE §7). A handler that refuses agents for its own reasons (beyond
 `authorize()`) is invisible to both: **an app MUST NOT emit an event to an agent that its `visibleWith` handler would refuse
@@ -420,6 +423,8 @@ their summary (every detail read is authorized per call).
   (`visibleWith: "channel_conversations"`, scopeType `account`, `instanceId` = the account id) AND `audience: "target"` with
   `to: [account.ownerAgent]`; the bridge also requires that agent in `eligible` (its row on that account admits `read`).
   A row alone never makes a channel event reach an agent. Summaries with message text set `untrusted: true`.
+- Connect calls `ctx.purgeEvents(accountId)` when it disconnects or deletes an account or changes its owner agent (the old
+  owner keeps nothing).
 - Mail and tool accounts (`channel_conversations` answers 404 for them) name their own `visibleWith` op when they get
   events; none in the first wave.
 - The workspace sender instances `sender:<service>` are shared and app-only: the manifest default (`shared` → `apps_only`,
@@ -440,3 +445,7 @@ their summary (every detail read is authorized per call).
   "events declared → bridge ≥ 0.2.7" (the first bridge that pins it and declares the `events` cap), which Core's C104 gate
   already applies at deploy. Consequence: an app release WITH `events` cannot deploy to a workspace whose bridge is older
   than 0.2.7; the app ships it after bridge 0.2.7 is available on that channel (not "harmless before the bridge").
+- The CI template's `release-record` step and the registry signer validate app manifests too (both pin manifest 0.1.12
+  today, platform `ci/README.md`): they re-pin manifest ≥ 0.1.30 (+ spec 0.1.57) in a new template tag, with the documented
+  dry run (every indexed app manifest re-validates with an unchanged `manifestDigest`), before any app release declares
+  `events`; otherwise that release fails its own pipeline and the signer.

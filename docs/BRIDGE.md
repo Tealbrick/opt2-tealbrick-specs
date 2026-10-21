@@ -437,7 +437,7 @@ ONLY in the release that implements all of §14.
   2. Shape: `key` `^[A-Za-z0-9._:-]{8,128}$`, `subject.kind` `^[a-z][a-z0-9_]{0,31}$`, `subject.id` 1..256, `data`
      validates against the `payloadSchema` → else `event_payload_invalid`; `summary` > 280 chars, `data` > 2 KiB (JCS) or
      item > 4 KiB → `event_too_large`.
-  3. Scoped (the `visibleWith` op has a `scopeType`) ⇔ `instanceId` present (1..256) and `eligible` present (≤ 500) →
+  3. Scoped (the `visibleWith` op has a `scopeType`) ⇔ `instanceId` present (1..256) and `eligible` present →
      else `event_instance_invalid`.
   4. `audience: target` ⇔ `to` present with 1..100 agents → else `event_target_invalid`.
   5. `(app instance, key)` seen in the last 7 days → `duplicate` (nothing stored, not an error). (`eligible` has at most
@@ -453,14 +453,22 @@ ONLY in the release that implements all of §14.
   drains in emit order, so one app's events keep their order).
 - Retention (C274d ruling 3): per agent, 7 days or 10 000 rows, whichever comes first; the oldest rows go first. The bridge
   keeps per agent `droppedThrough` = the highest id it removed BY RETENTION.
-- At delivery the bridge re-checks MANIFEST §16.2 rules 1, 5 and 6 against the current table, using the `visibleWith` op
-  of the CURRENT serving manifest: a paused agent/workspace/instance keeps the row; an op missing from the serving
+- At delivery the bridge re-checks MANIFEST §16.2 rules 1, 5 and 6 against the current table, using the op named by the
+  row's RECORDED declaration, looked up in the CURRENT serving manifest; if that op's `scopeType` presence differs from
+  the recorded one (a scoped row without `eligible`, or the reverse) the row is dropped. Otherwise: a paused agent/workspace/instance keeps the row; an op missing from the serving
   manifest while a G2b attempt runs keeps the row (the candidate may become serving); a failed grant check, or an op that
   is missing once no attempt runs (rollback), drops it (not delivered, not counted as truncation). Rule 6: an enabled
   `before` or `after` hook that matches the op → the event goes out without `summary`.
 - Held rows and the cursor: an agent's cursor is one sequence over all apps. A row held because its INSTANCE was paused (or
-  its op was waiting on a G2b attempt) gets a NEW id when it is released, and its old id is never delivered, so a cursor
-  that moved past it meanwhile still receives it. Agent and workspace pauses hold the whole stream, so no re-id is needed.
+  its op was waiting on a G2b attempt) gets a NEW id when it is released, so a cursor that moved past it meanwhile still
+  receives it. Every row keeps `origin` = its first id; it may have been delivered before under its old id, so consumers
+  dedupe by `origin` (never by `id`). The re-id happens in the same transaction that applies the resume (or the G2b
+  switch), in old-id order, before any later ingest from that instance, so one app's order holds. Agent and workspace
+  pauses hold the whole stream, so no re-id is needed.
+- Retention age counts from INGEST (a re-id does not extend it). When retention removes a HELD row (its old id may be below
+  the agent's cursor, so `droppedThrough` would not show it), the bridge sets a per-agent flag and answers `truncated: true`
+  on that agent's next `poll` or `stream` call, whatever the cursor; the flag clears once answered. (A runtime holding an
+  open stream sees it on its next reconnect or fallback poll.)
 - Presence (D6) is out of scope of 0.1.57 (no wire field).
 
 ### 14.3 Delivery on `/mcp` (JSON-RPC on the agent's session)
@@ -483,7 +491,8 @@ ONLY in the release that implements all of §14.
   session; a second `stream` call replaces it.
 - A cursor this bridge did not issue (not a ULID) → JSON-RPC error -32602 with `data.code: "cursor_invalid"`. A ULID
   cursor newer than every row = nothing yet (not an error).
-- Delivery is at-least-once; consumers dedupe by `event.id` and store their cursor only after they handled the event.
+- Delivery is at-least-once; consumers dedupe by `event.origin` and store their cursor (`event.id`) only after they
+  handled the event.
 - `tools/list_changed` is unchanged (§7.2). A bridge without the cap answers these methods with JSON-RPC -32601
   (method not found); runtimes then keep their own polls (no user step).
 
@@ -492,7 +501,8 @@ Emit → subscribed agent < 3 s; agent without a visible op → nothing and no `
 not in `eligible` (e.g. its row lacks the op's crud) → nothing;
 the causing agent → nothing; disconnect, 3 emits, reconnect with the cursor → exactly those 3 in order; grant revoked
 between write and read → not delivered; instance paused while another app's events advance the cursor, then resumed →
-the held events arrive (new ids); a matching `before`/`after` hook → no `summary`; a product `tb` → refused; > 10 000 rows or older than 7 days → `truncated` + oldest kept; undeclared type,
+the held events arrive (new ids, same `origin`, in their old order before any later event of that instance); a held row
+removed by retention → `truncated: true` on the next poll; a matching `before`/`after` hook → no `summary`; a product `tb` → refused; > 10 000 rows or older than 7 days → `truncated` + oldest kept; undeclared type,
 app `tb.*`, invalid payload → refused, nothing stored; same `(app instance, key)` twice → one event; scoped event to an
 agent outside `eligible` → nothing; purge → stored rows of that agent and instance gone; purge without agent → every
 agent's rows for that instance gone; `"events"` in every StatusReport of a bridge that

@@ -704,7 +704,11 @@ Until 0.1.8 the bridge CI runs two passes: all groups but `keyset` via `--cmd` (
   release manifest with its pinned validator (manifest 0.1.23 today) and skips a release it refuses, so Core re-pins
   manifest ≥ 0.1.30 before any app release with `events` is published; `requiredBridgeVersion` gains "events → bridge
   ≥ 0.2.7" (Core's C104 gate applies it). Also §8 step 5 is not "harmless before step 4": an app release with `events`
-  cannot deploy on a bridge older than 0.2.7, so apps ship it after bridge 0.2.7 is available.
+  cannot deploy on a bridge older than 0.2.7, so apps ship it after bridge 0.2.7 is available. And the CI template
+  `release-record` + registry signer (manifest 0.1.12 today) re-pin manifest ≥ 0.1.30 first (MANIFEST §16.3).
+- Review round 2 (CHANGES NEEDED → applied): `origin` on every event (dedupe key across a re-id); re-id in the resume
+  transaction in old order; retention of a held row → `truncated`; delivery uses the recorded declaration's op; Connect
+  purges on owner change; wildcard hooks strip all summaries (runtimes never depend on `summary`).
 - Review round 1 (adversarial, CHANGES NEEDED → applied): channel events target the account's owner agent; hooks matching
   `visibleWith` strip the summary; instance-pause held rows are re-id'd on release; outbox rows share only their
   transaction's fate; purge also on owner→bounded and per instance (`ctx.purgeEvents`); default key = ULID, dedupe per app

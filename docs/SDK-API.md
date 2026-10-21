@@ -535,8 +535,8 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
 - **`tb.hold.decided`.** The SDK emits it after a hold decision (`tb.holds_decide`, after `receipts.decide`) and from the
   expiry sweep, `to` = the hold's caller when that caller is an agent; data `{holdId, op, decision}`; subject
   `{kind: "hold", id: holdId}`; no summary.
-- Conformance (0.1.28, A-EV-*): a declared change emits exactly one event (fake bridge); a rolled-back transaction and a
-  throwing handler emit nothing; an invalid payload or an undeclared name throws; bridge 503 then retry → delivered once
+- Conformance (0.1.28, A-EV-*): a declared change emits exactly one event (fake bridge); a rolled-back transaction emits
+  nothing (a committed one followed by a throw still emits); an invalid payload or an undeclared name throws; bridge 503 then retry → delivered once
   (same key); a slice without `"events"` → nothing sent, then the cap appears → the backlog is sent in order; a scoped
   emit carries the right `eligible` (owner row above the grant → `owner`; `apps_only`-style row is still listed, so the app
   must not emit there — MANIFEST §16.2); a row removal, narrowing or owner→bounded change sends a purge after the earlier

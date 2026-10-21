@@ -572,9 +572,11 @@ export interface EventSubject {
 /** The envelope an agent receives (poll result, stream notification). C274d ruling 2: ids + an optional summary; the agent
  *  reads details through the normal ops, so grants stay the only authority. */
 export interface AgentEvent<D = JsonObject> {
-  /** opaque cursor: ULID, strictly increasing per bridge; the SSE `id:` of its stream frame. Delivery is at-least-once:
-   *  consumers dedupe by `id`. */
+  /** opaque cursor: ULID, strictly increasing per bridge; the SSE `id:` of its stream frame;
+   *  the cursor position only. A row held by an instance pause or a G2b attempt is re-id'd on release (BRIDGE §14.2). */
   id: Ulid;
+  /** the row's FIRST id; unchanged by a re-id. Delivery is at-least-once: consumers dedupe by `origin`. */
+  origin: Ulid;
   /** `<product>.<name>` for app events; the PLATFORM_EVENTS key for platform events */
   type: string;
   app: ProductId;

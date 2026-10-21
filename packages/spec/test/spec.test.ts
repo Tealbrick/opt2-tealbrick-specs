@@ -527,7 +527,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
     assert.equal(v({ holdId: "hld_01M53BAEQSGKVVY4PRM2VE6FBF", op: "note_create", decision: "approve" }), false, "past tense, as the receipt status");
   }
   const e: import("../src/bridge.ts").AgentEvent = {
-    id: "01M53BAEQSGKVVY4PRM2VE6FBF", type: "kanban.issue.assigned", app: "kanban", instanceId: "prj_1", at: "2026-10-21T00:00:00Z",
+    id: "01M53BAEQSGKVVY4PRM2VE6FBF", origin: "01M53BAEQSGKVVY4PRM2VE6FBF", type: "kanban.issue.assigned", app: "kanban", instanceId: "prj_1", at: "2026-10-21T00:00:00Z",
     subject: { kind: "issue", id: "iss_1" }, summary: "Assigned to you: Fix the login page", data: { issueId: "iss_1" }, causedBy: "agt_01M53BAEQSGKVVY4PRM2VE6FBF",
   };
   const item: import("../src/bridge.ts").EventEmitItem = { kind: "emit", key: "issue:iss_1:assigned:3", name: "issue.assigned", at: e.at, subject: e.subject, instanceId: "prj_1", data: e.data, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], eligible: [{ agent: "agt_01M53BAEQSGKVVY4PRM2VE6FBF", authority: "owner" }] };
