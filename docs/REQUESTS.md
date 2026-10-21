@@ -688,3 +688,19 @@ Until 0.1.8 the bridge CI runs two passes: all groups but `keyset` via `--cmd` (
 ## specs: DECIDED (G5, spec 0.1.22) — tags compare after trim + lower case (`normalizeTag` / `tagsMatch` in @opt2-tealbrick/manifest 0.1.15; Rules and Knowledge import them); Knowledge's points 2–4 are blessed as written (SDK-API §18 v0.1.22). Core rows typed in spec 0.1.22: `DeployState` `refused`, `BridgeManifestRefusalCode` for lastError, `CatalogEntry.devOnly`, `rejected[].ins`.
 
 ## specs: DECIDED (C116, spec 0.1.24) — StatusReport rejected kind `config` code `standalone_without_grants` (BRIDGE v0.1.24); bridge 0.1.21 emits it. No type change needed (code is a string); documented in types/bridge.ts.
+
+## specs: DECIDED (C274c/C274d, spec 0.1.57) — wake as a platform primitive: manifest `events`, `ctx.emit` outbox, per-agent stream on /mcp
+- Manifest `events[] {name, title, description?, payloadSchema, visibleWith, audience}`; the `tb.` event namespace is the
+  platform's (`PLATFORM_EVENTS`, first `tb.hold.decided`); rules M-EV-1..4 (MANIFEST §16). Bridge cap `"events"`; ingest
+  `POST /tb/v1/events`; `tealbrick/events/{list,poll,stream}` + `notifications/tealbrick/event` on the existing /mcp session;
+  7 d / 10 000 rows per agent, `truncated` (BRIDGE §14). `ctx.emit` synchronous into a transactional outbox, sent only
+  with the `"events"` cap (SDK-API §20).
+- Open point settled by the contracts & platform lead (`scoped` for Connect accounts): no `scoped` field; an event is scoped
+  iff its `visibleWith` op has a `scopeType`. The app (SDK) computes `eligible` per instance from its scope rows with each
+  row's authority; the bridge intersects with its grant rule and never widens. Scope-row removal/narrowing → ordered
+  `purge`. Connect: account events scoped on the account; never on the app-only `sender:*` instances (their `apps_only` rows
+  would admit agents; recommended `callers: ["app"]` on that default grant); Buzz events unscoped (`buzz_read`, target).
+- Release-order correction to PLAN-P2-PORT-WAKE §8 step 2: Core is NOT "no change" — its catalog sync validates every
+  release manifest with its pinned validator (manifest 0.1.23 today) and skips a release it refuses, so Core re-pins
+  manifest ≥ 0.1.30 before any app release with `events` is published; `requiredBridgeVersion` gains "events → bridge
+  ≥ 0.2.7" (Core's C104 gate applies it).

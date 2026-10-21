@@ -50,6 +50,12 @@ export const WILDCARD_COMPANION_OPS = ["tb.holds_pending"] as const;
 /** v0.1.42 (C230): shared app-to-app contracts, `<name>/<major>`; each has a JSON Schema in this package at
  *  `schemas/contracts/<name>.<major>.schema.json` and a fixture at `examples/contracts/<name>.<major>.json`. */
 export const CONTRACT_IDS = ["messages/1", "fleet.directory_feed/1"] as const;
+/** v0.1.57 (C274c/C274d): who an app event goes to. `target` = only the agents the emit names (`to`); `granted` = every agent
+ *  that passes the `visibleWith` rule. Either way the bridge delivers only to agents that pass it (MANIFEST §16). */
+export const EVENT_AUDIENCES = ["target", "granted"] as const;
+/** v0.1.57 (C274d ruling 4): the platform event namespace. Event types starting with it are declared in this spec
+ *  (`PLATFORM_EVENTS`, bridge.ts) and emitted by the SDK; a manifest never declares one (M-EV-1). */
+export const RESERVED_EVENT_PREFIX = "tb." as const;
 
 
 export type CrudAction = (typeof CRUD_ACTIONS)[number];
@@ -71,6 +77,7 @@ export type Category = (typeof CATEGORIES)[number];
 export type HarnessKind = (typeof HARNESS_KINDS)[number];
 export type StandardOperationId = (typeof STANDARD_OPERATIONS)[number];
 export type ContractId = (typeof CONTRACT_IDS)[number];
+export type EventAudience = (typeof EVENT_AUDIENCES)[number];
 
 // ---------- Primitive aliases (patterns in the schema) ----------
 
@@ -127,6 +134,25 @@ export interface Manifest {
   /** v0.1.42 (C230): the shared app-to-app contracts this app writes (`produces`) and reads (`consumes`). A manifest with this
    *  field needs a validator from manifest 0.1.20 on: the release must state `requires.bridge` of a bridge that pins it. */
   contracts?: { produces?: ContractId[]; consumes?: ContractId[] };
+  /** v0.1.57 (C274c/C274d): the event types this app emits (`ctx.emit`) and the bridge delivers to agents (MANIFEST §16). A
+   *  manifest with this field needs a validator from manifest 0.1.30 on (strict schema). */
+  events?: EventDecl[];
+}
+
+/** v0.1.57 (C274c/C274d): one app event type (MANIFEST §16). */
+export interface EventDecl {
+  /** `^(?!tb\.)[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, ≤ 64 chars, unique per app. Wire type = `<product>.<name>`. */
+  name: string;
+  title: string;
+  description?: string;
+  /** JSON Schema 2020-12, object root, local `$ref` only, ≤ 8 KiB (JCS); ids and enums only, never record bodies (C274d
+   *  ruling 2); no top-level `summary` property (the summary travels in the envelope, M-EV-4). */
+  payloadSchema: JsonSchemaObject;
+  /** An `agent` op of this manifest (not dynamic). The event reaches an agent only when tools/list would list this op for it;
+   *  when the op has a `scopeType`, the event is SCOPED: it names one instance of that type and reaches only agents whose row
+   *  on that instance admits the op (M-EV-3, MANIFEST §16.2). */
+  visibleWith: SnakeId;
+  audience: EventAudience;
 }
 
 export interface Discovery {

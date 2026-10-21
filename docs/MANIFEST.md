@@ -352,3 +352,78 @@ None. v0.1 review items applied: S6 (§7), S8 + N6 (§10, §13), N1 (§2, §5.4)
 - M-PR-2: `publicRoutes[].purpose: "viewer"` — at most one per manifest; `path` = `/v`; it is served ONLY by the workspace views service (tb-views, the bridge image in `TB_ROLE=views`) at `https://<viewUrl>/v/<product>/…`; the bridge main and keys origins answer 404 for `/v/*`. The segment `_d` right after `/v/<product>/` is reserved for untrusted documents: tb-views answers 502 `viewer_document_unsafe` for a `/_d/` response whose `Content-Security-Policy` lacks `sandbox` or whose sandbox allows `allow-same-origin`, `allow-top-navigation`, `allow-top-navigation-by-user-activation`, `allow-popups`, `allow-forms` or `allow-modals` (union of all CSP headers). Request headers forwarded: `Accept`, `Sec-Fetch-Dest`, `Sec-Fetch-Mode`, `Sec-Fetch-Site`, `If-None-Match` only (absent stays absent). `VIEWER_HEADER_FLOOR` (@opt2-tealbrick/manifest) is set on every views response; it has no `X-Frame-Options` — the app controls framing with CSP `frame-ancestors <viewUrl> <publicUrl>`, the one header it may replace. Slice `bridge.viewUrl` / SDK `ctx.viewUrl` carry the views origin (null until Core creates tb-views; the app answers `view_origin_missing` 409).
 - M-OP-11: `operations[].listing: "workflow"` (agent ops only; `person` ops refuse it → `listing_invalid`): the op is in tools/list and passes `gate()` only when the grant's `wf` names it; other cards never see it. Readers that predate it show the op as before, so an app keeps its own guard until every bridge it runs on pins manifest ≥ 0.1.21 (L26; release `requires.bridge`).
 - A manifest that uses `purpose: "viewer"` or `listing` needs manifest ≥ 0.1.21 (strict schema): its release states `requires.bridge`.
+
+## v0.1.57 — app events (§16; C274c, C274d)
+Wake is a platform primitive: an app DECLARES the events it emits, the SDK writes them through a transactional outbox
+(`ctx.emit`, SDK-API §20), the bridge stores one log per agent and delivers it on the agent's existing `/mcp` session
+(BRIDGE §14). There is no per-agent or per-app event setting anywhere: an agent receives exactly what its grants let it see.
+
+### 16.1 Field
+`events?: EventDecl[]` (≤ 64), each `{name, title, description?, payloadSchema, visibleWith, audience}` (types/manifest.ts):
+
+| Field | Meaning |
+|---|---|
+| `name` | `^(?!tb\.)[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`, ≤ 64, e.g. `issue.assigned`. Wire type = `<product>.<name>`. |
+| `title`, `description?` | Shown in `tealbrick/events/list` and docs. |
+| `payloadSchema` | JSON Schema 2020-12, object root. The payload carries ids and enums only, never record bodies (C274d ruling 2); ≤ 2 KiB per event (JCS, checked by the SDK and the bridge). |
+| `visibleWith` | An `agent` op of this manifest, not dynamic. The visibility rule of the event (§16.2). |
+| `audience` | `target` = only the agents the emit names (`to`); `granted` = every agent that passes §16.2. |
+
+There is no `scoped` field: an event is SCOPED exactly when its `visibleWith` op has a `scopeType` (a declared flag could
+disagree with the op; a derived one cannot). A scoped event names one instance of that type (`instanceId`).
+
+| Rule | Check |
+|---|---|
+| M-EV-1 | Names unique within the manifest; pattern above; any `tb.` name refused (the `tb.` event namespace is the platform's: `PLATFORM_EVENTS`, types/bridge.ts) → `event_name_invalid`. |
+| M-EV-2 | `payloadSchema` compiles (Ajv 2020, strict), object root, ≤ 8 KiB (JCS); embedded-schema limits of M-OP-8 (no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType`) → `event_schema_invalid`. |
+| M-EV-3 | `visibleWith` names an op of this manifest with `audience: agent` and no `dynamic` → `event_visible_with_invalid`. |
+| M-EV-4 | `payloadSchema` declares no top-level `summary` property (the summary travels in the envelope, set by `ctx.emit`, ≤ 280 chars) → `event_schema_invalid`. |
+
+### 16.2 Visibility (normative) — "visible = could call `visibleWith` now"
+An event reaches agent A only when ALL of these hold, checked when the bridge stores it AND again when it delivers it:
+1. **Grant (bridge, the tools/list rule, BRIDGE §7.2):** A has a valid grant to the app's instance, the `visibleWith` op is
+   an agent op, and the `wf` rule passes (Bound grants, `listing: "workflow"`). Crud: `op.crud ⊆ grant.crud` (effective) —
+   except for a scoped event whose `eligible` entry for A says `authority: "owner"` (the C283 A1 rule: an owner-set primary
+   row admits above the Portal grant, exactly as `gate()` does for scoped ops on a bridge with `owner_rows`).
+2. **Scope row (app, scoped events only):** the app is the authority for scope rows (CORE §6; the bridge never sees them).
+   The SDK computes, when it SENDS the event, `eligible` = the agents with a row on (`scopeType`, `instanceId`) whose
+   EFFECTIVE crud (`ScopeGrantRow.crud`, C283c) ⊇ `visibleWith.crud`, each with that row's authority. No best-access
+   fallback and no "spans instances": an event is about one instance. The bridge never delivers a scoped event to an agent
+   outside `eligible`.
+3. **Not the cause:** A ≠ `causedBy` (the SDK sets it from the call; app code cannot).
+4. **Audience:** `target` → A ∈ `to`.
+5. **Pause:** while A, the workspace or the app instance is paused, A's rows are KEPT and not delivered; delivery resumes
+   on resume (retention still applies). Every other failed check at delivery DROPS the row (grant revoked or narrowed).
+
+The SDK and the bridge can only see `authorize()` (CORE §7). A handler that refuses agents for its own reasons (beyond
+`authorize()`) is invisible to both: **an app MUST NOT emit an event to an agent that its `visibleWith` handler would refuse
+for that instance.** The summary may contain only what `visibleWith` would show that agent (C274d ruling 2).
+
+Revocation: the bridge re-checks rule 1 at delivery, so a Portal grant change applies at once. A scope-row change is the
+app's: when a row of A on an instance is removed or its effective crud narrows (`tb.scopes_set`, `ctx.scopeGrants`,
+`ctx.scopeSelfRevoke`), the SDK sends a `purge` for (A, instance) through the same ordered outbox, and the bridge deletes
+A's stored events of that app and instance, delivered or not. A level narrowed by an app update (C283c, no row write) sends
+no purge: such events stay until retention, and they expose at most their summary (every detail read is authorized per call).
+
+**Connect accounts (the settled case, C274d open point).** Connect's scope type is `account`.
+- An event about a connected account (e.g. a message arrives in a conversation of a bot/mail account) is scoped:
+  `visibleWith: "channel_conversations"` (scopeType `account`), `instanceId` = the account id. It reaches the agents whose
+  row on THAT account admits `read` (owner rows above the grant; bounded rows also within the Portal grant). An agent with
+  access to another account sees nothing.
+- The workspace sender instances `sender:<service>` are shared and app-only: the manifest default (`shared` → `apps_only`,
+  no `callers`) gives every caller, agents included, an `apps_only` row with crud read/create/update, and only the handler
+  refuses agents (`sender_reserved_for_apps`). The row check would therefore admit agents, so **Connect MUST NOT emit any
+  event with `instanceId` `sender:*`**. Recommended with its first events release: `callers: ["app"]` on that default grant
+  (v0.1.14), so new agents get no row at all.
+- Buzz events (`buzz.mention`, `buzz.dm`) are about the agent's own Buzz identity, not an account row: unscoped,
+  `visibleWith: "buzz_read"`, `audience: "target"` (the mentioned agent).
+
+### 16.3 Platform events and compatibility
+- `tb.hold.decided` (types/bridge.ts `PLATFORM_EVENTS`): emitted by the SDK for every app when a hold is approved, denied
+  or expires; `to` = the hold's AGENT caller only (app callers receive no events in v1); visibility = `tb.hold_status`
+  (any valid grant to the app, CORE I4); data `{holdId, op, decision: "approved"|"denied"|"expired"}`.
+- A manifest with `events` needs manifest ≥ 0.1.30 (strict schema) in EVERY reader: Core's catalog sync validates each
+  release manifest with its pinned validator and SKIPS a release it refuses, and each bridge validates at claim. So Core
+  re-pins manifest ≥ 0.1.30 before any app release with `events` is published, and `requiredBridgeVersion` gains the row
+  "events declared → bridge ≥ 0.2.7" (the first bridge that pins it and declares the `events` cap), which Core's C104 gate
+  already applies at deploy.

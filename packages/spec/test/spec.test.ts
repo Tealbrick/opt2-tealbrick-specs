@@ -463,7 +463,7 @@ test("v0.1.53 (C289 + C291): TBD device-flow owner sessions have a 7-day idle li
 
 test("v0.1.54 (C292 + C290): bridge capabilities in the status report and the slice; adopt write-op crud", async () => {
   const { BRIDGE_CAPS } = await import("../src/bridge.ts");
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows"]);
+  assert.ok((BRIDGE_CAPS as readonly string[]).includes("owner_rows"));
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
   const slice = load("instance-slice.schema.json");
@@ -493,5 +493,46 @@ test("v0.1.56 (C296): needs_keys is an instance error code (a companion waits fo
   assert.equal(e.code, "needs_keys");
   const attention: import("../src/routes.ts").Instance["attention"] = { code: "engine_missing", reason: "No memory engine runs." };
   assert.equal(attention?.code, "engine_missing");
-  assert.equal(SPEC_VERSION, "0.1.56");
+});
+
+test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the events cap and the wire shapes", async () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const validate = ajv.compile(load("manifest.schema.json"));
+  const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
+  const ev = {
+    name: "note.shared",
+    title: "A note was shared with the agent",
+    payloadSchema: { type: "object", additionalProperties: false, required: ["noteId"], properties: { noteId: { type: "string" } } },
+    visibleWith: ex.operations.find((o: { audience: string }) => o.audience === "agent").id,
+    audience: "target",
+  };
+  assert.equal(validate({ ...ex, events: [ev] }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ ...ex, events: [{ ...ev, name: "tb.hold.decided" }] }), false, "an app never declares tb.*");
+  assert.equal(validate({ ...ex, events: [{ ...ev, name: "shared" }] }), false, "a name has at least two segments");
+  assert.equal(validate({ ...ex, events: [{ ...ev, audience: "everyone" }] }), false);
+  assert.equal(validate({ ...ex, events: [{ ...ev, scoped: true }] }), false, "scoped is derived from visibleWith, not declared");
+  assert.equal(validate({ ...ex, events: [{ ...ev, payloadSchema: { type: "array" } }] }), false, "object root");
+  const { RESERVED_EVENT_PREFIX, EVENT_AUDIENCES } = await import("../src/manifest.ts");
+  assert.equal(RESERVED_EVENT_PREFIX, "tb.");
+  assert.deepEqual([...EVENT_AUDIENCES], ["target", "granted"]);
+
+  const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events"]);
+  assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
+  assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
+  for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {
+    assert.ok(type.startsWith(RESERVED_EVENT_PREFIX), type);
+    const v = ajv.compile(d.payloadSchema);
+    assert.equal(v({ holdId: "hld_01M53BAEQSGKVVY4PRM2VE6FBF", op: "note_create", decision: "approved" }), true, JSON.stringify(v.errors));
+    assert.equal(v({ holdId: "hld_01M53BAEQSGKVVY4PRM2VE6FBF", op: "note_create", decision: "approve" }), false, "past tense, as the receipt status");
+  }
+  const e: import("../src/bridge.ts").AgentEvent = {
+    id: "01M53BAEQSGKVVY4PRM2VE6FBF", type: "kanban.issue.assigned", app: "kanban", instanceId: "prj_1", at: "2026-10-21T00:00:00Z",
+    subject: { kind: "issue", id: "iss_1" }, summary: "Assigned to you: Fix the login page", data: { issueId: "iss_1" }, causedBy: "agt_01M53BAEQSGKVVY4PRM2VE6FBF",
+  };
+  const item: import("../src/bridge.ts").EventEmitItem = { kind: "emit", key: "issue:iss_1:assigned:3", name: "issue.assigned", at: e.at, subject: e.subject, instanceId: "prj_1", data: e.data, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], eligible: [{ agent: "agt_01M53BAEQSGKVVY4PRM2VE6FBF", authority: "owner" }] };
+  assert.equal(item.eligible?.[0]?.authority, "owner");
+  const opts: import("../src/sdk.ts").EmitOptions = { subject: e.subject, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], instanceId: "prj_1", summary: e.summary };
+  assert.ok(opts.subject.id);
+  assert.equal(SPEC_VERSION, "0.1.57");
 });

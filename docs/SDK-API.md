@@ -499,3 +499,37 @@ Person-op contexts carry `ctx.companionCallers()`: the verified list of app inst
   would fail a real 0.2.4 bridge, which has no A1). Bridge tests (0.2.5): caps declared in every StatusReport; never
   `owner_rows` without the A1 filter. Core tests: normalisation (bad entry dropped, duplicates, order flip = no new revision,
   > 16 truncated), downgrade (caps disappear → new revision without them).
+
+## 20. App events — `ctx.emit` and the outbox (v0.1.57; C274c, C274d; miniapp-sdk 0.1.38)
+`ctx.emit(name, data, {subject, to?, instanceId?, summary?, key?})` on OpContext, EventContext and StartContext (types:
+`EmitFn`, `EmitOptions`). The manifest declares each `name` (MANIFEST §16); the bridge delivers (BRIDGE §14).
+- **Synchronous, transactional.** `emit` validates, then writes ONE outbox row with `ctx.db` inside the transaction that
+  is open, so a rolled-back change never emits. Apps that change state and emit do both in one `ctx.db.transaction`.
+  Rows written during an op call are released only when the handler returns; a handler that throws discards them unsent
+  (a failed call wakes nobody). Held calls run the handler only on replay, so they emit then.
+- **Validation (throws TbError 400, before any write):** undeclared name → `event_undeclared`; a `tb.*` name →
+  `event_reserved` (only the SDK emits platform events); `data` fails the `payloadSchema` → `event_payload_invalid`;
+  `data` > 2 KiB (JCS) or `summary` > 280 chars → `event_too_large`; `instanceId` missing on a scoped event or present on an
+  unscoped one → `event_instance_invalid`; `to` missing/empty/> 100 for `target` or present for `granted` →
+  `event_target_invalid`; `subject.kind`/`subject.id` shape → `event_payload_invalid`. Tests catch these; the SDK does not
+  swallow them in production (an emit bug is a code bug).
+- **`causedBy`** = the calling agent of the current op call (from the verified call, never from app code); absent for
+  person calls, EventContext and StartContext.
+- **Sender.** A background sender drains the outbox in row order to `POST /tb/v1/events` (≤ 100 items per batch), ONLY
+  while `ctx.bridgeCaps()` includes `"events"` (C292: by capability, never by bridge version). Without the cap rows wait;
+  unsent rows older than 7 days are pruned (the bridge window). Transport error, 429 or 5xx → retry the batch with backoff
+  (same keys, so the bridge dedupes); `stored`/`duplicate` → row done; `refused` → row dropped and logged with its code.
+- **Scoped events.** At SEND time the sender computes `eligible` = agents with a row on (`scopeType`, `instanceId`) whose
+  effective crud ⊇ `visibleWith.crud`, with each row's authority (MANIFEST §16.2 rule 2); for `target` it is intersected
+  with `to`. The bridge never delivers outside it.
+- **Purge.** When a row of agent A on an instance is removed or its effective crud narrows (`tb.scopes_set`,
+  `ctx.scopeGrants.grant/revoke`, `ctx.scopeSelfRevoke`), the SDK writes a `purge {agent, instanceId}` row in the same
+  transaction as the row change; it drains in order with the events.
+- **`tb.hold.decided`.** The SDK emits it after a hold decision (`tb.holds_decide`, after `receipts.decide`) and from the
+  expiry sweep, `to` = the hold's caller when that caller is an agent; data `{holdId, op, decision}`; subject
+  `{kind: "hold", id: holdId}`; no summary.
+- Conformance (0.1.28, A-EV-*): a declared change emits exactly one event (fake bridge); a rolled-back transaction and a
+  throwing handler emit nothing; an invalid payload or an undeclared name throws; bridge 503 then retry → delivered once
+  (same key); a slice without `"events"` → nothing sent, then the cap appears → the backlog is sent in order; a scoped
+  emit carries the right `eligible` (owner row above the grant → `owner`; `apps_only`-style row is still listed, so the app
+  must not emit there — MANIFEST §16.2); a row removal sends a purge after the earlier events.

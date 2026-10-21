@@ -430,6 +430,9 @@ export interface OpContext {
    *  the slice is absent, expired or has none). Decide by capability (e.g. "owner_rows"), never by bridge version. Advisory: a cap
    *  never widens access (the SDK authorizes every call). Optional in this type (hand-built contexts); the SDK always sets it. */
   bridgeCaps?: () => readonly string[];
+  /** v0.1.57 (C274c/C274d): emit one declared app event (SDK-API §20). Optional in this type (hand-built contexts); SDKs from
+   *  0.1.38 always set it. */
+  emit?: EmitFn;
   /** v0.1.47: agent callers only — drop the calling agent's own access to one instance (narrowing is always allowed). */
   scopeSelfRevoke?: (type: string, instanceId: string) => Promise<void>;
   /** v0.1.3 (C31): THE app-secret mechanism */
@@ -462,6 +465,8 @@ export interface StartContext {
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
   ownerLink(path: string): string | null;
+  /** v0.1.57 (C274c): as OpContext.emit (timers, background work); no call, so no `causedBy`. Usable for the app's lifetime. */
+  emit?: EmitFn;
 }
 /** v0.1.13: the ctx every event handler gets (C85: callApp outside an op handler; C86: statusChanged). */
 export interface EventContext {
@@ -472,6 +477,25 @@ export interface EventContext {
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
   ownerLink(path: string): string | null;
+  /** v0.1.57 (C274c): as OpContext.emit; no call, so no `causedBy` */
+  emit?: EmitFn;
+}
+
+/** v0.1.57 (C274c/C274d, SDK-API §20): `emit(name, data, opts)`. SYNCHRONOUS: validates, then writes one outbox row with
+ *  `ctx.db` in the transaction that is open (a rolled-back transaction emits nothing). Throws TbError (400) on
+ *  `event_undeclared`, `event_reserved`, `event_payload_invalid`, `event_too_large`, `event_instance_invalid`,
+ *  `event_target_invalid`. Rows of a call whose handler throws are discarded unsent. */
+export type EmitFn = (name: string, data: Json, opts: EmitOptions) => void;
+export interface EmitOptions {
+  subject: { kind: string; id: string };
+  /** audience `target`: the agents to wake (1..100); refused for `granted` */
+  to?: AgentId[];
+  /** required iff the event's `visibleWith` op has a scopeType (a scoped event): the instance the event is about */
+  instanceId?: string;
+  /** ≤ 280 chars; only what `visibleWith` would show the recipients (C274d ruling 2) */
+  summary?: string;
+  /** idempotency key across emits (`^[A-Za-z0-9._:-]{8,128}$`); default = the outbox row id */
+  key?: string;
 }
 
 export type Handler<I = Json, O = Json> = (input: I, ctx: OpContext) => Promise<O>;

@@ -35,6 +35,7 @@ import type {
   HookHoldFamily,
   HookMatch,
   HookPhase,
+  JsonSchemaObject,
   KeySource,
   ProductId,
   SemVer,
@@ -98,7 +99,9 @@ export type BridgeErrorCode =
   | "key_not_set"
   | "tool_name_too_long"
   /** v0.1.11 (BSD-07): an app / neighbour `internalUrl` outside the private-network forms (BRIDGE §5.7); the app is not routed */
-  | "internal_url_refused";
+  | "internal_url_refused"
+  /** v0.1.57 (C274c/C274d): per-item refusals of `POST /tb/v1/events` (EventIngestResult) and the events methods (BRIDGE §14) */
+  | EventRefuseCode;
 
 /** One envelope everywhere. App-side codes (e.g. `scope_denied`, `idempotency_conflict`) pass through, hence `string`. */
 export interface ErrorEnvelope<C extends string = BridgeErrorCode | (string & {})> {
@@ -287,8 +290,10 @@ export type ConfigPullResponse = { status: 200; body: CompactJws } | { status: 3
 
 // ── Status report = ack (BRIDGE §5.6) — op `bridge_api.ack` ─────────────────
 export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" | "paused";
-/** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps). */
-export const BRIDGE_CAPS = ["owner_rows"] as const;
+/** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps).
+ *  v0.1.57 (C274c/C274d): + `events` = the bridge implements BRIDGE §14 in full (ingest, per-agent log, delivery on /mcp).
+ *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule). */
+export const BRIDGE_CAPS = ["owner_rows", "events"] as const;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
@@ -302,7 +307,8 @@ export interface StatusReport {
     sdkMajors: number[];
     mcpVersions: string[];
     /** v0.1.54 (C292): the capabilities this bridge implements (BRIDGE_CAPS). "owner_rows" = the C283 A1 owner-row filter
-     *  (catalog `admitted`, scope_summary `admittedOps`, gate skips op.crud ⊆ grant.crud for scoped ops). Absent = none. */
+     *  (catalog `admitted`, scope_summary `admittedOps`, gate skips op.crud ⊆ grant.crud for scoped ops). Absent = none.
+     *  v0.1.57: "events" = app events (BRIDGE §14). */
     caps?: BridgeCap[];
   };
   portalReachable: boolean;
@@ -513,6 +519,161 @@ export interface TokenResponse {
   refresh_token?: string;
 }
 
+// ── App events (BRIDGE §14, MANIFEST §16, v0.1.57; C274c/C274d) ──────────────
+// Shape-compatible with MCP SEP-3415 (C274b): events/list, events/poll, events/stream, opaque cursor, `truncated`.
+
+/** Platform events (C274d ruling 4): declared HERE, emitted by the SDK for every app, never declared in a manifest
+ *  (M-EV-1 refuses `tb.*`). The bridge validates them against this table like a manifest declaration; `visibleWith` names
+ *  the standard op whose rule applies (`tb.hold_status`: any valid grant to the app, CORE I4). */
+export const PLATFORM_EVENTS = {
+  "tb.hold.decided": {
+    title: "A held call was decided",
+    audience: "target",
+    visibleWith: "tb.hold_status",
+    subjectKind: "hold",
+    payloadSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["holdId", "op", "decision"],
+      properties: {
+        holdId: { type: "string", pattern: "^hld_[0-9A-HJKMNP-TV-Z]{26}$" },
+        op: { type: "string", pattern: "^[a-z][a-z0-9_]{1,39}$" },
+        decision: { enum: ["approved", "denied", "expired"] },
+      },
+    },
+  },
+} as const;
+export type PlatformEventType = keyof typeof PLATFORM_EVENTS;
+/** Data of `tb.hold.decided`; `to` = the hold's AGENT caller only (app callers receive no events in v1). */
+export interface HoldDecidedData { holdId: `hld_${Ulid}`; op: SnakeId; decision: "approved" | "denied" | "expired" }
+
+export type EventRefuseCode =
+  /** name not declared by the manifest of the sending release, or a platform type the bridge does not know */
+  | "event_undeclared"
+  /** an app name in the `tb.` namespace other than a PLATFORM_EVENTS type */
+  | "event_reserved"
+  | "event_payload_invalid"
+  | "event_too_large"
+  /** scoped event without `instanceId`, unscoped event with one, or `eligible` on an unscoped event */
+  | "event_instance_invalid"
+  /** `to` missing / empty / > 100 for audience `target`, or present for `granted` */
+  | "event_target_invalid"
+  /** `tealbrick/events/poll|stream` with a cursor that is not one this bridge issued */
+  | "cursor_invalid";
+
+/** What the event is about (routing key for the agent runtime). */
+export interface EventSubject {
+  /** `^[a-z][a-z0-9_]{0,31}$`, e.g. `issue`, `inbox_item`, `hold`, `conversation` */
+  kind: string;
+  /** 1..256 chars */
+  id: string;
+}
+
+/** The envelope an agent receives (poll result, stream notification). C274d ruling 2: ids + an optional summary; the agent
+ *  reads details through the normal ops, so grants stay the only authority. */
+export interface AgentEvent<D = JsonObject> {
+  /** opaque cursor: ULID, strictly increasing per bridge; the SSE `id:` of its stream frame. Delivery is at-least-once:
+   *  consumers dedupe by `id`. */
+  id: Ulid;
+  /** `<product>.<name>` for app events; the PLATFORM_EVENTS key for platform events */
+  type: string;
+  app: ProductId;
+  /** the scope instance the event is about; present iff the event is scoped (MANIFEST §16.2) */
+  instanceId?: string;
+  /** when the app emitted it (app clock) */
+  at: IsoTime;
+  subject: EventSubject;
+  /** ≤ 280 chars, written by the app; only what `visibleWith` would show this agent */
+  summary?: string;
+  /** validated against the declared payloadSchema; ≤ 2 KiB (JCS); ids and enums, never record bodies */
+  data: D;
+  /** the agent whose call caused the event (set by the SDK from the call, never by app code); that agent never receives it */
+  causedBy?: AgentId;
+}
+
+/** `POST /tb/v1/events` (internal listener) with `TB-Assert` (instance assertion; `htm`, `htu`, `bd` required; app instance
+ *  only, never a companion service). Body ≤ 512 KiB, 1..100 items, processed IN ORDER. */
+export interface EventIngestBody {
+  items: EventIngestItem[];
+}
+export type EventIngestItem = EventEmitItem | EventPurgeItem;
+export interface EventEmitItem {
+  kind: "emit";
+  /** idempotency key, unique per app for 7 days: `^[A-Za-z0-9._:-]{8,128}$`; the same (app, key) again → `duplicate` */
+  key: string;
+  /** a manifest event name (without the product) or a PLATFORM_EVENTS type */
+  name: string;
+  at: IsoTime;
+  subject: EventSubject;
+  instanceId?: string;
+  summary?: string;
+  data: JsonObject;
+  /** audience `target` only: 1..100 agents; the bridge still delivers only to those that pass §14.3 */
+  to?: AgentId[];
+  /** scoped events only (also with an empty array): the agents whose row on `instanceId` admits the `visibleWith` op, with
+   *  that row's authority, computed by the SDK at send time (the app is the scope authority, CORE §6). The bridge NEVER
+   *  delivers a scoped event to an agent outside this list. ≤ 500 entries. */
+  eligible?: EventEligible[];
+  causedBy?: AgentId;
+}
+export interface EventEligible {
+  agent: AgentId;
+  /** the row's authority (SDK ScopeAuthority): "owner" → the bridge skips `op.crud ⊆ grant.crud` (C283 A1 rule);
+   *  "bounded" → the bridge also requires `op.crud ⊆ grant.crud` */
+  authority: "owner" | "bounded";
+}
+/** Sent by the SDK when a scope row of `agent` on `instanceId` is removed or narrowed: the bridge deletes that agent's stored
+ *  events of this app for that instance, delivered or not. */
+export interface EventPurgeItem {
+  kind: "purge";
+  key: string;
+  agent: AgentId;
+  instanceId: string;
+}
+/** 200 answer: one result per item, same order. `stored` = written for `recipients` agents (0 is a valid answer);
+ *  `refused` = permanent (the SDK drops the row and logs it); transport errors, 429 and 5xx = retry the whole batch. */
+export interface EventIngestResult {
+  results: { key: string; status: "stored" | "duplicate" | "refused"; code?: EventRefuseCode; recipients?: number }[];
+}
+
+/** JSON-RPC methods and the notification on the agent's EXISTING `/mcp` session (C274d ruling 1). */
+export const EVENT_MCP_METHODS = {
+  list: "tealbrick/events/list",
+  poll: "tealbrick/events/poll",
+  stream: "tealbrick/events/stream",
+  notification: "notifications/tealbrick/event",
+} as const;
+/** `tealbrick/events/list` (no params): the event types this agent can receive now (§14.3 without the per-instance part). */
+export interface EventsListResult {
+  types: { type: string; app: ProductId; title: string; payloadSchema: JsonSchemaObject; scoped: boolean; delivery: ("poll" | "stream")[] }[];
+}
+/** `tealbrick/events/poll`: events with id > cursor (absent = from the oldest kept), ≤ limit (1..100, default 50). */
+export interface EventsPollParams {
+  cursor?: string;
+  limit?: number;
+}
+export interface EventsPollResult {
+  events: AgentEvent[];
+  /** id of the last event returned; else the given cursor; null when neither exists */
+  cursor: string | null;
+  /** true when retention removed events after the given cursor (§14.4); delivery continues from the oldest kept */
+  truncated: boolean;
+  /** present while the agent or the workspace is paused: nothing is delivered, nothing is dropped */
+  paused?: true;
+}
+/** `tealbrick/events/stream`: from now on, this session's SSE stream (GET /mcp) carries `notifications/tealbrick/event`
+ *  frames, first the backlog after `cursor`, then live events. One subscription per session; a second call replaces it. */
+export interface EventsStreamParams {
+  cursor?: string;
+}
+export interface EventsStreamResult {
+  cursor: string | null;
+  truncated: boolean;
+}
+export interface EventNotificationParams {
+  event: AgentEvent;
+}
+
 // ── Bridge internal API (BRIDGE §3.2, §8.3, §9.4, §10) ─────────────────────
 /** `POST /tb/v1/claim` (no assertion yet; the K6 code authenticates). */
 export interface ClaimRequest {
@@ -663,6 +824,8 @@ export const BRIDGE_INTERNAL_PATHS = {
   status: "/tb/v1/status",
   keys: "/tb/v1/keys/{name}",
   call: "/tb/v1/call",
+  /** v0.1.57 (C274c): app event ingest (BRIDGE §14.1) */
+  events: "/tb/v1/events",
   metrics: "/metrics",
 } as const;
 export const SDK_PATHS_CALLED_BY_BRIDGE = {
