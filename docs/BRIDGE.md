@@ -451,11 +451,11 @@ ONLY in the release that implements all of §14.
 ### 14.2 Per-agent log
 - Row id = ULID, strictly increasing per bridge (the cursor). Order per agent = id order = ingest order (the SDK outbox
   drains in emit order, so one app's events keep their order).
-- Retention (C274d ruling 3): per agent, 7 days or 10 000 rows, whichever comes first; the oldest rows go first. The bridge
+- Retention (C274d ruling 3): per agent, 7 days or 10 000 rows, whichever comes first; the oldest rows by INGEST time go first. The bridge
   keeps per agent `droppedThrough` = the highest id it removed BY RETENTION.
 - At delivery the bridge re-checks MANIFEST §16.2 rules 1, 5 and 6 against the current table, using the op named by the
-  row's RECORDED declaration, looked up in the CURRENT serving manifest; if that op's `scopeType` presence differs from
-  the recorded one (a scoped row without `eligible`, or the reverse) the row is dropped. Otherwise: a paused agent/workspace/instance keeps the row; an op missing from the serving
+  row's RECORDED declaration, looked up in the CURRENT serving manifest; if that op's `scopeType` differs from the
+  recorded one (present vs absent, or another type) the row is dropped. Otherwise: a paused agent/workspace/instance keeps the row; an op missing from the serving
   manifest while a G2b attempt runs keeps the row (the candidate may become serving); a failed grant check, or an op that
   is missing once no attempt runs (rollback), drops it (not delivered, not counted as truncation). Rule 6: an enabled
   `before` or `after` hook that matches the op → the event goes out without `summary`.
