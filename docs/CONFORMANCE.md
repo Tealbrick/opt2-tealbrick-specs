@@ -213,7 +213,9 @@ Rows (normative text: MANIFEST §16, BRIDGE §14, SDK-API §20):
   approve, deny and expiry, never to an app caller.
 - **Bridge (B-EV, gated by the reported `"events"` cap, never by version):** one row per case listed in BRIDGE §14.4
   (numbered B-EV-1.. in that order by the conformance package). The row that certifies the cap passes only when every
-  other B-EV row PASSED (not "not applicable") and the cap is in every status report the run saw. A bridge WITHOUT the
+  other B-EV row PASSED (not "not applicable") and the cap is in every status report the run saw. Rows that need volume
+  (retention, rate limits) get their own time budget; when only such rows did not RUN within it, the certifying row is
+  `not_run` (never a fail of a compliant but slow bridge, never a pass). A bridge WITHOUT the
   cap must answer `tealbrick/events/*` with JSON-RPC -32601 (one row).
 - **Runtime (R-EV, Agents lane, against the fake bridge):** as PLAN-P2-PORT-WAKE §5 (`R-EV-1`..`R-EV-6`).
 
