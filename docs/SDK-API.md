@@ -510,7 +510,7 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
   write. Held calls run the handler only on replay, so they emit then.
 - **Validation (throws TbError 400, before any write):** undeclared name → `event_undeclared`; a `tb.*` name →
   `event_reserved` (only the SDK emits platform events); `data` fails the `payloadSchema` or `key` fails
-  `^[A-Za-z0-9._:-]{8,128}$` → `event_payload_invalid`; `data` > 2 KiB (JCS) or `summary` > 280 chars → `event_too_large`; `instanceId` missing on a scoped event or present on an
+  `^[A-Za-z0-9._:-]{8,128}$` → `event_payload_invalid`; `data` > 2 KiB (JCS), `summary` > 280 chars, or the whole wire item without `eligible` > 4 KiB (BRIDGE §14.1, e.g. a long `to` list) → `event_too_large`; `instanceId` missing on a scoped event or present on an
   unscoped one → `event_instance_invalid`; `to` missing/empty/> 100 for `target` or present for `granted` →
   `event_target_invalid`; `subject.kind`/`subject.id` shape → `event_payload_invalid`. Tests catch these; the SDK does not
   swallow them in production (an emit bug is a code bug).
@@ -522,20 +522,37 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
   person calls, EventContext and StartContext.
 - **Sender.** A background sender drains the outbox in row order to `POST /tb/v1/events` (≤ 100 items per batch), ONLY
   while `ctx.bridgeCaps()` includes `"events"` (C292: by capability, never by bridge version). Without the cap rows wait;
-  unsent rows older than 7 days are pruned (the bridge window). Transport error, 429 or 5xx → retry the batch with backoff
-  (same keys, so the bridge dedupes); `stored`/`duplicate` → row done; `refused` → row dropped and logged with its code.
+  unsent rows older than 7 days are pruned (the bridge window). It drains only COMMITTED rows (never while a transaction
+  is open on its connection). No emit follows a purge in the same batch (consecutive purges may share one; belt and
+  braces with the bridge's purge dedupe: a retry never re-sends a purge ahead of a later event). Answers, per batch:
+  - `stored`/`duplicate` → row done; `refused` → row dropped and logged with its code; a 200 that does not answer every
+    item with the item's own `key` in order → retry the batch.
+  - transport error, 429, 5xx, 503 `app_not_claimed` → retry the batch with backoff (same keys, so the bridge dedupes).
+  - 413 → halve the batch and retry, down to one item. A single EMIT item still answered 413 is a permanent refusal (drop
+    and log `event_too_large`), so one oversized row never blocks the outbox; a single PURGE item is never dropped (it is
+    small; a 413 on it means a broken path): it is retried with backoff like a transport error. A 413 drop does not count
+    as a successful send. The batch size grows back only after 10 consecutive fully answered sends (doubling each time).
+  - 401 → retry with backoff (key or clock trouble); after 10 consecutive failed sends (any cause) the app reports
+    `AppStatus.attention {code: "events_send_failing", reason}` until a send succeeds, so the owner sees it long before
+    the 7-day prune.
 - **Scoped events.** At SEND time the sender computes `eligible` = agents with a row on (`scopeType`, `instanceId`) whose
-  effective crud ⊇ `visibleWith.crud`, with each row's authority (MANIFEST §16.2 rule 2); for `target` it is intersected
-  with `to`. The bridge never delivers outside it.
+  effective crud ⊇ `visibleWith.crud`, with each row's authority (MANIFEST §16.2 rule 2), LIMITED to agents in the
+  current verified slice (an agent that left the slice cannot receive anything; its rows may stay), at most 500; for
+  `target` it is intersected with `to`. The bridge never delivers outside it. The emit records the event's scope type; a
+  row whose `visibleWith` scope type changed by an app update before it was sent is dropped (logged), never sent with
+  `eligible` computed on another type.
 - **Purge.** When a row of agent A on an instance is removed, its effective crud narrows, or its authority changes from
   `owner` to `bounded` (`tb.scopes_set`, `ctx.scopeGrants.grant/revoke`, `ctx.scopeSelfRevoke`), the SDK writes a
-  `purge {agent, instanceId}` row in the same transaction as the row change; it drains in order with the events.
+  `purge {agent, instanceId}` row in the same transaction as the row change, for EVERY scope type (not only types some
+  current event is scoped on: an app update may have removed the event while older events of it are still stored); it
+  drains in order with the events.
   `ctx.purgeEvents(instanceId)` (synchronous, outbox) writes `purge {instanceId}` for every agent: apps call it in the
   transaction that deletes or disconnects an instance.
 - **`tb.hold.decided`.** The SDK emits it after a hold decision (`tb.holds_decide`, after `receipts.decide`) and from the
   expiry sweep, `to` = the hold's caller when that caller is an agent; data `{holdId, op, decision}`; subject
   `{kind: "hold", id: holdId}`; no summary.
-- Conformance (0.1.28, A-EV-*): a declared change emits exactly one event (fake bridge); a rolled-back transaction emits
+- Conformance (0.1.28, A-EV-*): a manifest that declares `events` but offers no way for the suite to trigger them is
+  a FAIL of the A-EV rows, never "not applicable"; a declared change emits exactly one event (fake bridge); a rolled-back transaction emits
   nothing (a committed one followed by a throw still emits); an invalid payload or an undeclared name throws; bridge 503 then retry → delivered once
   (same key); a slice without `"events"` → nothing sent, then the cap appears → the backlog is sent in order; a scoped
   emit carries the right `eligible` (owner row above the grant → `owner`; `apps_only`-style row is still listed, so the app

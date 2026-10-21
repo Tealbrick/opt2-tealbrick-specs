@@ -435,8 +435,9 @@ ONLY in the release that implements all of §14.
      runs) the candidate manifest's (`candidateManifestDigest`); neither → `event_undeclared`. The row records which
      manifest digest it was checked against; fan-out uses that declaration.
   2. Shape: `key` `^[A-Za-z0-9._:-]{8,128}$`, `subject.kind` `^[a-z][a-z0-9_]{0,31}$`, `subject.id` 1..256, `data`
-     validates against the `payloadSchema` → else `event_payload_invalid`; `summary` > 280 chars, `data` > 2 KiB (JCS) or
-     item > 4 KiB → `event_too_large`.
+     validates against the `payloadSchema` → else `event_payload_invalid`; `summary` > 280 chars (UTF-16 code units, i.e.
+     a JavaScript string length), `data` > 2 KiB (JCS) or the item WITHOUT `eligible` > 4 KiB → `event_too_large`
+     (`eligible` has its own limit, step 5).
   3. Scoped (the `visibleWith` op has a `scopeType`) ⇔ `instanceId` present (1..256) and `eligible` present →
      else `event_instance_invalid`.
   4. `audience: target` ⇔ `to` present with 1..100 agents → else `event_target_invalid`.
@@ -446,7 +447,9 @@ ONLY in the release that implements all of §14.
   that pass MANIFEST §16.2 rules 1–4 now (scoped: ∩ `eligible`, with the per-entry authority); write one row per
   recipient. `stored` with `recipients` (0 is a valid answer). Paused recipients get their row (rule 5).
 - `purge` items: delete every stored row of (`agent`, this app, `instanceId`), delivered or not; without `agent` (an
-  instance deleted or disconnected) the rows of EVERY agent for that app and instance; answer `stored`.
+  instance deleted or disconnected) the rows of EVERY agent for that app and instance; answer `stored`. Purge keys are
+  deduped exactly like emit keys (`(app instance, key)`, 7 days → `duplicate`, nothing applied), so a retried batch never
+  applies a purge twice (a second application would delete events stored after it).
 
 ### 14.2 Per-agent log
 - Row id = ULID, strictly increasing per bridge (the cursor). Order per agent = id order = ingest order (the SDK outbox
