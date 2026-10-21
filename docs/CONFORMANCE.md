@@ -222,12 +222,17 @@ Normative text: BRIDGE §14.3 client duties. Rows are gated by what the fake sid
 version (C292 pattern).
 - **Relay target** (`tb-conformance relay --cmd "<stdio relay command>"`); rows run only when the fake upstream offers
   `tealbrick/events/*`, else `not_run`:
-  - `B10.events_forwarded` — after `tealbrick/events/stream`, a `notifications/tealbrick/event` frame (SSE `id:` = event
-    id) on the upstream GET stream appears on stdout deep-equal.
+  - `B10.events_forwarded` — `tealbrick/events/stream` reaches the upstream (same id) and its answer comes back unchanged;
+    a `notifications/tealbrick/event` frame (SSE `id:` = event id) on the subscribed GET stream appears on stdout as the
+    whole JSON-RPC message, deep-equal.
   - `B10.events_last_event_id` — the upstream ends the GET stream; the relay's next `GET /mcp` carries `Last-Event-ID` =
     the id of the last event frame.
-  - `B10.events_resubscribe` — the upstream forgets the session (404 on the idle GET); the relay sends `initialize`, then
-    `tealbrick/events/stream` with `cursor` = the last event id, and writes no answer to stdout for its own requests.
+  - `B10.events_resubscribe` — the upstream forgets every session (404); the relay sends `initialize`, then
+    `tealbrick/events/stream` on the NEW session with `cursor` = the last event id, opens a GET on it, and the next event
+    reaches stdout; the suite sends nothing meanwhile and the relay writes no answer of its own to stdout (no
+    result/error, no second answer to an id).
+  - Fake upstream session model for these rows: a session id it never issued, forgot or ended → 404;
+    `tealbrick/events/stream` without a session → 400; event frames go only to GET streams of a subscribed session.
 - **Runtime target** (planned, package after 0.1.29): `tb-conformance runtime --cmd "<agent host command>"
   [--login-cmd "<agent login command>"] [--timeout <ms>] [--report <base>]`; the suite plays the bridge with the shared
   fake bridge and records every turn (prompt, time). Rows need the fake bridge to report `"events"`, except R-EV-6:
