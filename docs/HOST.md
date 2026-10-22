@@ -103,31 +103,38 @@ actions run before the first engine call; a refused plan changes nothing.
    workspace; `now ≤ exp + 30 s`, `iat ≤ now + 30 s`.
 2. **monotonicSeq** — `lastSeq` = the highest seq the box DECIDED (applied, or refused after signature + server binding
    verified), persisted, used as `after`. seq ≤ lastSeq → `replayed`; seq > lastSeq + 1000 → `seq_out_of_range` (lastSeq not
-   moved); a bad signature never moves lastSeq. A VPS snapshot restore rolls back lastSeq, the key-set pin and the version floor
+   moved, reported); a bad signature never moves lastSeq. Core serves only plans the box has not decided, so a reported
+   refusal never blocks later plans. A VPS snapshot restore rolls back lastSeq, the key-set pin and the version floor
    together; the agent re-derives the floor from the images it finds running.
 3. **closedSchema** — `host-plan.schema.json`, ≤ 64 KiB (`schema_invalid`).
-4. **serviceIdentity** — serviceName is derived from (product, component); the box records (product, component,
-   TB_INSTANCE_ID) at first create and refuses another identity for that name forever, also after a stop (`identity_changed`).
+4. **serviceIdentity** — serviceName is derived from (product, component); the box records (product, component) at first
+   create and refuses another identity for that name forever, also after a stop (`identity_changed`). A reinstall of the same
+   app (new TB_INSTANCE_ID) keeps the name and its volumes.
 5. **imageFromIndex** — the box fetches `index.json` + `index.jws` itself, verifies them with the release keys pinned in the agent
    build; entry `releaseId` exists, product, channel (box config, default stable) and `manifestDigest` match, and `image` =
    entry.image (component null) | entry.services[component].image | the digest-pinned image of manifest runtime.services[component]
    (`not_in_index`). Index or manifest unreachable → nothing applied (`index_unavailable`).
-6. **noDowngrade** — a version floor per (product, component), persisted, across every serviceName, running or stopped; below it →
-   `downgrade_refused`, except a rollback to the ONE version that ran for that serviceName right before the current one, and only
-   while the current one is `failed` or health `failing` (C213). An owner-initiated rollback of a healthy service is refused in S1.
+6. **noDowngrade** — a version floor per (product, component), persisted, across every serviceName, running or stopped. The
+   release that runs now is never a downgrade (a setting change passes). Below the floor → `downgrade_refused`, except a rollback
+   to the ONE version that ran for that serviceName right before the current one, only while the current one is `failed` or
+   health `failing` (C213); that rollback lowers the floor. The owner's `instances.rollback` (snapshot restore) is not available
+   on own servers in S1 (Core refuses it).
 7. **envAllowlist** — names in env ∪ generatedSecrets ∪ serviceRefs keys are pairwise disjoint and declared for that component
    (manifest runtime.env / runtime.services[id].env; bridge: index runtime.env), or `HOST_PLATFORM_ENV` (env only:
-   TB_INSTANCE_ID, TB_SERVICE, TB_DATA_DIR, TB_BACKUP_DIR) or `HOST_PLATFORM_GENERATED` (TB_KEK). `HOST_BOX_OWNED_ENV` (PORT,
+   TB_INSTANCE_ID, TB_SERVICE, TB_DATA_DIR, TB_LOG_LEVEL, TB_BACKUP_DIR = the backup volume's path when the spec carries one,
+   else TB_DATA_DIR/backup) or `HOST_PLATFORM_GENERATED` (TB_KEK). `HOST_BOX_OWNED_ENV` (PORT,
    TB_ENROL_CODE, TB_OWN_INFRA_ORIGINS, TB_INTERNAL_HOST, TB_PORTAL_URL, TB_PORTAL_KEYS, TB_BRIDGE_URL, TB_PUBLIC_URL,
    TB_KEYS_PUBLIC_URL — the box renders them) and `HOST_DENIED_ENV` (NODE_OPTIONS, LD_*, PYTHONPATH, JAVA_TOOL_OPTIONS, PATH,
    proxies, …) are refused everywhere, even if declared (`env_not_declared`).
 8. **manifestMatch** — `generate: secret` / `provider-secret` names only in generatedSecrets; `value` / `fixed` entries only in env
    with exactly that value (`{{services.<id>.host|port|url}}` rendered by the box); whole-value `{{services.<id>.env.<NAME>}}`
-   only as serviceRefs {serviceName of <id> in the same instance, NAME}; platform values = what the box derives; `port`,
-   `healthPath` (or null) and every mountPath = the declared ones (none declared: "/data") (`manifest_mismatch`).
+   only as serviceRefs {serviceName of <id> in the same instance, NAME}; platform values = what the box derives; `port` and
+   `healthPath` (or null) = the declared ones; volumes = a subset of the declared ones at their paths (none declared: one at
+   "/data") (`manifest_mismatch`). Not on own servers in S1: TB_RESTORE_FROM (snapshot restore), TB_KEK_PREVIOUS (KEK rotation).
 9. **noSecretValues** — no env value matches `HOST_SECRET_VALUE_PATTERNS` (`secret_like_value`).
 10. **generatedNotSent** — the adapter GENERATES the engine config; no compose/engine spec from outside reaches the engine (B3).
-11. **neverDeleteVolumes** / **finalPlan** — no action deletes a volume in S1; after a `final` plan the box is detached (§3).
+11. **neverDeleteVolumes** / **finalPlan** — no action deletes a volume in S1. A `final` plan (only stop actions, may be empty)
+   makes the box stop EVERY tb- service it created, keep all data, refuse every later plan and stop polling (§3).
 12. **resources** — clamped to the facts minus 1 GiB RAM / 0.5 CPU reserve; box defaults when null.
 13. **ownInfraOrigins** — after every applied change: rewrite the bridge's `TB_OWN_INFRA_ORIGINS` (exact
    `http://<serviceName>:<port>` origins of the running tb- APP services the agent created in this stack, sorted, comma-separated)
@@ -135,10 +142,12 @@ actions run before the first engine call; a refused plan changes nothing.
 14. **firewall** — agent-owned, re-checked before every report and on every Docker `network create` event: DROP by default from
    any Docker bridge (`br-+`, `docker0`) to the host (INPUT, IPv4 + IPv6): :22, the engine API, other stacks' networks, IPv6
    host addresses, 169.254.169.254; explicit allows only for the engine's own network. A failed check → `firewall.ok = false`.
-15. **containEscapes** (FIX-B3 L3) — every report cycle the agent lists ALL containers on the box; one outside its allowlist
-   (the engine's own containers by name + image digest, its own tb- services) with a container:/host network, pid or ipc mode,
-   privileged, added capabilities, devices, a docker.sock or host-path bind is stopped (`docker stop`, data kept) and reported
-   in `escapes` (code `escape_attempt`) until Core acknowledged it. Core marks the server `degraded` and alerts.
+15. **containEscapes** (FIX-B3 L3) — every report cycle the agent lists ALL containers and compares each one's HostConfig
+   (namespace modes, privileged, capabilities, devices, binds/mounts) with what it expects: the config recorded at install for an
+   engine component's pinned digest, or the config it generated for a tb- service. Name and digest only identify, never exempt.
+   A deviating container with a container:/host namespace mode, privileged, added capabilities, devices, a docker.sock or
+   host-path bind gets `docker update --restart=no` + `docker stop` (data kept) and is reported in `escapes` (code
+   `escape_attempt`) until Core acknowledged it. Core marks the server `degraded` (24 h) and alerts.
 16. **publicHosts** — only the bridge (kind bridge, component null): `main = w<lower ws ULID>.<zone>`,
    `keys = w<lower ws ULID>-keys.<zone>`, `zone` = the box's configured workspace zone.
 
@@ -217,3 +226,16 @@ for main; seq cap and jump limit; refused plans advance lastSeq; all checks befo
   stack, resolved on the box, never a secret from outside the box.
 - `escape_attempt` code + `HostReport.escapes[]` + `Server.escapes` + rule `containEscapes` + row H-12 (FIX-B3 layer L3).
 - Bridge `TB_INTERNAL_HOST`: the box writes the hostname form (advertise only; bridge PR #17); no further contract change.
+
+### Second review pass (2026-10-22) — folded in
+Identity pinned to (product, component) only (reinstall works); escape check compares every container's HostConfig (no
+name/digest exemption) and disables restart before stopping; the running release is never a downgrade and a health-gated rollback
+lowers the floor; owner snapshot rollback, TB_RESTORE_FROM and TB_KEK_PREVIOUS are out of S1 on own servers; TB_LOG_LEVEL allowed;
+TB_BACKUP_DIR follows the backup volume; a final plan may be empty and stops every tb- service; Core serves only undecided plans.
+
+### Known gaps (follow-ups, not blocking S1a)
+- The manifest validator / release signer should apply `HOST_PATTERNS.mountPath` and `healthPath` at publish time, so a published
+  release is never undeployable on a server (`/.well-known/...`, `/usr/share/...`). Owner: SDK/manifest + Platform signer.
+- Service-name collisions (`foo-bar` vs `foo` + companion `bar`, the 60-char cut) are refused, never taken over; the signer can
+  refuse colliding product/service ids. Owner: Platform.
+- The release index has no `revoked` / `minVersion` / rollback flag yet; the box's floor is the only downgrade guard. Owner: Platform.

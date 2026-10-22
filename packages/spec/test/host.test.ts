@@ -152,6 +152,10 @@ test("final (detach) plan holds only stop actions; companions use their manifest
   assert.equal(validatePlan(p), false, "final plan with ensure_service");
   p.actions = [p.actions[1]];
   assert.equal(validatePlan(p), true, JSON.stringify(validatePlan.errors));
+  p.actions = [];
+  assert.equal(validatePlan(p), true, "a final plan may be empty (the box stops all its services)");
+  delete p.final;
+  assert.equal(validatePlan(p), false, "a normal plan needs an action");
   const c = plan();
   const s = svc(c) as Record<string, any>;
   s.publicDomain = false;
