@@ -5,8 +5,8 @@ import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { CALLER_TYPES, CREDENTIAL_KINDS, CREDENTIAL_REGISTRY, DEVICE_FLOW, TYP } from "../src/credentials.ts";
 import {
-  HOST_BOX_OWNED_ENV, HOST_CONFORMANCE, HOST_ERROR_CODES, HOST_FORBIDDEN_KEYS, HOST_LIMITS, HOST_PATTERNS, HOST_PLATFORM_ENV,
-  HOST_POLICY, HOST_RESERVED_ACTION_KINDS, HOST_SECRET_VALUE_PATTERNS,
+  HOST_BOX_OWNED_ENV, HOST_CONFORMANCE, HOST_DENIED_ENV, HOST_ERROR_CODES, HOST_FORBIDDEN_KEYS, HOST_LIMITS, HOST_PATTERNS,
+  HOST_PLATFORM_ENV, HOST_PLATFORM_GENERATED, HOST_POLICY, HOST_RESERVED_ACTION_KINDS, HOST_SECRET_VALUE_PATTERNS,
 } from "../src/host.ts";
 import { AUDIT_ACTIONS, RATE_CLASSES, ROUTES, TRANSPORTS } from "../src/routes.ts";
 
@@ -83,7 +83,8 @@ test("schemas use the HOST_PATTERNS / HOST_LIMITS values (no drift)", () => {
   const d = s.$defs.service.properties;
   assert.equal(s.$defs.serviceName.pattern, HOST_PATTERNS.serviceName);
   assert.equal(s.$defs.envName.pattern, HOST_PATTERNS.envName);
-  assert.equal(d.component.pattern, HOST_PATTERNS.component);
+  assert.equal(d.component.anyOf[0].pattern, HOST_PATTERNS.componentId);
+  assert.equal(d.healthPath.anyOf[0].pattern, HOST_PATTERNS.healthPath);
   assert.equal(d.release.properties.image.pattern, HOST_PATTERNS.imageByDigest);
   assert.equal(d.volumes.items.properties.mountPath.pattern, HOST_PATTERNS.mountPath);
   assert.equal(d.volumes.items.properties.name.pattern, HOST_PATTERNS.volumeName);
@@ -115,14 +116,52 @@ test("secret-like values are caught; platform and public values are not", () => 
   for (const v of ['{"keys":[{"kty":"OKP","crv":"Ed25519","x":"IIKwS6eT-LIrtVuNO-2VRoGdYk27nBkG8zG_Ed1dt8Q"}]}', "https://portal.example.com", "http://tb-bridge:8080", "/data", "info", "ins_01JZ0000000000000000000005", "postgres://db:5432/x"]) assert.ok(!isSecret(v), v);
 });
 
-test("platform env forms and box-owned names do not overlap", () => {
-  for (const n of HOST_BOX_OWNED_ENV) assert.ok(!(n in HOST_PLATFORM_ENV), n);
-  for (const [n, form] of Object.entries(HOST_PLATFORM_ENV)) {
+test("platform, box-owned and denied env names are disjoint and well-formed", () => {
+  const owned = Object.keys(HOST_BOX_OWNED_ENV);
+  const platform = Object.keys(HOST_PLATFORM_ENV);
+  for (const n of owned) assert.ok(!platform.includes(n), n);
+  for (const n of [...owned, ...platform, ...HOST_PLATFORM_GENERATED]) {
     assert.match(n, new RegExp(HOST_PATTERNS.envName));
-    if (!form.includes(":")) new RegExp(form);
+    assert.ok(!HOST_DENIED_ENV.some((d) => (d.endsWith("*") ? n.startsWith(d.slice(0, -1)) : d === n)), n);
   }
-  assert.ok(new RegExp(HOST_PLATFORM_ENV.TB_BRIDGE_URL).test("http://tb-bridge:8080"));
-  assert.ok(!new RegExp(HOST_PLATFORM_ENV.TB_BRIDGE_URL).test("http://evil.example:80"));
+  for (const n of ["TB_PORTAL_URL", "TB_PORTAL_KEYS", "TB_BRIDGE_URL", "TB_ENROL_CODE", "TB_OWN_INFRA_ORIGINS", "TB_INTERNAL_HOST", "PORT"]) assert.ok(owned.includes(n), n);
+  for (const n of ["NODE_OPTIONS", "LD_*", "PATH", "HTTPS_PROXY"]) assert.ok((HOST_DENIED_ENV as readonly string[]).includes(n), n);
+  assert.ok(new RegExp(HOST_PLATFORM_ENV.TB_INSTANCE_ID).test("ins_01JZ0000000000000000000005"));
+});
+
+test("path rules (review B2): no system path, no empty/dot segment; health path is never a URL", () => {
+  const mount = new RegExp(HOST_PATTERNS.mountPath, "u");
+  for (const bad of ["/", "/../proc", "/../var/run/docker.sock", "//proc", "/./proc", "/var//run/docker.sock", "/var/./run/docker.sock", "/var/run/docker.sock", "/proc/1/root", "/usr/src/app", "/etc/passwd", "/data/../etc", "/data/.", "/var/lib/docker/volumes", "relative/path"]) assert.ok(!mount.test(bad), bad);
+  for (const ok of ["/data", "/var/lib/app", "/srv/knowledge/data", "/home/node/cache"]) assert.ok(mount.test(ok), ok);
+  const health = new RegExp(HOST_PATTERNS.healthPath, "u");
+  for (const bad of ["//evil.com/x", "/../../x", "/a//b", "http://x/", "healthz", "/.env"]) assert.ok(!health.test(bad), bad);
+  for (const ok of ["/", "/healthz", "/tb/v1/health", "/api/health/"]) assert.ok(health.test(ok), ok);
+  const image = new RegExp(HOST_PATTERNS.imageByDigest, "u");
+  assert.ok(image.test(`registry.example.com:5000/team/app:1.2@sha256:${"a".repeat(64)}`));
+  assert.ok(!image.test("ghcr.io/x/y:latest"));
+});
+
+test("final (detach) plan holds only stop actions; companions use their manifest id; volume ids may use underscores", () => {
+  const p = plan();
+  p.final = true;
+  assert.equal(validatePlan(p), false, "final plan with ensure_service");
+  p.actions = [p.actions[1]];
+  assert.equal(validatePlan(p), true, JSON.stringify(validatePlan.errors));
+  const c = plan();
+  const s = svc(c) as Record<string, any>;
+  s.publicDomain = false;
+  delete s.publicHosts;
+  s.component = "gbrain-db";
+  s.serviceName = "tb-knowledge-gbrain-db";
+  s.volumes[0].name = "pg_data";
+  assert.equal(validatePlan(c), true, JSON.stringify(validatePlan.errors));
+  s.component = "main";
+  assert.equal(validatePlan(c), true, "main is just an id string here; identity is the box rule");
+  s.component = "tb-evil";
+  assert.equal(validatePlan(c), false, "tb- component");
+  const big = plan();
+  big.seq = 2 ** 31;
+  assert.equal(validatePlan(big), false, "seq cap");
 });
 
 test("routes: host rows take only the host class, never store or log bodies; servers rows keep RT1", () => {

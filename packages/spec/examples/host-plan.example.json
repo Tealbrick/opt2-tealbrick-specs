@@ -15,7 +15,7 @@
       "kind": "ensure_service",
       "service": {
         "serviceName": "tb-bridge",
-        "component": "main",
+        "component": null,
         "release": {
           "product": "bridge",
           "releaseId": "rel_01JZ0000000000000000000004",
@@ -23,11 +23,8 @@
           "manifestDigest": null
         },
         "env": {
-          "TB_PORTAL_URL": "https://portal.example.com",
-          "TB_PUBLIC_URL": "https://w01jz0000000000000000000002.ws.example.com",
-          "TB_KEYS_PUBLIC_URL": "https://w01jz0000000000000000000002-keys.ws.example.com",
-          "TB_DATA_DIR": "/data",
-          "TB_INTERNAL_PORT": "8788"
+          "TB_INTERNAL_PORT": "8788",
+          "TB_DATA_DIR": "/data"
         },
         "generatedSecrets": [
           "TB_KEK"

@@ -38,30 +38,33 @@ signature only proves that Core made a plan. The box enforces a closed local pol
    pin the key, (b) `workspaces.set_infrastructure {provider: "own_infra", destinationId: srv_…}` for that workspace (recorded as
    one applied draft, `DeviceDecision.draftId`; audit `device.approve` + `server.pair` + `workspace.set_infrastructure`), which
    also requests the bridge deploy (the first plan). `DeviceDecision.serverId` = the new server.
-   Refused: a workspace that already runs services in another destination (409 conflict, as set_infrastructure), a paused
-   or standalone workspace, a key already pinned for a live server (409 conflict).
+   `DeviceRequest.agents` is `[]` for scope host. Refused: a workspace that already has infrastructure of any provider
+   (409 conflict, `details.reason = infrastructure_set`; S1 never replaces — moving a workspace is a later migration feature),
+   a paused or standalone workspace, a key already pinned for a live server (409 conflict).
 6. The agent polls `device.token` (RFC 8628). Result `DeviceHostTokenResult {scope: "host", server_id, workspace_id, key_thumbprint}`
    — no token; the box checks `key_thumbprint` equals its own key and from now on signs host assertions.
 - The device code is single-use and lives 10 min (K2); it is redeemed before the box can fetch any plan.
 
 ## 3. Server object
-`Server {id, workspaceId, label, state, facts, keyThumbprint, lastReportAt, lastAppliedSeq, services, firewall, createdAt, detachedAt}`
+`Server {id, workspaceId, label, state, facts, keyThumbprint, lastReportAt, lastSeq, services, firewall, createdAt, detachedAt}`
 (host.ts). One server runs ONE workspace (one engine stack per workspace). State (Core computes it):
 `pending` paired, no report yet · `online` last report < 90 s ago, firewall ok, no service failed · `degraded` online but the
 firewall check failed or a service is `failed` / its health `failing` · `offline` no report for 90 s · `detached` terminal.
 
 | opId | method path | auth | notes |
 |---|---|---|---|
-| `servers.list` | GET /servers | browser, owner-cli | the account's servers, newest first |
+| `servers.list` | GET /servers?ws= | browser, owner-cli | the account's servers, newest first; `ws` = only that workspace's server |
 | `servers.get` | GET /servers/{srv} | browser, owner-cli | |
-| `servers.detach` | POST /servers/{srv}/detach | browser; draftable, confirm | S1: stop + keep data + unpair (below). No delete op in S1 (B2e) |
+| `servers.detach` | POST /servers/{srv}/detach `{srv}` | browser; draftable, confirm, Idempotency-Key | returns the Server; repeat-safe; S1: stop + keep data + unpair (below). No delete op in S1 (B2e) |
 | `host.plans` | GET /host/plans?after=&wait= | host; longpoll | ONE plan JWS or 304 |
 | `host.report` | POST /host/reports | host | `HostReport` → `HostReportAck`; also the heartbeat |
 
-**Detach (S1)**: Core issues one final plan that stops every `tb-` service it created on the server (volumes KEPT), marks the
-server `detached`, clears the workspace infrastructure and marks that workspace's instances removed with data kept. Core keeps
-serving that final plan on `host.plans` and accepts `host.report` until the final plan is reported or expires (15 min); after
-that every host assertion of the server is refused (401). The data stays on the box. Re-pairing = a new device flow (new `srv_`);
+**Detach (S1)**: Core issues one final plan (`final: true`, only `stop_service` actions) that stops every `tb-` service it
+created on the server (volumes KEPT), marks the server `detached`, clears the workspace infrastructure and marks that
+workspace's instances removed with data kept. Until the box reports that plan applied, Core keeps serving it on `host.plans`
+(re-signed with a new seq when it expires, so a box that was offline still gets it) and accepts `host.report`; after that every
+host assertion of the server is refused (401). The box, after applying a final plan, records the pairing as detached, refuses
+every later plan and stops polling. The data stays on the box. Re-pairing = a new device flow (new `srv_`);
 re-adopting kept data on a server is out of S1.
 
 ## 4. Plans (signed by Core, CHECKED by the box — REDTEAM B2)
@@ -77,56 +80,69 @@ re-adopting kept data on a server is out of S1.
   typ `tb-host-plan+jws`). There is no separate key-set URL for the box.
 - `seq`: strictly increasing per server, from 1. `exp − iat ≤ 900 s`. Core signs at enqueue and never serves an expired plan;
   a deploy job whose plan expired undelivered fails (`deploy_failed`, reason `plan_expired`); Retry enqueues a new plan (new seq).
-- Actions: `ensure_service {service: HostServiceSpec}` (create, or replace when the spec differs) and
+- Actions: `ensure_service {service: HostServiceSpec}` (create, or replace when the spec differs — same identity only) and
   `stop_service {serviceName}` (never removes a volume). `ensure_agent_runtime` is RESERVED (S2+: a container unit in the stack
   with an egress policy, REDTEAM M9); S1 boxes refuse it like every unknown kind (`schema_invalid`). Host-level units never exist.
-- `HostServiceSpec` (closed): `serviceName` (`^tb-[a-z0-9-]{1,40}$`, single label), `component` (`main` or the manifest service
-  id), `release {product, releaseId, image (name@sha256 only), manifestDigest}`, `env`, `generatedSecrets` (names), `serviceRefs`
+- `HostServiceSpec` (closed): `serviceName` (= `("tb-" + product + ("-" + component)?)` cut to 60, single label), `component`
+  (null = the main image, else the manifest service id), `release {product, releaseId, image (name@sha256 only), manifestDigest}`, `env`, `generatedSecrets` (names), `serviceRefs`
   (another tb- service's env in this stack), `enrolCode` (the one-time `tbe_` code; the box sets TB_ENROL_CODE; never logged or
   reported), `port`, `publicDomain` (bridge only) + `publicHosts {main, keys}` (C59), `healthPath`, `stopGraceSeconds` (≤ 120;
   bridge drain C131), `volumes` (NAMED only: `{name, mountPath, purpose}`; the box names them `<stack>_<serviceName>_<name>`),
-  `resources`.
+  `resources` (a request the box clamps). Manifest mount paths must not start a segment with "." (the plan pattern refuses it).
 - Never in the schema, so never sendable: host paths, bind mounts, privileged, cap_add, devices, network_mode, pid, ipc,
   extra_hosts, user, sysctls, security_opt, entrypoint/command overrides, labels, compose, build/source (`HOST_FORBIDDEN_KEYS`).
 
 ## 5. Local policy on the box (cannot be overridden by a valid signature) — `HOST_POLICY`
-1. **verifySignature / bindServer / monotonicSeq / notExpired** — §4 trust rule; `server`, `sub`, `aud` = this box and
-   `workspace` = its paired workspace; `seq` > last applied (persisted across restarts); `now ≤ exp + 30 s`, `iat ≤ now + 30 s`.
-2. **closedSchema** — the payload validates against `host-plan.schema.json`; size ≤ 64 KiB.
-3. **imageFromIndex** — the box fetches the release index (`index.json` + `index.jws`) itself and verifies it with the release
-   keys pinned in the agent build (Platform `registry/keys.json`). The entry `release.releaseId` exists, its product =
-   `release.product`, its channel = the box's configured channel (default `stable`, set at install), its `manifestDigest` =
-   `release.manifestDigest`, and `release.image` = entry.image (component main) | entry.services[component].image | the
-   digest-pinned image of the manifest's `runtime.services[component]` (manifest fetched from entry.manifestUrl, digest checked).
-   Index unreachable → nothing is applied (`index_unavailable`).
-4. **noDowngrade** — for a serviceName the box runs, a lower version (from the index) is refused, EXCEPT the one version the box
-   itself ran for that serviceName right before the current one (health-gated rollback, C213). The index has no rollback flag yet.
-5. **envAllowlist / noSecretValues** — every `env` name is declared by the release for that component (manifest `runtime.env` /
-   `runtime.services[id].env`; bridge: the index `runtime.env` names) or is a `HOST_PLATFORM_ENV` name whose value has its form
-   (`TB_INSTANCE_ID`, `TB_SERVICE`, `TB_BRIDGE_URL` = `http://tb-…:<port>`, `TB_PORTAL_KEYS` = public JWK JSON, `TB_PORTAL_URL`,
-   `TB_DATA_DIR` / `TB_BACKUP_DIR` = a volume path). `HOST_BOX_OWNED_ENV` (`PORT`, `TB_ENROL_CODE`, `TB_OWN_INFRA_ORIGINS`,
-   `TB_INTERNAL_HOST`) is never accepted in `env`. No value matches `HOST_SECRET_VALUE_PATTERNS` (our opaque prefixes, Stripe,
-   GitHub, Slack, OpenAI/Anthropic-style `sk-`, AWS, JWTs, PEM private keys, URLs with a password).
-6. **generatedNotSent** — the adapter GENERATES the engine config from `HostServiceSpec`; no compose file or engine spec from
-   outside ever reaches the engine (REDTEAM B3).
-7. **neverDeleteVolumes** — `stop_service` and detach never delete a volume in S1. No action deletes data.
-8. **ownInfraOrigins** — after every applied change: rewrite the bridge's `TB_OWN_INFRA_ORIGINS` (exact `http://<serviceName>:<port>`
-   origins of the tb- APP services the agent created in this stack, sorted, comma-separated) and `TB_INTERNAL_HOST` (= the bridge
-   serviceName), then restart the bridge (it reads the allowlist at boot; adding an app restarts the bridge).
-9. **firewall** — agent-owned, re-checked before every report and on every Docker `network create` event: DROP by default from any
-   Docker bridge (`br-+`, `docker0`) to the host (INPUT, IPv4 + IPv6): :22, the engine API, other stacks' networks, IPv6 host
-   addresses, 169.254.169.254; explicit allows only for the engine's own network. A failed check → report `firewall.ok = false`.
-10. **publicHosts** — `publicDomain` only for release kind bridge, component main; then `publicHosts` present, main ≠ keys, both
-   end with "." + the box's configured workspace zone; the bridge env values of the index sources public-url / public-url-keys
-   equal `https://<main>` / `https://<keys>`.
+Principle: every value the box can derive from the verified release, its pairing and its own config it DERIVES and compares.
+Left to Core: which release, the owner's setting values (public, non-secret), the one-time enrolment code. ALL checks of ALL
+actions run before the first engine call; a refused plan changes nothing.
+1. **verifySignature / bindServer / notExpired** — §4 trust rule; `server`, `sub`, `aud` = this box, `workspace` = its paired
+   workspace; `now ≤ exp + 30 s`, `iat ≤ now + 30 s`.
+2. **monotonicSeq** — `lastSeq` = the highest seq the box DECIDED (applied, or refused after signature + server binding
+   verified), persisted, used as `after`. seq ≤ lastSeq → `replayed`; seq > lastSeq + 1000 → `seq_out_of_range` (lastSeq not
+   moved); a bad signature never moves lastSeq. A VPS snapshot restore rolls back lastSeq, the key-set pin and the version floor
+   together; the agent re-derives the floor from the images it finds running.
+3. **closedSchema** — `host-plan.schema.json`, ≤ 64 KiB (`schema_invalid`).
+4. **serviceIdentity** — serviceName is derived from (product, component); the box records (product, component,
+   TB_INSTANCE_ID) at first create and refuses another identity for that name forever, also after a stop (`identity_changed`).
+5. **imageFromIndex** — the box fetches `index.json` + `index.jws` itself, verifies them with the release keys pinned in the agent
+   build; entry `releaseId` exists, product, channel (box config, default stable) and `manifestDigest` match, and `image` =
+   entry.image (component null) | entry.services[component].image | the digest-pinned image of manifest runtime.services[component]
+   (`not_in_index`). Index or manifest unreachable → nothing applied (`index_unavailable`).
+6. **noDowngrade** — a version floor per (product, component), persisted, across every serviceName, running or stopped; below it →
+   `downgrade_refused`, except a rollback to the ONE version that ran for that serviceName right before the current one, and only
+   while the current one is `failed` or health `failing` (C213). An owner-initiated rollback of a healthy service is refused in S1.
+7. **envAllowlist** — names in env ∪ generatedSecrets ∪ serviceRefs keys are pairwise disjoint and declared for that component
+   (manifest runtime.env / runtime.services[id].env; bridge: index runtime.env), or `HOST_PLATFORM_ENV` (env only:
+   TB_INSTANCE_ID, TB_SERVICE, TB_DATA_DIR, TB_BACKUP_DIR) or `HOST_PLATFORM_GENERATED` (TB_KEK). `HOST_BOX_OWNED_ENV` (PORT,
+   TB_ENROL_CODE, TB_OWN_INFRA_ORIGINS, TB_INTERNAL_HOST, TB_PORTAL_URL, TB_PORTAL_KEYS, TB_BRIDGE_URL, TB_PUBLIC_URL,
+   TB_KEYS_PUBLIC_URL — the box renders them) and `HOST_DENIED_ENV` (NODE_OPTIONS, LD_*, PYTHONPATH, JAVA_TOOL_OPTIONS, PATH,
+   proxies, …) are refused everywhere, even if declared (`env_not_declared`).
+8. **manifestMatch** — `generate: secret` / `provider-secret` names only in generatedSecrets; `value` / `fixed` entries only in env
+   with exactly that value (`{{services.<id>.host|port|url}}` rendered by the box); whole-value `{{services.<id>.env.<NAME>}}`
+   only as serviceRefs {serviceName of <id> in the same instance, NAME}; platform values = what the box derives; `port`,
+   `healthPath` (or null) and every mountPath = the declared ones (none declared: "/data") (`manifest_mismatch`).
+9. **noSecretValues** — no env value matches `HOST_SECRET_VALUE_PATTERNS` (`secret_like_value`).
+10. **generatedNotSent** — the adapter GENERATES the engine config; no compose/engine spec from outside reaches the engine (B3).
+11. **neverDeleteVolumes** / **finalPlan** — no action deletes a volume in S1; after a `final` plan the box is detached (§3).
+12. **resources** — clamped to the facts minus 1 GiB RAM / 0.5 CPU reserve; box defaults when null.
+13. **ownInfraOrigins** — after every applied change: rewrite the bridge's `TB_OWN_INFRA_ORIGINS` (exact
+   `http://<serviceName>:<port>` origins of the running tb- APP services the agent created in this stack, sorted, comma-separated)
+   and `TB_INTERNAL_HOST` (= the bridge serviceName, hostname form = advertise only; bridge PR #17), then restart the bridge.
+14. **firewall** — agent-owned, re-checked before every report and on every Docker `network create` event: DROP by default from
+   any Docker bridge (`br-+`, `docker0`) to the host (INPUT, IPv4 + IPv6): :22, the engine API, other stacks' networks, IPv6
+   host addresses, 169.254.169.254; explicit allows only for the engine's own network. A failed check → `firewall.ok = false`.
+15. **publicHosts** — only the bridge (kind bridge, component null): `main = w<lower ws ULID>.<zone>`,
+   `keys = w<lower ws ULID>-keys.<zone>`, `zone` = the box's configured workspace zone.
 
 ## 6. Reports (metadata only — no log content, no env values, no secrets)
-`HostReport {server, at, lastAppliedSeq, results[], services[], facts, firewall, queued?}`, schema `host-report.schema.json`,
+`HostReport {server, at, lastSeq, results[], services[], facts, firewall, queued?}`, schema `host-report.schema.json`,
 ≤ 64 KiB, every 30 s and after every plan (rate class `host_write`, 30/min per server). `results[] = {seq, index, ok, code?}`, one
 per action; `index: -1` = the whole plan was refused before any action. A result is re-sent until a report carrying it got 200.
-Error codes `HostErrorCode`: `bad_signature`, `wrong_server`, `replayed`, `expired`, `schema_invalid`, `not_in_index`,
-`index_unavailable`, `downgrade_refused`, `env_not_declared`, `secret_like_value`, `engine_error`, `health_timeout`,
-`firewall_failed`. Answer `HostReportAck {accepted: true, serverState, pendingSeq}` (`pendingSeq` = the next deliverable plan, or
+Error codes `HostErrorCode`: `bad_signature`, `wrong_server`, `replayed`, `seq_out_of_range`, `expired`, `schema_invalid`,
+`identity_changed`, `not_in_index`, `index_unavailable`, `downgrade_refused`, `env_not_declared`, `manifest_mismatch`,
+`secret_like_value`, `engine_error`, `health_timeout`, `firewall_failed`. Engine phase: actions run in order and stop at the first
+engine failure; the plan's seq counts as decided either way. Answer `HostReportAck {accepted: true, serverState, pendingSeq}` (`pendingSeq` = the next deliverable plan, or
 null: the box may poll at once). Core accepts a report older than the last one for its results only (state never goes back).
 
 ## 7. Core down
@@ -161,9 +177,28 @@ running tb- services · H-11 firewall probe from an app network. Each row names 
 | Report cap | 64 KiB body, ≤ 64 services, ≤ 64 results; heartbeat 30 s; offline after 90 s; queue 500 | |
 | Assertion `aud` | `tb:portal` (draft: portal origin) | identical to K7; the URL is bound by `htu` anyway |
 | Enrolment code | own field `enrolCode`, not in `env` | a `tbe_` value fails the secret-like check by design |
-| `component` | new field (`main` or manifest service id) | the box must know which index image to compare |
+| `component` | new field (null = main image, else manifest service id) | the box must know which index image to compare |
 | Downgrade | refused, except the one version the box ran right before (rollback) | keeps C213 health-gated rollback working; no index flag exists |
-| Schema refusal | new code `schema_invalid` (+ `index_unavailable`) | the draft had no code for H-8 |
-| Detach | final stop plan, then unpair; workspace infra cleared; instances removed with data kept | S1 = stop + keep data |
+| Error codes | added `schema_invalid` (H-8), `index_unavailable`, `seq_out_of_range`, `identity_changed`, `manifest_mismatch` | the draft had no code for these refusals |
+| Detach | `final: true` stop plan (re-issued until applied), then unpair; workspace infra cleared; instances removed with data kept | S1 = stop + keep data |
 | Registry | servers live in the Provider Registry (still 15 registries) | a server is an own-infrastructure destination |
 | Spec version | 0.1.58 | next after 0.1.57 |
+
+### Independent review (2026-10-22) — folded in before release
+Blockers fixed: serviceRefs/generatedSecrets now go through the allowlist (env injection via a ref); the mountPath `..` check
+bypass on the first segment (`/../proc`, `//proc`). Majors fixed: fixed service identity; manifest match for values, ports,
+health and mount paths + a denied-name list; a persisted per-(product, component) version floor with a health-gated one-step
+rollback; a `final` detach plan enforced on the box. Minors fixed: TB_PORTAL_URL / TB_PORTAL_KEYS / TB_BRIDGE_URL / public URLs
+box-rendered; health path never a URL; exact public host names; volume ids with `_`; registry ports in image refs; component null
+for main; seq cap and jump limit; refused plans advance lastSeq; all checks before any engine call; resources clamped.
+
+### Decisions for the GUI (Lead C, portal-gui #39)
+| # | Question | Decision |
+|---|---|---|
+| 1 | `device.lookup` scope host | accepted: `agents: []` + `host: {publicKeyThumbprint, facts}` |
+| 2 | `device.approve` scope host | accepted: `{userCode, ws}` (+ optional `label`); server + key pin + set_infrastructure own_infra in ONE consent |
+| 3 | `servers.detach` | accepted: POST `{srv}` with Idempotency-Key (`idempotent: true`), returns the Server; repeat-safe |
+| 4 | `servers.list` `ws` filter | added: optional query `ws` |
+| 5 | workspace already has infrastructure | refuse, 409 conflict `details.reason = infrastructure_set` (no replace in S1) |
+| 6 | DeviceScope / DeviceClientId / destinationId | accepted: scope `host`, client `tealbrick-host`, the workspace destination may be `srv_…` |
+| 7 | rows + auth | `servers.*` rows ship here; the `host` class is never a browser op (RT9) |

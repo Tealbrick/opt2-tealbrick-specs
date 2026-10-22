@@ -8,7 +8,7 @@
   "required": [
     "server",
     "at",
-    "lastAppliedSeq",
+    "lastSeq",
     "results",
     "services",
     "facts",
@@ -23,7 +23,7 @@
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$"
     },
-    "lastAppliedSeq": {
+    "lastSeq": {
       "type": "integer",
       "minimum": 0
     },
@@ -56,12 +56,15 @@
               "bad_signature",
               "wrong_server",
               "replayed",
+              "seq_out_of_range",
               "expired",
               "schema_invalid",
+              "identity_changed",
               "not_in_index",
               "index_unavailable",
               "downgrade_refused",
               "env_not_declared",
+              "manifest_mismatch",
               "secret_like_value",
               "engine_error",
               "health_timeout",
@@ -87,7 +90,7 @@
         "properties": {
           "serviceName": {
             "type": "string",
-            "pattern": "^tb-[a-z0-9-]{1,40}$"
+            "pattern": "^tb-[a-z0-9-]{1,57}$"
           },
           "state": {
             "enum": [
@@ -239,7 +242,7 @@
               },
               "additionalProperties": {
                 "type": "string",
-                "pattern": "^[a-z0-9][a-z0-9._/-]{0,200}(:[A-Za-z0-9._-]{1,128})?@sha256:[a-f0-9]{64}$",
+                "pattern": "^[a-z0-9][a-z0-9._-]*(:[0-9]{1,5})?(/[a-z0-9._-]+)*(:[A-Za-z0-9._-]{1,128})?@sha256:[a-f0-9]{64}$",
                 "maxLength": 400
               }
             }

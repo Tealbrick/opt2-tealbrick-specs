@@ -1,7 +1,6 @@
 {
   "server": "srv_01JZ0000000000000000000001",
   "at": "2026-10-22T14:00:00.000Z",
-  "lastAppliedSeq": 1,
   "results": [
     {
       "seq": 1,
@@ -46,5 +45,6 @@
   "firewall": {
     "ok": true,
     "rulesDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-  }
+  },
+  "lastSeq": 1
 }

@@ -41,7 +41,8 @@
     },
     "seq": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 2147483647
     },
     "iat": {
       "type": "integer",
@@ -54,6 +55,10 @@
     "jti": {
       "type": "string",
       "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "final": {
+      "const": true,
+      "description": "detach: only stop_service actions (HOST_POLICY.finalPlan)"
     },
     "portalKeySet": {
       "type": "string",
@@ -70,6 +75,24 @@
       }
     }
   },
+  "if": {
+    "required": [
+      "final"
+    ]
+  },
+  "then": {
+    "properties": {
+      "actions": {
+        "items": {
+          "properties": {
+            "kind": {
+              "const": "stop_service"
+            }
+          }
+        }
+      }
+    }
+  },
   "$defs": {
     "srvId": {
       "type": "string",
@@ -81,7 +104,7 @@
     },
     "serviceName": {
       "type": "string",
-      "pattern": "^tb-[a-z0-9-]{1,40}$"
+      "pattern": "^tb-[a-z0-9-]{1,57}$"
     },
     "envName": {
       "type": "string",
@@ -145,8 +168,15 @@
           "$ref": "#/$defs/serviceName"
         },
         "component": {
-          "type": "string",
-          "pattern": "^(main|[a-z0-9][a-z0-9_-]{0,39})$"
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(?!tb-)[a-z][a-z0-9-]{1,31}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "release": {
           "type": "object",
@@ -168,7 +198,7 @@
             },
             "image": {
               "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9._/-]{0,200}(:[A-Za-z0-9._-]{1,128})?@sha256:[a-f0-9]{64}$",
+              "pattern": "^[a-z0-9][a-z0-9._-]*(:[0-9]{1,5})?(/[a-z0-9._-]+)*(:[A-Za-z0-9._-]{1,128})?@sha256:[a-f0-9]{64}$",
               "maxLength": 400
             },
             "manifestDigest": {
@@ -274,7 +304,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^/[A-Za-z0-9._~/-]{0,200}$"
+              "pattern": "^(/|(/[A-Za-z0-9_~-][A-Za-z0-9._~-]{0,63}){1,8}/?)$"
             },
             {
               "type": "null"
@@ -307,11 +337,11 @@
             "properties": {
               "name": {
                 "type": "string",
-                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
               },
               "mountPath": {
                 "type": "string",
-                "pattern": "^/(?!(proc|sys|dev|run|etc|boot|root|var/run|var/lib/docker)(/|$))(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._/-]{1,200}$"
+                "pattern": "^(?!/(proc|sys|dev|run|etc|boot|root|bin|sbin|lib|lib32|lib64|usr|var/run|var/lib/docker|var/lib/containerd)(/|$))(/[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}){1,8}$"
               },
               "purpose": {
                 "enum": [
@@ -364,7 +394,7 @@
         ],
         "properties": {
           "component": {
-            "const": "main"
+            "type": "null"
           }
         }
       },

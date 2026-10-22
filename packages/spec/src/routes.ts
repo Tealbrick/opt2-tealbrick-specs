@@ -14,7 +14,7 @@ import type {
 } from "./credentials.ts";
 import type {
   DeviceHostTokenResult, DeviceRequestHost, DeviceStartHostInput, HostPlanJws, HostPlansQuery, HostReport, HostReportAck,
-  Server, ServerId, ServerList, ServerRefInput,
+  Server, ServerId, ServerList, ServerListInput, ServerRefInput,
 } from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
 
@@ -536,7 +536,9 @@ export interface DeviceRequest {
 /** v0.1.14 (C96): `name` / `purpose` = the owner's edits on the device page, applied to that agent card on approve. */
 /** v0.1.18 (C106a): `agt` optional when `name` is given (Core creates the card: `bound`, workflow = the ticked ops of `adopt`). */
 /** v0.1.58 (S1-0) scope host: `ws` REQUIRED (the one choice), `label` optional (default machine_label, 1..64); no `agents`.
- *  Approve = create the server, pin its key, set the workspace infrastructure {own_infra, srv_…} — ONE consent, one draft. */
+ *  Approve = create the server, pin its key, set the workspace infrastructure {own_infra, srv_…} — ONE consent, one draft.
+ *  A workspace that already has infrastructure (any provider) is refused: 409 conflict, details.reason `infrastructure_set`
+ *  (S1: no replace; moving a workspace is a later migration feature). */
 export interface DeviceApproveInput { userCode: string; ws?: WorkspaceId; label?: string; agents?: { index: number; agt?: AgentId; name?: string; purpose?: string; adopt?: AdoptChoice }[] }
 export interface DeviceDenyInput { userCode: string }
 export interface DeviceDecision {
@@ -1279,7 +1281,7 @@ export interface SchemaMap {
   BridgeConfig: BridgeConfig; BridgeAckInput: BridgeAckInput; BridgeAckResult: BridgeAckResult;
   RouteRegistryDoc: RouteRegistryDoc; Health: Health;
   /** v0.1.58 (S1-0) */
-  Server: Server; ServerList: ServerList; ServerRefInput: ServerRefInput;
+  Server: Server; ServerList: ServerList; ServerListInput: ServerListInput; ServerRefInput: ServerRefInput;
   HostPlansQuery: HostPlansQuery; HostPlanJws: HostPlanJws; HostReport: HostReport; HostReportAck: HostReportAck;
 }
 export type SchemaName = keyof SchemaMap;
@@ -1462,10 +1464,10 @@ export const ROUTES = [
   { opId: "bridge_api.ack", method: "POST", path: "/bridge/ack", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeAckInput", output: "BridgeAckResult", rate: "bridge_write", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
 
   // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)
-  { opId: "servers.list", method: "GET", path: "/servers", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "ServerList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
+  { opId: "servers.list", method: "GET", path: "/servers", auth: BO, exposure: "gateway", transport: "json", query: ["ws"], input: "ServerListInput", output: "ServerList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
   { opId: "servers.get", method: "GET", path: "/servers/{srv}", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
   /** S1 meaning: one final plan stops every service (volumes KEPT), the key is unpaired after that plan, the workspace infrastructure is cleared. No delete op in S1 (REDTEAM B2e). */
-  { opId: "servers.detach", method: "POST", path: "/servers/{srv}/detach", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "write", bodyLog: "meta", audit: "server.detach", draftable: true, confirm: true, idempotent: false, registry: "provider" },
+  { opId: "servers.detach", method: "POST", path: "/servers/{srv}/detach", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "write", bodyLog: "meta", audit: "server.detach", draftable: true, confirm: true, idempotent: true, registry: "provider" },
 
   // v0.1.58 (S1-0): host-agent-facing (outbound only from the server; K13 host assertion)
   /** 200 application/jose = ONE plan (lowest unexpired seq > after); 304 after `wait` s. Carries one-time codes: never stored, never logged. */
