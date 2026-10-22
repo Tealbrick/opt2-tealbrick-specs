@@ -494,6 +494,9 @@ ONLY in the release that implements all of §14.
   session; a second `stream` call replaces it.
 - A cursor this bridge did not issue (not a ULID) → JSON-RPC error -32602 with `data.code: "cursor_invalid"`. A ULID
   cursor newer than every row = nothing yet (not an error).
+- v0.1.58 note (bridge 0.2.7, #16): while the bridge's signed workspace config has EXPIRED, `events/poll` and `events/stream`
+  answer JSON-RPC error -32000 with `data.code: "config_expired"` (the live flush writes nothing; frames resume at the next
+  config swap); `events/list` still answers. Runtimes keep their cursor, back off and retry; it is not a reason to re-login.
 - Delivery is at-least-once; consumers dedupe by `event.origin` and store their cursor (`event.id`) only after they
   handled the event.
 - `tools/list_changed` is unchanged (§7.2). A bridge without the cap answers these methods with JSON-RPC -32601

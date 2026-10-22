@@ -1,0 +1,60 @@
+{
+  "v": 1,
+  "iss": "tb:portal",
+  "sub": "tb:srv:srv_01JZ0000000000000000000001",
+  "aud": "tb:srv:srv_01JZ0000000000000000000001",
+  "server": "srv_01JZ0000000000000000000001",
+  "workspace": "ws_01JZ0000000000000000000002",
+  "seq": 1,
+  "iat": 1792663200,
+  "exp": 1792664100,
+  "jti": "01JZ0000000000000000000003",
+  "portalKeySet": "<compact tb-keyset+jws: the root-signed key-set statement, see CREDENTIALS 9.5>",
+  "actions": [
+    {
+      "kind": "ensure_service",
+      "service": {
+        "serviceName": "tb-bridge",
+        "component": null,
+        "release": {
+          "product": "bridge",
+          "releaseId": "rel_01JZ0000000000000000000004",
+          "image": "ghcr.io/tealbrick/opt2-tealbrick-bridge@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "manifestDigest": null
+        },
+        "env": {
+          "TB_INTERNAL_PORT": "8788",
+          "TB_DATA_DIR": "/data"
+        },
+        "generatedSecrets": [
+          "TB_KEK"
+        ],
+        "enrolCode": "tbe_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "port": 8080,
+        "publicDomain": true,
+        "publicHosts": {
+          "main": "w01jz0000000000000000000002.ws.example.com",
+          "keys": "w01jz0000000000000000000002-keys.ws.example.com"
+        },
+        "healthPath": "/healthz",
+        "stopGraceSeconds": 30,
+        "volumes": [
+          {
+            "name": "data",
+            "mountPath": "/data",
+            "purpose": "data"
+          }
+        ],
+        "resources": {
+          "cpu": 0.1,
+          "memoryMb": 256,
+          "volumeGb": 1
+        }
+      }
+    },
+    {
+      "kind": "stop_service",
+      "serviceName": "tb-notes"
+    }
+  ]
+}

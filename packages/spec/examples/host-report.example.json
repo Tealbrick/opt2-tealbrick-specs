@@ -1,0 +1,50 @@
+{
+  "server": "srv_01JZ0000000000000000000001",
+  "at": "2026-10-22T14:00:00.000Z",
+  "results": [
+    {
+      "seq": 1,
+      "index": 0,
+      "ok": true
+    },
+    {
+      "seq": 1,
+      "index": 1,
+      "ok": true
+    }
+  ],
+  "services": [
+    {
+      "serviceName": "tb-bridge",
+      "state": "running",
+      "image": "ghcr.io/tealbrick/opt2-tealbrick-bridge@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "health": "ok",
+      "restarts": 0
+    }
+  ],
+  "facts": {
+    "os": "Ubuntu 24.04.1 LTS",
+    "kernel": "6.8.0-45-generic",
+    "arch": "x86_64",
+    "cpuCount": 4,
+    "memoryMb": 15990,
+    "diskGb": 193,
+    "diskFreeGb": 170.5,
+    "publicIpv4": "203.0.113.10",
+    "publicIpv6": null,
+    "engine": {
+      "name": "openship",
+      "version": "0.9.3",
+      "images": {
+        "api": "ghcr.io/oblien/openship-api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "edge": "ghcr.io/oblien/openship-edge@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    "agentVersion": "0.1.0"
+  },
+  "firewall": {
+    "ok": true,
+    "rulesDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "lastSeq": 1
+}
