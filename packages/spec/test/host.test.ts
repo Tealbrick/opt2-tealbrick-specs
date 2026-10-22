@@ -24,9 +24,9 @@ test("example plan and report validate", () => {
   assert.equal(validateReport(example("host-report.example.json")), true, JSON.stringify(validateReport.errors));
 });
 
-test("H-8: every forbidden engine key is refused at plan, service, release and volume level", () => {
+test("H-8: every forbidden key is refused at plan, service, release and volume level", () => {
   for (const k of HOST_FORBIDDEN_KEYS) {
-    const v = k === "network_mode" ? "container:openship-edge" : k === "pid" ? "container:openship-api" : true;
+    const v = k === "network_mode" || k === "pid" ? "container:other" : true;
     for (const where of ["plan", "service", "release", "volume", "action"] as const) {
       const p = plan();
       const target = where === "plan" ? p : where === "service" ? svc(p) : where === "release" ? svc(p).release : where === "volume" ? (svc(p).volumes as object[])[0] : p.actions[0];
@@ -134,7 +134,7 @@ test("platform, box-owned and denied env names are disjoint and well-formed", ()
   assert.ok(new RegExp(HOST_PLATFORM_ENV.TB_INSTANCE_ID).test("ins_01JZ0000000000000000000005"));
 });
 
-test("path rules (review B2): no system path, no empty/dot segment; health path is never a URL", () => {
+test("path rules: no system path, no empty/dot segment; health path is never a URL", () => {
   const mount = new RegExp(HOST_PATTERNS.mountPath, "u");
   for (const bad of ["/", "/../proc", "/../var/run/docker.sock", "//proc", "/./proc", "/var//run/docker.sock", "/var/./run/docker.sock", "/var/run/docker.sock", "/proc/1/root", "/usr/src/app", "/etc/passwd", "/data/../etc", "/data/.", "/var/lib/docker/volumes", "relative/path"]) assert.ok(!mount.test(bad), bad);
   for (const ok of ["/data", "/var/lib/app", "/srv/knowledge/data", "/home/node/cache"]) assert.ok(mount.test(ok), ok);
