@@ -1466,7 +1466,7 @@ export const ROUTES = [
   // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)
   { opId: "servers.list", method: "GET", path: "/servers", auth: BO, exposure: "gateway", transport: "json", query: ["ws"], input: "ServerListInput", output: "ServerList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
   { opId: "servers.get", method: "GET", path: "/servers/{srv}", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
-  /** S1 meaning: one final plan stops every service (volumes KEPT), the key is unpaired after that plan, the workspace infrastructure is cleared. No delete op in S1 (REDTEAM B2e). */
+  /** S1 meaning: one final plan stops every service (volumes KEPT), the key is unpaired after that plan, the workspace infrastructure is cleared. No delete op in S1. */
   { opId: "servers.detach", method: "POST", path: "/servers/{srv}/detach", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "write", bodyLog: "meta", audit: "server.detach", draftable: true, confirm: true, idempotent: true, registry: "provider" },
 
   // v0.1.58 (S1-0): host-agent-facing (outbound only from the server; K13 host assertion)

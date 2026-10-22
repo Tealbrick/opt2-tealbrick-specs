@@ -1,7 +1,6 @@
 # opt2 specs — HOST (customer server: pairing, signed plans, local policy, reports)
 
-Status: v0.1.58 (S1-0, frozen 2026-10-22, Lead A Specs + Core). Sprint S1 "deploy outside Railway" (C308). Sources:
-roadmap/S1-0-CONTRACT-DRAFT.md (Coordinator), SPRINT-S1-OWN-VPS.md v2, REDTEAM-S1.md (B1, B2, B3, M1, M3, M6, M7, M9).
+Status: v0.1.58 (S1-0, frozen 2026-10-22; wording revised in v0.1.59). Sprint S1 "deploy outside Railway" (C308).
 Machine-readable source of truth: `packages/spec/src/host.ts` (types, `HOST_LIMITS`, `HOST_PATTERNS`, `HOST_POLICY`,
 `HOST_PLATFORM_ENV`, `HOST_BOX_OWNED_ENV`, `HOST_SECRET_VALUE_PATTERNS`, `HOST_CONFORMANCE`), route rows in `routes.ts`
 (`servers.*`, `host.*`, RT9), K13 + `TYP.hostAssertion` / `TYP.hostPlan` + `DEVICE_FLOW.hostClientIds` in `credentials.ts`,
@@ -10,7 +9,7 @@ schemas `schemas/host-plan.schema.json` and `schemas/host-report.schema.json`. W
 Two ends build against it: **Portal Core** (pairing, server object, plan queue + signing, reports, provider `own_infra`) and the
 **host agent** (`tealbrick host`, private CLI repo: plan verification, local policy, engine adapter, firewall, reports).
 
-Threat model: Core may be compromised (its signing key is sealed under `TB_KEK` in Railway env; REDTEAM B2). A valid Portal
+Threat model: Core may be compromised (for example through its hosting environment). A valid Portal
 signature only proves that Core made a plan. The box enforces a closed local policy (§5) that no signature can override.
 
 ## 1. Auth: K13 host key and the host assertion
@@ -25,7 +24,7 @@ signature only proves that Core made a plan. The box enforces a closed local pol
 - The owner CLI stays read + drafts only (RT1 unchanged). The host agent never holds a person credential, an owner session, an
   agent connection or a Railway token.
 
-## 2. Pairing = device flow with scope `host` (REDTEAM B1)
+## 2. Pairing = device flow with scope `host`
 1. `tealbrick server add --ssh root@<ip>` (CLI, owner's machine) installs the agent + the engine over SSH, then starts
    `tealbrick host pair` on the box. No claim code in cloud-init in S1 (M7: metadata endpoint).
 2. The agent generates K13 and calls `device.start` (public) with `DeviceStartHostInput`
@@ -55,7 +54,7 @@ firewall check failed or a service is `failed` / its health `failing` · `offlin
 |---|---|---|---|
 | `servers.list` | GET /servers?ws= | browser, owner-cli | the account's servers, newest first; `ws` = only that workspace's server |
 | `servers.get` | GET /servers/{srv} | browser, owner-cli | |
-| `servers.detach` | POST /servers/{srv}/detach `{srv}` | browser; draftable, confirm, Idempotency-Key | returns the Server; repeat-safe; S1: stop + keep data + unpair (below). No delete op in S1 (B2e) |
+| `servers.detach` | POST /servers/{srv}/detach `{srv}` | browser; draftable, confirm, Idempotency-Key | returns the Server; repeat-safe; S1: stop + keep data + unpair (below). No delete op in S1 |
 | `host.plans` | GET /host/plans?after=&wait= | host; longpoll | ONE plan JWS or 304 |
 | `host.report` | POST /host/reports | host | `HostReport` → `HostReportAck`; also the heartbeat |
 
@@ -67,7 +66,7 @@ host assertion of the server is refused (401). The box, after applying a final p
 every later plan and stops polling. The data stays on the box. Re-pairing = a new device flow (new `srv_`);
 re-adopting kept data on a server is out of S1.
 
-## 4. Plans (signed by Core, CHECKED by the box — REDTEAM B2)
+## 4. Plans (signed by Core, CHECKED by the box)
 - `host.plans?after=<last applied seq>&wait=<s>`: Core answers `200 application/jose` with ONE plan — the lowest unexpired
   `seq > after` — or `304` after `wait` seconds (default 50, max 60; the longpoll transport caps at 75 s). The box applies or
   refuses it, reports (§6), and polls again. On a network error: back off 5 s → 60 s. Rate class `host_poll` (6/min per server).
@@ -82,7 +81,7 @@ re-adopting kept data on a server is out of S1.
   a deploy job whose plan expired undelivered fails (`deploy_failed`, reason `plan_expired`); Retry enqueues a new plan (new seq).
 - Actions: `ensure_service {service: HostServiceSpec}` (create, or replace when the spec differs — same identity only) and
   `stop_service {serviceName}` (never removes a volume). `ensure_agent_runtime` is RESERVED (S2+: a container unit in the stack
-  with an egress policy, REDTEAM M9); S1 boxes refuse it like every unknown kind (`schema_invalid`). Host-level units never exist.
+  with an egress policy); S1 boxes refuse it like every unknown kind (`schema_invalid`). Host-level units never exist.
 - `HostServiceSpec` (closed): `serviceName` (= `("tb-" + product + ("-" + component)?)` cut to 60, single label), `component`
   (null = the main image, else the manifest service id), `release {product, releaseId, image (name@sha256 only), manifestDigest}`, `env`, `generatedSecrets` (names), `serviceRefs` (key = the env
   name in THIS service; value = `{serviceName, env}` of the SOURCE service: a tb- service the agent created in the same workspace
@@ -132,17 +131,17 @@ actions run before the first engine call; a refused plan changes nothing.
    `healthPath` (or null) = the declared ones; volumes = a subset of the declared ones at their paths (none declared: one at
    "/data") (`manifest_mismatch`). Not on own servers in S1: TB_RESTORE_FROM (snapshot restore), TB_KEK_PREVIOUS (KEK rotation).
 9. **noSecretValues** — no env value matches `HOST_SECRET_VALUE_PATTERNS` (`secret_like_value`).
-10. **generatedNotSent** — the adapter GENERATES the engine config; no compose/engine spec from outside reaches the engine (B3).
+10. **generatedNotSent** — the adapter GENERATES the engine config; no compose/engine spec from outside reaches the engine.
 11. **neverDeleteVolumes** / **finalPlan** — no action deletes a volume in S1. A `final` plan (only stop actions, may be empty)
    makes the box stop EVERY tb- service it created, keep all data, refuse every later plan and stop polling (§3).
 12. **resources** — clamped to the facts minus 1 GiB RAM / 0.5 CPU reserve; box defaults when null.
 13. **ownInfraOrigins** — after every applied change: rewrite the bridge's `TB_OWN_INFRA_ORIGINS` (exact
    `http://<serviceName>:<port>` origins of the running tb- APP services the agent created in this stack, sorted, comma-separated)
-   and `TB_INTERNAL_HOST` (= the bridge serviceName, hostname form = advertise only; bridge PR #17), then restart the bridge.
+   and `TB_INTERNAL_HOST` (= the bridge serviceName, hostname form = advertise only), then restart the bridge.
 14. **firewall** — agent-owned, re-checked before every report and on every Docker `network create` event: DROP by default from
    any Docker bridge (`br-+`, `docker0`) to the host (INPUT, IPv4 + IPv6): :22, the engine API, other stacks' networks, IPv6
    host addresses, 169.254.169.254; explicit allows only for the engine's own network. A failed check → `firewall.ok = false`.
-15. **containEscapes** (FIX-B3 L3) — every report cycle the agent lists ALL containers and compares each one's HostConfig
+15. **containEscapes** — every report cycle the agent lists ALL containers and compares each one's HostConfig
    (namespace modes, privileged, capabilities, devices, binds/mounts) with what it expects: the config recorded at install for an
    engine component's pinned digest, or the config it generated for a tb- service. Name and digest only identify, never exempt.
    A deviating container with a container:/host namespace mode, privileged, added capabilities, devices, a docker.sock or
@@ -181,11 +180,11 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
 ## 9. Conformance rows (`HOST_CONFORMANCE`; probes: QA + host-agent leads)
 H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in
 index refused · H-6 downgrade refused (one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) ·
-H-8 the two namespace-escape probes refused (REDTEAM B3) · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
-running tb- services · H-11 firewall probe from an app network · H-12 escape attempt contained (FIX-B3 L3). Each row names its `HOST_POLICY` rule and its target
+H-8 forbidden runtime settings refused · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
+running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped. Each row names its `HOST_POLICY` rule and its target
 (`agent-unit`, `box-probe`, `both`); `given` / `expect` are the test text.
 
-## 10. Decisions on the draft's open items (Lead A, 2026-10-22)
+## 10. Decisions on the draft's open items (2026-10-22)
 | Item | Decision | Why |
 |---|---|---|
 | JWS header | Plan: exactly `{alg, typ: tb-host-plan+jws, kid}`, `kid` = Portal key thumbprint, key from `portalKeySet` (active/pending). Assertion: `{alg, typ: tb-host-assert+jwt, kid}` | the existing rules (JoseHeader, §9.5); no new verifier code |
@@ -202,15 +201,7 @@ running tb- services · H-11 firewall probe from an app network · H-12 escape a
 | Registry | servers live in the Provider Registry (still 15 registries) | a server is an own-infrastructure destination |
 | Spec version | 0.1.58 | next after 0.1.57 |
 
-### Independent review (2026-10-22) — folded in before release
-Blockers fixed: serviceRefs/generatedSecrets now go through the allowlist (env injection via a ref); the mountPath `..` check
-bypass on the first segment (`/../proc`, `//proc`). Majors fixed: fixed service identity; manifest match for values, ports,
-health and mount paths + a denied-name list; a persisted per-(product, component) version floor with a health-gated one-step
-rollback; a `final` detach plan enforced on the box. Minors fixed: TB_PORTAL_URL / TB_PORTAL_KEYS / TB_BRIDGE_URL / public URLs
-box-rendered; health path never a URL; exact public host names; volume ids with `_`; registry ports in image refs; component null
-for main; seq cap and jump limit; refused plans advance lastSeq; all checks before any engine call; resources clamped.
-
-### Decisions for the GUI (Lead C, portal-gui #39)
+### Portal GUI questions (2026-10-22)
 | # | Question | Decision |
 |---|---|---|
 | 1 | `device.lookup` scope host | accepted: `agents: []` + `host: {publicKeyThumbprint, facts}` |
@@ -221,17 +212,11 @@ for main; seq cap and jump limit; refused plans advance lastSeq; all checks befo
 | 6 | DeviceScope / DeviceClientId / destinationId | accepted: scope `host`, client `tealbrick-host`, the workspace destination may be `srv_…` |
 | 7 | rows + auth | `servers.*` rows ship here; the `host` class is never a browser op (RT9) |
 
-### Coordinator points (2026-10-22)
+### Further decisions (2026-10-22)
 - `serviceRefs` defined exactly (§4): key = env name in this service; value = source `{serviceName, env}` in the same workspace
   stack, resolved on the box, never a secret from outside the box.
-- `escape_attempt` code + `HostReport.escapes[]` + `Server.escapes` + rule `containEscapes` + row H-12 (FIX-B3 layer L3).
-- Bridge `TB_INTERNAL_HOST`: the box writes the hostname form (advertise only; bridge PR #17); no further contract change.
-
-### Second review pass (2026-10-22) — folded in
-Identity pinned to (product, component) only (reinstall works); escape check compares every container's HostConfig (no
-name/digest exemption) and disables restart before stopping; the running release is never a downgrade and a health-gated rollback
-lowers the floor; owner snapshot rollback, TB_RESTORE_FROM and TB_KEK_PREVIOUS are out of S1 on own servers; TB_LOG_LEVEL allowed;
-TB_BACKUP_DIR follows the backup volume; a final plan may be empty and stops every tb- service; Core serves only undecided plans.
+- `escape_attempt` code + `HostReport.escapes[]` + `Server.escapes` + rule `containEscapes` + row H-12.
+- Bridge `TB_INTERNAL_HOST`: the box writes the hostname form (advertise only); no further contract change.
 
 ### Known gaps (follow-ups, not blocking S1a)
 - The manifest validator / release signer should apply `HOST_PATTERNS.mountPath` and `healthPath` at publish time, so a published

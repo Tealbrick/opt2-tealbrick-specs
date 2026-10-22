@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.opt2.tealbrick.com/host-plan.schema.json",
   "title": "Host plan payload (tb-host-plan+jws)",
-  "description": "v0.1.58 (S1-0, HOST.md §4). JWS payload of one host plan, signed by a Portal signing key (K12) and CHECKED by the host agent on the box. CLOSED at every level (additionalProperties: false): anything not listed — host paths, bind mounts, privileged, cap_add, devices, network_mode, pid, ipc, extra_hosts, user, sysctls, entrypoint/command, labels, compose — can never be sent (REDTEAM B2/B3). Unknown action kinds are refused (schema_invalid). The box applies the local policy (HOST_POLICY) on top; a valid signature cannot override it.",
+  "description": "v0.1.58 (S1-0, HOST.md §4). JWS payload of one host plan, signed by a Portal signing key (K12) and CHECKED by the host agent on the box. CLOSED at every level (additionalProperties: false): anything not listed — host paths, bind mounts, privileged, cap_add, devices, network_mode, pid, ipc, extra_hosts, user, sysctls, entrypoint/command, labels, compose — can never be sent. Unknown action kinds are refused (schema_invalid). The box applies the local policy (HOST_POLICY) on top; a valid signature cannot override it.",
   "type": "object",
   "additionalProperties": false,
   "required": [

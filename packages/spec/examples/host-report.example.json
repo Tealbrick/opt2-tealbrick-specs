@@ -36,8 +36,8 @@
       "name": "openship",
       "version": "0.9.3",
       "images": {
-        "api": "ghcr.io/oblien/openship-api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "edge": "ghcr.io/oblien/openship-edge@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        "api": "registry.example.com/engine/api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "edge": "registry.example.com/engine/edge@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       }
     },
     "agentVersion": "0.1.0"

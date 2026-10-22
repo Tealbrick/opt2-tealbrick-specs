@@ -4,7 +4,7 @@
 // Data and types only: no runtime code. Route rows live in ./routes.ts (servers.*, host.*); the credential (K13 host key,
 // host assertion) lives in ./credentials.ts; JSON Schemas: schemas/host-plan.schema.json, schemas/host-report.schema.json.
 //
-// Threat model (REDTEAM-S1 B2): Core may be compromised. A valid Portal signature proves only that Core made a plan.
+// Threat model: Core may be compromised. A valid Portal signature proves only that Core made a plan.
 // The box therefore enforces a CLOSED local policy (HOST_POLICY, HOST.md §5) that no signature can override: every value the
 // box can derive itself (names, ports, paths, platform env, public URLs) it derives itself and compares; what is left for Core
 // to choose is the release (checked against the root-signed index), the owner's setting values (public, non-secret) and the
@@ -76,8 +76,8 @@ export const HOST_PATTERNS = {
 // ───────────────────────────── server object (HOST.md §3) ─────────────────────────────
 /**
  * pending  = paired, no report yet · online = last report < offlineAfterS ago, firewall ok, no service failed ·
- * degraded = online but the firewall check failed, a service is `failed` or its health is `failing`, or an escape attempt
- *            was contained (FIX-B3 L3) ·
+ * degraded = online but the firewall check failed, a service is `failed` or its health is `failing`, or the agent stopped a
+ *            container that does not match the box allowlist ·
  * offline  = no report for offlineAfterS · detached = servers.detach ran (terminal; a new pairing makes a new `srv_`).
  */
 export type ServerState = "pending" | "online" | "degraded" | "offline" | "detached";
@@ -108,10 +108,10 @@ export interface HostServiceStatus {
   restarts: number;
 }
 
-/** FIX-B3 L3: why the agent stopped a container it found outside its allowlist. */
+/** Why the agent stopped a container that does not match the box allowlist (forbidden runtime settings). */
 export type HostEscapeReason = "namespace_mode" | "privileged" | "capabilities" | "devices" | "docker_sock" | "host_bind";
 /**
- * FIX-B3 layer L3 (coordination/roadmap/FIX-B3-NAMESPACE-ESCAPE.md): every report cycle the agent lists ALL containers on the
+ * Containment: every report cycle the agent lists ALL containers on the
  * box; one outside its allowlist (the engine's own containers by name + image digest, and the tb- services it created) that
  * uses a container:/host network, pid or ipc mode, privileged, added capabilities, devices, a docker.sock or host-path bind
  * is stopped (`docker stop`, data kept) and reported here until Core acknowledged one report carrying it.
@@ -147,7 +147,7 @@ export interface Server {
   lastSeq: number;
   services: HostServiceStatus[];
   firewall: HostFirewallStatus | null;
-  /** FIX-B3 L3: escape attempts the box contained, newest first (Core keeps the last 20); any one makes the state `degraded` */
+  /** containers the agent stopped because they did not match the box allowlist, newest first (Core keeps the last 20); any one makes the state `degraded` */
   escapes: HostEscapeEvent[];
   createdAt: IsoTime;
   detachedAt: IsoTime | null;
@@ -228,7 +228,7 @@ export interface HostEnsureServiceAction { kind: "ensure_service"; service: Host
 export interface HostStopServiceAction { kind: "stop_service"; serviceName: string }
 /**
  * Reserved for S2+ and refused by S1 boxes (`schema_invalid`): `ensure_agent_runtime` = a CONTAINER unit in the workspace
- * stack with an egress policy (REDTEAM M9, C306 R7). Host-level units are never part of this contract.
+ * stack with an egress policy. Host-level units are never part of this contract.
  */
 export const HOST_RESERVED_ACTION_KINDS = ["ensure_agent_runtime"] as const;
 
@@ -271,7 +271,7 @@ export interface HostServiceSpec {
 }
 
 /**
- * Engine/compose keys that can never appear anywhere in a plan (REDTEAM B2(a), B3). The closed schema already refuses
+ * Engine/compose keys that can never appear anywhere in a plan (closed format). The closed schema already refuses
  * every unknown key; this list exists so tests can name the dangerous ones (conformance H-8).
  */
 export const HOST_FORBIDDEN_KEYS = [
@@ -380,7 +380,7 @@ export const HOST_POLICY = {
   ownInfraOrigins: "After every applied change the agent rewrites the bridge's TB_OWN_INFRA_ORIGINS (exact `http://<serviceName>:<port>` origins of the tb- app services it created in this stack and that run, comma-separated, sorted) and TB_INTERNAL_HOST (= the bridge serviceName), then restarts the bridge (the allowlist is read at boot).",
   firewall: "Agent-owned rules, re-checked before every report and on every Docker network create event: traffic from any Docker bridge (br-+, docker0) to the host is DROPped by default (INPUT, IPv4 and IPv6), including :22, the engine API, other stacks' networks, IPv6 host addresses and 169.254.169.254; explicit allows only for the engine's own network to what it needs (the report says ok:false; firewall_failed on an action that needs it).",
   coreDown: "While Core is unreachable the box keeps the last applied state running, queues ≤ reportQueueMax reports, applies nothing without a fresh valid plan and takes no destructive action (HOST.md §7).",
-  containEscapes: "FIX-B3 L3: every report cycle the agent lists ALL containers on the box and compares each one's HostConfig (network/pid/ipc modes, privileged, capabilities, devices, binds and mounts) with what it expects: for an engine container the config recorded at install for that component's pinned image digest; for a tb- service the config the agent generated. Name and digest only IDENTIFY a container, they never exempt it. A container that deviates with a container:/host namespace mode, privileged, added capabilities, devices, a docker.sock or host-path bind gets `docker update --restart=no` and `docker stop` (data kept) and is reported in `escapes` (code escape_attempt) until Core acknowledged it.",
+  containEscapes: "Every report cycle the agent lists ALL containers on the box and compares each one's HostConfig (network/pid/ipc modes, privileged, capabilities, devices, binds and mounts) with what it expects: for an engine container the config recorded at install for that component's pinned image digest; for a tb- service the config the agent generated. Name and digest only IDENTIFY a container, they never exempt it. A container that deviates with a container:/host namespace mode, privileged, added capabilities, devices, a docker.sock or host-path bind gets `docker update --restart=no` and `docker stop` (data kept) and is reported in `escapes` (code escape_attempt) until Core acknowledged it.",
   publicHosts: "`publicDomain` true only for release kind bridge, component null; then `publicHosts` = {main: \"w\" + lower(ws ULID) + \".\" + zone, keys: \"w\" + lower(ws ULID) + \"-keys.\" + zone}, `zone` = the box's configured workspace zone (schema_invalid otherwise).",
 } as const;
 export type HostPolicyRule = keyof typeof HOST_POLICY;
@@ -403,7 +403,8 @@ export type HostErrorCode =
   | "engine_error"
   | "health_timeout"
   | "firewall_failed"
-  /** FIX-B3 L3: a container outside the allowlist with escape settings was found and stopped (report `escapes`) */
+  /** the agent stopped a container that does not match the box allowlist (forbidden runtime settings such as shared namespaces,
+   *  privileged mode, added capabilities, devices or host mounts); report `escapes` */
   | "escape_attempt";
 export const HOST_ERROR_CODES = [
   "bad_signature", "wrong_server", "replayed", "seq_out_of_range", "expired", "schema_invalid", "identity_changed",
@@ -429,7 +430,7 @@ export interface HostReport {
   services: HostServiceStatus[];
   facts: HostFacts;
   firewall: HostFirewallStatus;
-  /** FIX-B3 L3 events not yet acknowledged by Core (absent or [] = none) */
+  /** containment events not yet acknowledged by Core (absent or [] = none) */
   escapes?: HostEscapeEvent[];
   /** reports still queued on the box after this one (Core was down) */
   queued?: number;
@@ -475,8 +476,8 @@ export const HOST_CONFORMANCE = [
   { id: "H-7", title: "undeclared env name refused", rule: "envAllowlist", target: "agent-unit",
     given: "Plans with env NODE_OPTIONS (undeclared), NODE_OPTIONS declared by the manifest (denied), TB_OWN_INFRA_ORIGINS / TB_BRIDGE_URL (box-owned), serviceRefs NODE_OPTIONS → another service, generatedSecrets PORT; a declared `value` entry with another value; a declared setting whose value is `sk_live_…`.",
     expect: "Nothing applied; env_not_declared for the first five, manifest_mismatch for the changed value, secret_like_value for the last." },
-  { id: "H-8", title: "namespace escape refused (REDTEAM B3)", rule: "closedSchema", target: "both",
-    given: "Plans that carry network_mode: container:openship-edge, pid: container:<engine api>, and every other HOST_FORBIDDEN_KEYS key, at plan, action, service, release and volume level; a volume at /var/run/docker.sock, /../proc and /usr/src/app; then on a real box: docker inspect of every tb- container.",
+  { id: "H-8", title: "forbidden runtime settings refused", rule: "closedSchema", target: "both",
+    given: "Plans that carry any HOST_FORBIDDEN_KEYS key (shared network/pid/ipc modes and the rest), at plan, action, service, release and volume level, and volumes at system paths; then on a real box: docker inspect of every tb- container.",
     expect: "Every plan refused (schema_invalid or manifest_mismatch); on the box no tb- container has a container:/host network, pid or ipc mode, a bind mount or a capability beyond the engine default." },
   { id: "H-9", title: "stop keeps the volume", rule: "neverDeleteVolumes", target: "both",
     given: "A running service with data in its volume; plan stop_service; then servers.detach (final plan); then another valid plan.",
@@ -487,7 +488,7 @@ export const HOST_CONFORMANCE = [
   { id: "H-11", title: "firewall probe from an app network", rule: "firewall", target: "box-probe",
     given: "From a container on the stack network (and from a stack created AFTER the agent started): connect to host :22, the engine API port, another stack's container IP, the host's IPv6 address, 169.254.169.254, and the edge with Host: localhost.",
     expect: "Every connection fails (DROP/REJECT); the report carries firewall.ok true and an unchanged rulesDigest; breaking a rule makes the next report ok:false." },
-  { id: "H-12", title: "escape attempt contained (FIX-B3 L3)", rule: "containEscapes", target: "box-probe",
-    given: "Create a container straight through the Docker API (not through a plan) with network_mode container:<engine edge>, one with privileged, one with a docker.sock bind.",
+  { id: "H-12", title: "container outside the allowlist stopped", rule: "containEscapes", target: "box-probe",
+    given: "Containers created outside any plan with forbidden runtime settings (a shared namespace mode, privileged mode, a host mount).",
     expect: "Within one report cycle each is stopped (its data kept), the report carries one escapes entry per container with its reasons, the server shows degraded; allowlisted engine containers are never touched." },
 ] as const satisfies readonly HostConformanceRow[];
