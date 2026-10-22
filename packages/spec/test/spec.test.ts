@@ -538,5 +538,5 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.equal(untrusted.untrusted, true);
   const opts: import("../src/sdk.ts").EmitOptions = { subject: e.subject, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], instanceId: "prj_1", summary: e.summary };
   assert.ok(opts.subject.id);
-  assert.equal(SPEC_VERSION, "0.1.57");
+  assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 });

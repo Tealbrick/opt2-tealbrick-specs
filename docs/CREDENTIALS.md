@@ -4,7 +4,7 @@ Status: v0.1, Lead · Specs, 2026-10-11. Obeys CORE.md (§2–§10, §12–§14,
 
 Scope: every credential and proof in opt2 — who issues it, with which key, who holds it, how it is stored, its exact claims, lifetime, audience rule, verifier and check order, revocation, and pause behaviour. Also: identifiers, the one grant, key management (sealing, rotation, compromise), the revocation matrix, the pause matrix, hard rules with conformance cases, owner CLI / TBD identities, device flow, pairing code, standalone handover, key custody and the external credentials Core holds. Wire shapes of the config body, routes and SDK calls are owned by BRIDGE.md, PORTAL-API.md and SDK-API.md; this file owns every credential field they carry.
 
-## 1. Caller types (exactly five)
+## 1. Caller types (exactly five; v0.1.58 adds `host`, see the v0.1.58 section)
 | Caller type | Identity | Proves itself with | Talks to |
 |---|---|---|---|
 | person | `per_` (1:1 with the Clerk account owner) | K1 (browser), K3 (owner CLI / owner native session in TBD), K11 (one-time ticket, at bridge key page or app launch only) | Portal (K1, K3); bridge key page (K11 `keys`); app UI (K11 `launch`); K11 is obtained only with K1 |
@@ -41,7 +41,7 @@ A connection belongs to exactly one agent; an agent has 0..n connections; a sess
 | agent refresh token (K5) | `tbr_` | bridge |
 | OAuth authorization code (K5 issuance step) | `tbac_` | bridge |
 
-## 4. Credential registry (13 kinds)
+## 4. Credential registry (13 kinds; v0.1.58 adds K13 host key)
 Max lifetime is enforced by every verifier (`exp − iat`). "Digest" = SHA-256 at the issuer; "sealed" = AES-256-GCM under a KEK (§9).
 | # | Kind / `typ` | Issuer key → holder | Storage | Lifetime (max) | Audience rule | Verifier (key) | Revocation (mechanism → speed) | Pause |
 |---|---|---|---|---|---|---|---|---|
@@ -314,3 +314,11 @@ None. (Key connections without a refresh token: accepted, C15.)
 
 ## v0.1.46 — `prd` in companion grants (GRANT-PRD)
 A companion grant (K10, `sub` = the calling instance) carries `prd` = that instance's product, signed with the grant by its issuer (Portal Core; a standalone bridge the same way). Agent grants never carry it. CORRECTION (2026-10-17): the grant claim set is CLOSED in @opt2-tealbrick/manifest for signing AND verification (jws.ts claimsProblem), so verifiers before manifest 0.1.23 REFUSE a grant with `prd`. Issuers mint `prd` only when every verifier of that grant knows it: the workspace bridge ≥ 0.2.3 and the target app's SDK ≥ 0.1.28 (the first releases on manifest 0.1.23); below that the grant is minted without `prd`. SDKs set `Caller.product` from `prd` first and from the slice `companionCallers` only when `prd` is absent (grants minted before Core sends it); when both exist for the same instance and differ, the SDK refuses the call `grant_invalid` and logs both values. The bridge keeps its signed config as the source of `HookCallInfo.caller.product` and omits the product when a grant's `prd` disagrees.
+
+## v0.1.58 additions (S1-0, C308 — HOST.md)
+- Caller type `host` (six caller types now): the host agent on a paired customer server. It never holds a person credential, K3, K4/K5 or a provider token.
+- **K13 host key** (`CREDENTIAL_REGISTRY` row K13; 14 kinds now): Ed25519 generated on the box; private half in a root-only 0600 file outside every container (storage `holder_host_file`); public half pinned in Core at the device-flow approval with scope `host`. Revocation: `servers.detach` (after its final stop plan) or a new pairing; S2: signed rotation.
+- **Host assertion** `TYP.hostAssertion = tb-host-assert+jwt` (`HostAssertionClaims`): `iss = sub = tb:srv:<srv>`, `aud = tb:portal`, exp − iat ≤ 60, `jti` once, `htm`/`htu`/`bd` request binding — the K7 bridge-assertion rules; header `TB-Assert`.
+- **Host plan** `TYP.hostPlan = tb-host-plan+jws`: a signed DOCUMENT (not a kind), signed with K12, carrying `portalKeySet`; verified on the box with the §9.5 rule (statement under a pinned root, plan signed by an active or pending key). K12's audience list now includes host plans.
+- Device flow (§6): scope `host`, client `tealbrick-host` only (`DEVICE_FLOW.hostClientIds`); the token result carries no token (`DeviceHostTokenResult`). User code, lifetime (10 min), polling and the 5-wrong-codes rule are unchanged.
+- Ids/refs: `ServerId = srv_<ULID>`, `ServerRef = tb:srv:<srv>`, `RefKind` gains `srv`.

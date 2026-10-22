@@ -14,23 +14,28 @@ export type BridgeId = `brg_${Ulid}`;
 export type WorkspaceId = `ws_${Ulid}`;
 export type DeviceRequestId = `dev_${Ulid}`;
 export type CallId = `call_${Ulid}`;
+/** v0.1.58 (S1-0, C308): a customer server paired by the device flow with scope `host` (HOST.md §3). */
+export type ServerId = `srv_${Ulid}`;
 
 // ── Subject / audience references (CORE §2): `tb:${kind}:${id}` ─────────────
-export type RefKind = "portal" | "per" | "agt" | "ins" | "brg";
+export type RefKind = "portal" | "per" | "agt" | "ins" | "brg" | "srv";
 export type PortalRef = "tb:portal";
 export type PersonRef = `tb:per:${PersonId}`;
 export type AgentRef = `tb:agt:${AgentId}`;
 export type InstanceRef = `tb:ins:${InstanceId}`;
 export type BridgeRef = `tb:brg:${BridgeId}`;
-export type TbRef = PortalRef | PersonRef | AgentRef | InstanceRef | BridgeRef;
+/** v0.1.58 (S1-0): the host agent of one paired server (iss/sub of K13 host assertions, aud of host plans). */
+export type ServerRef = `tb:srv:${ServerId}`;
+export type TbRef = PortalRef | PersonRef | AgentRef | InstanceRef | BridgeRef | ServerRef;
 /** v0.1.1 (C30): issuer of the signed release index (Platform release key, pinned JWKS in Core). Not a caller type. */
 export type ReleasesRef = "tb:releases";
 
-// ── Caller types (exactly five) and kinds ────────────────────────────────────
-export const CALLER_TYPES = ["person", "agent", "app", "bridge", "portal"] as const;
+// ── Caller types (exactly six; v0.1.58 adds `host`) and kinds ─────────────────
+/** v0.1.58 (S1-0): `host` = the host agent on a paired customer server (HOST.md). It never holds a person credential. */
+export const CALLER_TYPES = ["person", "agent", "app", "bridge", "portal", "host"] as const;
 export type CallerType = (typeof CALLER_TYPES)[number];
 
-export const CREDENTIAL_KINDS = ["K1", "K2", "K2b", "K3", "K4", "K5", "K6", "K7", "K8", "K9", "K10", "K11", "K12"] as const;
+export const CREDENTIAL_KINDS = ["K1", "K2", "K2b", "K3", "K4", "K5", "K6", "K7", "K8", "K9", "K10", "K11", "K12", "K13"] as const;
 export type CredentialKindId = (typeof CREDENTIAL_KINDS)[number];
 
 // ── JOSE `typ` values: one per token kind / proof; every endpoint accepts exactly one ──
@@ -53,6 +58,10 @@ export const TYP = {
   releaseIndex: "tb-release-index+jws",
   /** v0.1.11 (C62/C63): Portal key-set statement, signed by a Portal Root Key (CREDENTIALS §9.5). A signed DOCUMENT, not a credential kind. */
   keySet: "tb-keyset+jws",
+  /** v0.1.58 (S1-0): host assertion (K13 key), accepted only on the `host` route rows (HOST.md §1). */
+  hostAssertion: "tb-host-assert+jwt",
+  /** v0.1.58 (S1-0): a host plan, signed by a Portal signing key (K12); verified on the box (HOST.md §4). A signed DOCUMENT, not a credential kind. */
+  hostPlan: "tb-host-plan+jws",
 } as const;
 export type Typ = (typeof TYP)[keyof typeof TYP];
 
@@ -352,6 +361,12 @@ export interface CallProofBridgeOpClaims extends BaseClaims<BridgeRef, BridgeRef
 export type CallProofClaims = CallProofOpClaims | CallProofHookClaims | CallProofBridgeOpClaims;
 /** Standalone only. */
 export interface OwnerAssertionClaims extends BaseClaims<PersonRef, PersonRef, BridgeRef>, RequestBinding {}
+/**
+ * v0.1.58 (S1-0): host assertion (`typ: tb-host-assert+jwt`), signed by the host key (K13) generated ON the box.
+ * Same shape and replay rules as the bridge assertion: `iss = sub = tb:srv:<srv>`, `aud = tb:portal`, `exp − iat ≤ 60`, `jti`
+ * once per verifier, bound to method + path/query (+ raw body digest). Header `kid` = RFC 7638 thumbprint of the pinned key.
+ */
+export interface HostAssertionClaims extends BaseClaims<ServerRef, ServerRef, PortalRef>, RequestBinding {}
 
 /** Header names: one per proof purpose. */
 export const PROOF_HEADER = { assertion: "TB-Assert", callProof: "TB-Call" } as const;
@@ -370,11 +385,13 @@ export type OwnerSessionClient = (typeof OWNER_SESSION_CLIENTS)[number];
 
 /** Device flow (K2, RFC 8628) parameters. */
 export const DEVICE_FLOW = {
-  clientIds: ["tealbrick-cli", "tbd", "kit"],
+  clientIds: ["tealbrick-cli", "tbd", "kit", "tealbrick-host"],
   /** scope=owner only for these (a kit can never obtain K3) */
   ownerClientIds: ["tealbrick-cli", "tbd"],
   agentClientIds: ["tealbrick-cli", "tbd", "kit"],
-  scopes: ["owner", "agent"],
+  /** v0.1.58 (S1-0): scope `host` only for this client (the host agent on a server); it can never obtain K3 or agent connections */
+  hostClientIds: ["tealbrick-host"],
+  scopes: ["owner", "agent", "host"],
   /** one agent request carries 1..64 {agt?, public_key} pairs */
   maxAgentPairs: 64,
   userCodeAlphabet: "BCDFGHJKLMNPQRSTVWXZ",
@@ -389,6 +406,7 @@ export type DeviceClientId = (typeof DEVICE_FLOW.clientIds)[number];
 export type DeviceScope = (typeof DEVICE_FLOW.scopes)[number];
 export type DeviceOwnerClientId = (typeof DEVICE_FLOW.ownerClientIds)[number];
 export type DeviceAgentClientId = (typeof DEVICE_FLOW.agentClientIds)[number];
+export type DeviceHostClientId = (typeof DEVICE_FLOW.hostClientIds)[number];
 // Device-flow wire types (DeviceStartInput union, DeviceOwnerTokenResult, DeviceAgentTokenResult) live in ./routes.ts only.
 
 /** Sealed blob (Core, bridge, app): AES-256-GCM under a KEK from the service env; AAD = `tb:seal:<purpose>:<record id>`. */
@@ -409,6 +427,8 @@ export type Storage =
   | "holder_keychain"
   | "holder_memory"
   | "holder_sealed_volume"
+  /** v0.1.58 (S1-0): a root-only (0600) file on the customer server, outside every container (K13) */
+  | "holder_host_file"
   | "verifier_jti_set"
   | "none";
 export type Form = "external_jwt" | "opaque" | "jwt" | "jws" | "key_pair";
@@ -564,11 +584,21 @@ export const CREDENTIAL_REGISTRY = [
     id: "K12", name: "Portal signing key", form: "key_pair", typ: null, prefix: null,
     issuer: "portal", issuerKey: "Ed25519 generated in Core", holder: "portal", holderDetail: "Core DB, sealed with TB_KEK; public in config, slices, TB_PORTAL_KEYS",
     storage: ["issuer_sealed"], maxLifetimeS: null, oneTime: false,
-    audienceRule: "n/a (signs K2b, K9, K10, K11)",
+    audienceRule: "n/a (signs K2b, K9, K10, K11; v0.1.58: host plans tb-host-plan+jws)",
     verifier: "n/a",
     checks: ["pending ≥ 24 h before active", "retired private half destroyed", "retired removed after 12 h + 5 min", "standalone: frozen final config; bridge key re-mints grants/slices; owner key (ownerKeys) proves 4 admin ops"],
     acceptedAt: [],
     revocation: "planned rotation (90 d) or compromise procedure", revocationLatency: "compromise: ≤ 60 s online", pause: "n/a",
+  },
+  {
+    id: "K13", name: "host key (v0.1.58, S1-0)", form: "key_pair", typ: null, prefix: null,
+    issuer: "self", issuerKey: "Ed25519 generated on the customer server by the host agent; the private half never leaves the box", holder: "host", holderDetail: "root-only 0600 file of the host agent on the server (never in a container, never in the engine)",
+    storage: ["holder_host_file", "issuer_public_key"], maxLifetimeS: null, oneTime: false,
+    audienceRule: "host assertions: aud = tb:portal; iss = sub = tb:srv:<srv>",
+    verifier: "Core (public key pinned at the device-flow approval with scope host)",
+    checks: ["kid = pinned host key thumbprint", "server not detached (except the final stop plan and its report)", "htm/htu/bd match", "exp − iat ≤ 60", "jti not replayed"],
+    acceptedAt: ["Core host rows (TB-Assert): host.plans, host.report"],
+    revocation: "servers.detach (unpairs the key) or a new pairing (S2: signed rotation)", revocationLatency: "Core immediate", pause: "n/a (pause is enforced by the bridge; plans and reports continue)",
   },
 ] as const satisfies readonly CredentialRegistryRow[];
 

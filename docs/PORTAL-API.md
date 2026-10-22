@@ -27,6 +27,7 @@ Scope: every operation Portal Core exposes — to the Portal GUI (browser), the 
 | `device` | K2 device code | `device_code` in the body of `device.token` | device request |
 | `public` | none | — | none (rate class `public_strict`) |
 | `stripe-webhook` | Stripe signature | `Stripe-Signature` over the raw body, verified with the sealed webhook secret | Stripe |
+| `host` (v0.1.58) | K13 host assertion (`tb-host-assert+jwt`, HOST.md §1) | `TB-Assert: <jws>`, `aud = tb:portal`, bound to method + URL (+ body digest), ≤ 60 s, verified with the host key pinned at pairing; only on `host.*` rows (RT9) | server id → workspace |
 
 Rules:
 - P1 (CORE §2): the Clerk token is accepted only on `browser` rows, only through the gateway. No row accepts a person credential and an agent credential. No agent credential (K4/K5) is accepted by any Portal row: agents talk to the bridge, never to Core (except the device flow, which carries no person credential).
@@ -531,3 +532,10 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 - `Draft.createdBy` gains `{kind: "device", id}`: the draft an agent device approval writes and applies at once (adopt, C96). Readers that do not know a kind show `createdByLabel`.
 - Hold family `public_link` (C167, C232, LA-2): in HOLD_FAMILIES, HOOK_HOLD_FAMILIES and DEFAULT_HELD_FAMILIES. New cards and new workspace apps policies hold it; existing cards and workspaces get it in `offeredHeld` (C107a), never added silently. GUI text: "Share a page with anyone who has the link." Old readers ignore the word (C108). An app that offers links must refuse an agent link op when the verified grant does not hold `public_link` (`link_needs_hold`, fail closed) until the owner accepts the offer.
 - Viewer tokens (LA-5): `tbv_` + 43 base64url chars (256-bit random), app-local bearer capabilities that authorise reading ONE rendered page; only a sha256 digest is stored; Portal and the bridge never see, log or store them; not a platform credential kind (no K-number, no registry row).
+
+## v0.1.58 additions (S1-0, C308: deploy outside Railway — HOST.md)
+- Auth class `host` (K13 host assertion) and invariant **RT9**: the class only on `host.*` rows, `host.*` rows only that class. RT1 (owner CLI = reads, drafts, logout) unchanged.
+- Rows (Provider Registry; 15 registries unchanged): `servers.list` GET `/servers` (B,O) · `servers.get` GET `/servers/{srv}` (B,O) · `servers.detach` POST `/servers/{srv}/detach` (B; D C; audit `server.detach`; S1 = stop + keep data + unpair) · `host.plans` GET `/host/plans?after&wait` (host; longpoll `application/jose`, ONE plan or 304; rate `host_poll`; bodyLog none; secret-bearing: carries the one-time enrolment code) · `host.report` POST `/host/reports` (host; rate `host_write`; bodyLog none).
+- Device flow scope `host` (client `tealbrick-host` only): `DeviceStartInput` gains `DeviceStartHostInput`; `DeviceRequest.host` (key thumbprint + facts); `DeviceApproveInput.label`; `DeviceDecision.serverId`; `DeviceToken` gains `DeviceHostTokenResult` (no token). Approve with scope host = create the server + pin its key + `workspaces.set_infrastructure {own_infra, srv_…}` in one consent, one applied draft.
+- Audit actions `server.pair`, `server.detach`. Rate classes `host_poll` (6/min), `host_write` (30/min), per server.
+- `own_infra` with a `srv_…` destination = Core deploys through signed plans (HOST.md §8); readers that know only Railway tolerate it (L24).

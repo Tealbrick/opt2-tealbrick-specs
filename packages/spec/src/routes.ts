@@ -12,6 +12,10 @@ import type {
   AgentId, BridgeId, ConnectionId, DeviceClientId, DeviceRequestId, DeviceScope, Ed25519PublicJwk,
   FreeCaps, InstanceId, OwnerSessionClient, PersonId, WorkspaceId,
 } from "./credentials.ts";
+import type {
+  DeviceHostTokenResult, DeviceRequestHost, DeviceStartHostInput, HostPlanJws, HostPlansQuery, HostReport, HostReportAck,
+  Server, ServerId, ServerList, ServerRefInput,
+} from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
 
 export type Crud = CrudAction;
@@ -36,14 +40,16 @@ export type OwnerSessionId = Id<"osn">;
 export type ProviderLinkId = Id<"lnk">;
 export type IsoTime = string;
 export type Digest = `sha256:${string}`;
-/** Provider adapter id, data (e.g. "railway"); never branched on outside the adapter. */
+/** Provider adapter id, data (e.g. "railway"); never branched on outside the adapter. v0.1.58 (S1-0): `own_infra` with a
+ *  `srv_…` destination = a paired server (HOST.md §8); the only key whose config entries carry `ownInfra: true`. */
 export type ProviderKey = string;
 
 // ───────────────────────────── route row ─────────────────────────────
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 /** Maps to CREDENTIALS kinds: browser=K1 Clerk session; owner-cli=K3 `tbo_`; bridge=K7 bridge
- *  assertion; device=K2 device_code in body; public=no credential; stripe-webhook=Stripe signature. */
-export type AuthClass = "browser" | "owner-cli" | "bridge" | "device" | "public" | "stripe-webhook";
+ *  assertion; device=K2 device_code in body; public=no credential; stripe-webhook=Stripe signature.
+ *  v0.1.58 (S1-0): host=K13 host assertion (`TB-Assert`, typ tb-host-assert+jwt), only on the host.* rows (RT9). */
+export type AuthClass = "browser" | "owner-cli" | "bridge" | "device" | "public" | "stripe-webhook" | "host";
 /** gateway = forwarded by the generated GUI gateway at https://<portal>/api/v1/…; internal = Core
  *  private network only (the gateway never forwards it). v0.1.36 (C193): admin = only in ADMIN_ROUTES
  *  (`@opt2-tealbrick/spec/admin`), served only on Core's admin listener; never a ROUTES row (Core's main listener refuses
@@ -52,7 +58,9 @@ export type Exposure = "gateway" | "internal" | "admin";
 export type Transport = "json" | "json_slow" | "sse" | "longpoll" | "raw" | "binary";
 export type RateClass =
   | "read" | "write" | "sensitive" | "public_strict" | "device_poll"
-  | "bridge_poll" | "bridge_write" | "webhook" | "stream" | "internal";
+  | "bridge_poll" | "bridge_write" | "webhook" | "stream" | "internal"
+  /** v0.1.58 (S1-0): per server */
+  | "host_poll" | "host_write";
 /** none = request/response bodies never logged; meta = field names + byte sizes only. Values never. */
 export type BodyLog = "none" | "meta";
 
@@ -96,6 +104,8 @@ export const RATE_CLASSES = {
   webhook: { perMinute: 300, key: "ip" },
   stream: { perMinute: 20, key: "principal" },
   internal: { perMinute: 0, key: "none" },
+  host_poll: { perMinute: 6, key: "principal" },
+  host_write: { perMinute: 30, key: "principal" },
 } as const satisfies Record<RateClass, { perMinute: number; key: "principal" | "ip" | "none" }>;
 
 // ───────────────────────────── audit action registry ─────────────────────────────
@@ -126,6 +136,10 @@ export const AUDIT_ACTIONS = [
   "draft.reject", "draft.import",
   /** v0.1.32 (C196 ENG-1): the account accepted the current legal documents (Terms, DPA, AUP) for its business */
   "account.terms_accept",
+  /** v0.1.58 (S1-0): device approval with scope host created the server and set the workspace infrastructure (one consent) */
+  "server.pair",
+  /** v0.1.58 (S1-0): stop every service on the server, keep data, unpair the key */
+  "server.detach",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -445,7 +459,8 @@ export interface DeviceStartAgentInput {
   /** v0.1.18 (C106a): `adopt` = the CLI's SUGGESTED access for the new card (the owner decides on the device page) */
   agents: { agt?: AgentId; public_key: Jwk; name?: string; purpose?: string; adopt?: AdoptSuggestion }[];
 }
-export type DeviceStartInput = DeviceStartOwnerInput | DeviceStartAgentInput;
+/** v0.1.58 (S1-0): scope "host" (`DeviceStartHostInput`, ./host.ts) → a paired server (HOST.md §2). */
+export type DeviceStartInput = DeviceStartOwnerInput | DeviceStartAgentInput | DeviceStartHostInput;
 export interface DeviceStart {
   device_code: string;
   user_code: string;
@@ -467,7 +482,7 @@ export interface DeviceAgentTokenResult {
   token_endpoint: string;
   connections: { connection_id: ConnectionId; agent_id: AgentId; public_key_thumbprint: string }[];
 }
-export type DeviceToken = DeviceOwnerTokenResult | DeviceAgentTokenResult;
+export type DeviceToken = DeviceOwnerTokenResult | DeviceAgentTokenResult | DeviceHostTokenResult;
 /** user_code as typed or from verification_uri_complete; normalised + digest-matched; 5 wrong codes / 10 min per account. */
 /** v0.1.18 (C106a): adopt (agent onboarding with access in one approval) */
 export type AdoptChannel = { kind: "buzz_channel" | "connect_inbox"; id?: string; /** ≤ 60 */ createName?: string };
@@ -511,6 +526,8 @@ export interface DeviceRequest {
   harness: string | null;
   /** v0.1.14 (C96): suggested `name` / `purpose` as the client sent them (display + prefill only) */
   agents: { index: number; agt: AgentId | null; publicKeyThumbprint: string; name?: string; purpose?: string; adopt?: AdoptResolved }[];
+  /** v0.1.58 (S1-0): scope host only — the key thumbprint and the facts the box sent (the approval page shows them) */
+  host?: DeviceRequestHost;
   state: "pending" | "approved" | "denied" | "expired" | "redeemed";
   createdAt: IsoTime;
   expiresAt: IsoTime;
@@ -518,7 +535,9 @@ export interface DeviceRequest {
 /** scope agent: ws + one agent card per pair (by index; existing cards from agents.create). scope owner: neither. */
 /** v0.1.14 (C96): `name` / `purpose` = the owner's edits on the device page, applied to that agent card on approve. */
 /** v0.1.18 (C106a): `agt` optional when `name` is given (Core creates the card: `bound`, workflow = the ticked ops of `adopt`). */
-export interface DeviceApproveInput { userCode: string; ws?: WorkspaceId; agents?: { index: number; agt?: AgentId; name?: string; purpose?: string; adopt?: AdoptChoice }[] }
+/** v0.1.58 (S1-0) scope host: `ws` REQUIRED (the one choice), `label` optional (default machine_label, 1..64); no `agents`.
+ *  Approve = create the server, pin its key, set the workspace infrastructure {own_infra, srv_…} — ONE consent, one draft. */
+export interface DeviceApproveInput { userCode: string; ws?: WorkspaceId; label?: string; agents?: { index: number; agt?: AgentId; name?: string; purpose?: string; adopt?: AdoptChoice }[] }
 export interface DeviceDenyInput { userCode: string }
 export interface DeviceDecision {
   id: DeviceRequestId;
@@ -527,6 +546,8 @@ export interface DeviceDecision {
   ownerSessionId: OwnerSessionId | null;
   /** v0.1.18 (C106a): the applied draft that recorded an adopt approval */
   draftId?: DraftId;
+  /** v0.1.58 (S1-0): scope host — the server the approval created */
+  serverId?: ServerId;
 }
 
 // catalog
@@ -1257,6 +1278,9 @@ export interface SchemaMap {
   BridgeEnrolInput: BridgeEnrolInput; BridgeEnrolResult: BridgeEnrolResult; BridgeConfigInput: BridgeConfigInput;
   BridgeConfig: BridgeConfig; BridgeAckInput: BridgeAckInput; BridgeAckResult: BridgeAckResult;
   RouteRegistryDoc: RouteRegistryDoc; Health: Health;
+  /** v0.1.58 (S1-0) */
+  Server: Server; ServerList: ServerList; ServerRefInput: ServerRefInput;
+  HostPlansQuery: HostPlansQuery; HostPlanJws: HostPlanJws; HostReport: HostReport; HostReportAck: HostReportAck;
 }
 export type SchemaName = keyof SchemaMap;
 
@@ -1437,6 +1461,18 @@ export const ROUTES = [
   { opId: "bridge_api.config", method: "GET", path: "/bridge/config", auth: ["bridge"], exposure: "gateway", transport: "longpoll", query: ["after", "wait"], input: "BridgeConfigInput", output: "BridgeConfig", rate: "bridge_poll", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
   { opId: "bridge_api.ack", method: "POST", path: "/bridge/ack", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeAckInput", output: "BridgeAckResult", rate: "bridge_write", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
 
+  // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)
+  { opId: "servers.list", method: "GET", path: "/servers", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "ServerList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
+  { opId: "servers.get", method: "GET", path: "/servers/{srv}", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
+  /** S1 meaning: one final plan stops every service (volumes KEPT), the key is unpaired after that plan, the workspace infrastructure is cleared. No delete op in S1 (REDTEAM B2e). */
+  { opId: "servers.detach", method: "POST", path: "/servers/{srv}/detach", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "write", bodyLog: "meta", audit: "server.detach", draftable: true, confirm: true, idempotent: false, registry: "provider" },
+
+  // v0.1.58 (S1-0): host-agent-facing (outbound only from the server; K13 host assertion)
+  /** 200 application/jose = ONE plan (lowest unexpired seq > after); 304 after `wait` s. Carries one-time codes: never stored, never logged. */
+  { opId: "host.plans", method: "GET", path: "/host/plans", auth: ["host"], exposure: "gateway", transport: "longpoll", query: ["after", "wait"], input: "HostPlansQuery", output: "HostPlanJws", rate: "host_poll", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
+  /** heartbeat every 30 s + plan results; metadata only */
+  { opId: "host.report", method: "POST", path: "/host/reports", auth: ["host"], exposure: "gateway", transport: "json", query: NOQ, input: "HostReport", output: "HostReportAck", rate: "host_write", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
+
   // internal (private network only; the gateway never forwards these)
   { opId: "routes.list", method: "GET", path: "/internal/routes", auth: ["public"], exposure: "internal", transport: "json", query: NOQ, input: "Empty", output: "RouteRegistryDoc", rate: "internal", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "route" },
   { opId: "system.health", method: "GET", path: "/internal/health", auth: ["public"], exposure: "internal", transport: "json", query: NOQ, input: "Empty", output: "Health", rate: "internal", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "route" },
@@ -1472,7 +1508,8 @@ export type InvariantGatewayPaths = Check<[Extract<Row, { exposure: "gateway"; p
 /** RT6 (B8): rows whose responses must never be stored are never idempotent (the idempotency store keeps responses). */
 export type InvariantIdempotencyNoSecrets = Check<[Extract<Row, { idempotent: true; bodyLog: "none" }>] extends [never] ? true : false>;
 /** Output schemas that carry a one-time code, ticket or token. */
-export type SecretBearingSchema = "DeviceStart" | "DeviceToken" | "PairingCode" | "FormPostRedirect" | "EnrolmentCode" | "TicketResult";
+/** v0.1.58: HostPlanJws (a bridge/app plan carries its one-time enrolment code). */
+export type SecretBearingSchema = "DeviceStart" | "DeviceToken" | "PairingCode" | "FormPostRedirect" | "EnrolmentCode" | "TicketResult" | "HostPlanJws";
 type SecretKey = "code" | "ticket" | "device_code" | "user_code" | "access_token" | "session_token";
 type TopKeys<T> = T extends unknown ? keyof T : never;
 /** RT7 (S1): no output reachable with K3 (owner CLI / TBD) carries a code, ticket or token — by name and by top-level field. */
@@ -1482,4 +1519,10 @@ export type InvariantOwnerCliNoSecrets = Check<
 /** RT8 (S1): every secret-bearing output is idempotent: false and bodyLog: none. */
 export type InvariantSecretOutputs = Check<
   [Exclude<Extract<Row, { output: SecretBearingSchema }>, { idempotent: false; bodyLog: "none" }>] extends [never] ? true : false
+>;
+type HostRow = WithAuth<Row, "host">;
+/** RT9 (v0.1.58, S1-0): the host class is accepted ONLY on host.* rows, and host.* rows accept ONLY the host class (a host
+ *  agent never reaches a person, owner-CLI or bridge row; no person credential reaches a host row). */
+export type InvariantHostRows = Check<
+  [Exclude<HostRow, { opId: `host.${string}`; auth: readonly ["host"] }> | Exclude<Extract<Row, { opId: `host.${string}` }>, HostRow>] extends [never] ? true : false
 >;

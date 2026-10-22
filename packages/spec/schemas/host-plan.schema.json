@@ -1,0 +1,380 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.opt2.tealbrick.com/host-plan.schema.json",
+  "title": "Host plan payload (tb-host-plan+jws)",
+  "description": "v0.1.58 (S1-0, HOST.md §4). JWS payload of one host plan, signed by a Portal signing key (K12) and CHECKED by the host agent on the box. CLOSED at every level (additionalProperties: false): anything not listed — host paths, bind mounts, privileged, cap_add, devices, network_mode, pid, ipc, extra_hosts, user, sysctls, entrypoint/command, labels, compose — can never be sent (REDTEAM B2/B3). Unknown action kinds are refused (schema_invalid). The box applies the local policy (HOST_POLICY) on top; a valid signature cannot override it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "v",
+    "iss",
+    "sub",
+    "aud",
+    "server",
+    "workspace",
+    "seq",
+    "iat",
+    "exp",
+    "jti",
+    "portalKeySet",
+    "actions"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "iss": {
+      "const": "tb:portal"
+    },
+    "sub": {
+      "$ref": "#/$defs/srvRef"
+    },
+    "aud": {
+      "$ref": "#/$defs/srvRef"
+    },
+    "server": {
+      "$ref": "#/$defs/srvId"
+    },
+    "workspace": {
+      "type": "string",
+      "pattern": "^ws_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "iat": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exp": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "jti": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "portalKeySet": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 16384,
+      "description": "root-signed key-set statement (tb-keyset+jws), REQUIRED"
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/action"
+      }
+    }
+  },
+  "$defs": {
+    "srvId": {
+      "type": "string",
+      "pattern": "^srv_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "srvRef": {
+      "type": "string",
+      "pattern": "^tb:srv:srv_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "serviceName": {
+      "type": "string",
+      "pattern": "^tb-[a-z0-9-]{1,40}$"
+    },
+    "envName": {
+      "type": "string",
+      "pattern": "^[A-Z_][A-Z0-9_]{0,63}$"
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "service"
+          ],
+          "properties": {
+            "kind": {
+              "const": "ensure_service"
+            },
+            "service": {
+              "$ref": "#/$defs/service"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "serviceName"
+          ],
+          "properties": {
+            "kind": {
+              "const": "stop_service"
+            },
+            "serviceName": {
+              "$ref": "#/$defs/serviceName"
+            }
+          }
+        }
+      ]
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serviceName",
+        "component",
+        "release",
+        "env",
+        "generatedSecrets",
+        "enrolCode",
+        "port",
+        "publicDomain",
+        "healthPath",
+        "stopGraceSeconds",
+        "volumes",
+        "resources"
+      ],
+      "properties": {
+        "serviceName": {
+          "$ref": "#/$defs/serviceName"
+        },
+        "component": {
+          "type": "string",
+          "pattern": "^(main|[a-z0-9][a-z0-9_-]{0,39})$"
+        },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "product",
+            "releaseId",
+            "image",
+            "manifestDigest"
+          ],
+          "properties": {
+            "product": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{1,31}$"
+            },
+            "releaseId": {
+              "type": "string",
+              "pattern": "^rel_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "image": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._/-]{0,200}(:[A-Za-z0-9._-]{1,128})?@sha256:[a-f0-9]{64}$",
+              "maxLength": 400
+            },
+            "manifestDigest": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^sha256:[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "env": {
+          "type": "object",
+          "maxProperties": 64,
+          "propertyNames": {
+            "$ref": "#/$defs/envName"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 8192
+          }
+        },
+        "generatedSecrets": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/envName"
+          }
+        },
+        "serviceRefs": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "$ref": "#/$defs/envName"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "serviceName",
+              "env"
+            ],
+            "properties": {
+              "serviceName": {
+                "$ref": "#/$defs/serviceName"
+              },
+              "env": {
+                "$ref": "#/$defs/envName"
+              }
+            }
+          }
+        },
+        "enrolCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^tbe_[A-Za-z0-9_-]{43}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicDomain": {
+          "type": "boolean"
+        },
+        "publicHosts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "main",
+            "keys"
+          ],
+          "properties": {
+            "main": {
+              "type": "string",
+              "pattern": "^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+            },
+            "keys": {
+              "type": "string",
+              "pattern": "^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+            }
+          }
+        },
+        "healthPath": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^/[A-Za-z0-9._~/-]{0,200}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stopGraceSeconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volumes": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "mountPath",
+              "purpose"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+              },
+              "mountPath": {
+                "type": "string",
+                "pattern": "^/(?!(proc|sys|dev|run|etc|boot|root|var/run|var/lib/docker)(/|$))(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._/-]{1,200}$"
+              },
+              "purpose": {
+                "enum": [
+                  "data",
+                  "backup"
+                ]
+              }
+            }
+          }
+        },
+        "resources": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 64
+                },
+                "memoryMb": {
+                  "type": "integer",
+                  "minimum": 16,
+                  "maximum": 262144
+                },
+                "volumeGb": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                }
+              }
+            }
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "publicDomain": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "publicHosts"
+        ],
+        "properties": {
+          "component": {
+            "const": "main"
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "publicHosts"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.opt2.tealbrick.com/host-report.schema.json",
+  "title": "Host report (host.report body; also the heartbeat)",
+  "description": "v0.1.58 (S1-0, HOST.md §6). Metadata only: no log content, no env values, no secrets. ≤ 65536 bytes. Sent every 30 s and after every plan. $defs.facts is also the `facts` of device.start with scope host.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "server",
+    "at",
+    "lastAppliedSeq",
+    "results",
+    "services",
+    "facts",
+    "firewall"
+  ],
+  "properties": {
+    "server": {
+      "type": "string",
+      "pattern": "^srv_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "lastAppliedSeq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "results": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seq",
+          "index",
+          "ok"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "index": {
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 15
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "code": {
+            "enum": [
+              "bad_signature",
+              "wrong_server",
+              "replayed",
+              "expired",
+              "schema_invalid",
+              "not_in_index",
+              "index_unavailable",
+              "downgrade_refused",
+              "env_not_declared",
+              "secret_like_value",
+              "engine_error",
+              "health_timeout",
+              "firewall_failed"
+            ]
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "serviceName",
+          "state",
+          "image",
+          "health",
+          "restarts"
+        ],
+        "properties": {
+          "serviceName": {
+            "type": "string",
+            "pattern": "^tb-[a-z0-9-]{1,40}$"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "starting",
+              "stopped",
+              "failed"
+            ]
+          },
+          "image": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "health": {
+            "enum": [
+              "ok",
+              "failing",
+              "none"
+            ]
+          },
+          "restarts": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "facts": {
+      "$ref": "#/$defs/facts"
+    },
+    "firewall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ok",
+        "rulesDigest"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "rulesDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "queued": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 500
+    }
+  },
+  "$defs": {
+    "facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "kernel",
+        "arch",
+        "cpuCount",
+        "memoryMb",
+        "diskGb",
+        "diskFreeGb",
+        "publicIpv4",
+        "publicIpv6",
+        "engine",
+        "agentVersion"
+      ],
+      "properties": {
+        "os": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "kernel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "arch": {
+          "enum": [
+            "x86_64",
+            "aarch64"
+          ]
+        },
+        "cpuCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "memoryMb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "diskGb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "diskFreeGb": {
+          "type": "number",
+          "minimum": 0
+        },
+        "publicIpv4": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])(\\.(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicIpv6": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F:.]{2,45}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "engine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version",
+            "images"
+          ],
+          "properties": {
+            "name": {
+              "const": "openship"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "images": {
+              "type": "object",
+              "maxProperties": 16,
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9-]{0,31}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9._/-]{0,200}(:[A-Za-z0-9._-]{1,128})?@sha256:[a-f0-9]{64}$",
+                "maxLength": 400
+              }
+            }
+          }
+        },
+        "agentVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        }
+      }
+    }
+  }
+}

@@ -245,3 +245,8 @@ version (C292 pattern).
   - `R-EV-4` 10 events on one subject within 2 s → one turn; another subject → its own turn.
   - `R-EV-5` a fresh agent directory with only the login and a grant receives events; no event key in any config file.
   - `R-EV-6` a bridge without the cap (-32601) → the host keeps its own polls, reports no error, stores no event state.
+
+## v0.1.58 — host contract rows H-1..H-11 (S1-0, HOST.md §9)
+Machine-readable: `HOST_CONFORMANCE` in `packages/spec/src/host.ts` (id, title, given, expect, policy rule, target). Targets: `agent-unit` = the host agent's own unit tests against plans signed by a test key set; `box-probe` = the probe suite on a real box (QA lead); `both`. The spec package itself tests the schema side (`test/host.test.ts`: every `HOST_FORBIDDEN_KEYS` key refused at every level, reserved/unknown action kinds, tag-only images, system mount paths, secret-like values).
+- H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in index refused · H-6 downgrade refused (the one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) · H-8 namespace-escape probes refused (`network_mode: container:openship-edge`, `pid: container:<api>`; REDTEAM B3) · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the running tb- services · H-11 firewall probe from an app network.
+- Core side (Portal Core tests, not this package): approve with scope host creates the server + sets the infrastructure in one consent; `host.plans` serves only unexpired plans with seq > after; a detached server gets only its final stop plan, then 401.

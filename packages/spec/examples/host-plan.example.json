@@ -1,0 +1,63 @@
+{
+  "v": 1,
+  "iss": "tb:portal",
+  "sub": "tb:srv:srv_01JZ0000000000000000000001",
+  "aud": "tb:srv:srv_01JZ0000000000000000000001",
+  "server": "srv_01JZ0000000000000000000001",
+  "workspace": "ws_01JZ0000000000000000000002",
+  "seq": 1,
+  "iat": 1792663200,
+  "exp": 1792664100,
+  "jti": "01JZ0000000000000000000003",
+  "portalKeySet": "eyJhbGciOiJFZERTQSIsInR5cCI6InRiLWtleXNldCtqd3MiLCJraWQiOiJ4cjhubE91SURQOEdxSk9uRHZCZTZkSWMyand5MlQ4M2oyWXFsUHo2eDdBIn0.eyJpc3MiOiJ0Yjpwb3J0YWwtcm9vdCJ9.c2lnbmF0dXJlLWV4YW1wbGU",
+  "actions": [
+    {
+      "kind": "ensure_service",
+      "service": {
+        "serviceName": "tb-bridge",
+        "component": "main",
+        "release": {
+          "product": "bridge",
+          "releaseId": "rel_01JZ0000000000000000000004",
+          "image": "ghcr.io/tealbrick/opt2-tealbrick-bridge@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "manifestDigest": null
+        },
+        "env": {
+          "TB_PORTAL_URL": "https://portal.example.com",
+          "TB_PUBLIC_URL": "https://w01jz0000000000000000000002.ws.example.com",
+          "TB_KEYS_PUBLIC_URL": "https://w01jz0000000000000000000002-keys.ws.example.com",
+          "TB_DATA_DIR": "/data",
+          "TB_INTERNAL_PORT": "8788"
+        },
+        "generatedSecrets": [
+          "TB_KEK"
+        ],
+        "enrolCode": "tbe_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "port": 8080,
+        "publicDomain": true,
+        "publicHosts": {
+          "main": "w01jz0000000000000000000002.ws.example.com",
+          "keys": "w01jz0000000000000000000002-keys.ws.example.com"
+        },
+        "healthPath": "/healthz",
+        "stopGraceSeconds": 30,
+        "volumes": [
+          {
+            "name": "data",
+            "mountPath": "/data",
+            "purpose": "data"
+          }
+        ],
+        "resources": {
+          "cpu": 0.1,
+          "memoryMb": 256,
+          "volumeGb": 1
+        }
+      }
+    },
+    {
+      "kind": "stop_service",
+      "serviceName": "tb-notes"
+    }
+  ]
+}
