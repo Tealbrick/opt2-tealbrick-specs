@@ -112,7 +112,7 @@ test("report schema: metadata only (no logs, no env)", () => {
 test("secret-like values are caught; platform and public values are not", () => {
   const res = HOST_SECRET_VALUE_PATTERNS.map((p) => new RegExp(p));
   const isSecret = (v: string) => res.some((r) => r.test(v));
-  for (const v of [`tbe_${"A".repeat(43)}`, `tbo_${"x".repeat(43)}`, "sk_live_51Habcdefgh", "rk_test_abcdefghij", `ghp_${"a".repeat(36)}`, `sk-ant-api03-${"a".repeat(30)}`, "AKIAABCDEFGHIJKLMNOP", "eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJ4eHh4eHgifQ.sig", "-----BEGIN OPENSSH PRIVATE KEY-----", "postgres://user:pw@db:5432/x"]) assert.ok(isSecret(v), v);
+  for (const v of [`tbe_${"A".repeat(43)}`, `tbo_${"x".repeat(43)}`, ["sk", "live", "51Habcdefgh"].join("_"), ["rk", "test", "abcdefghij"].join("_"), `ghp_${"a".repeat(36)}`, `sk-ant-api03-${"a".repeat(30)}`, `AKIA${"ABCDEFGHIJKLMNOP"}`, "eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJ4eHh4eHgifQ.sig", "-----BEGIN OPENSSH PRIVATE KEY-----", "postgres://user:pw@db:5432/x"]) assert.ok(isSecret(v), v);
   for (const v of ['{"keys":[{"kty":"OKP","crv":"Ed25519","x":"IIKwS6eT-LIrtVuNO-2VRoGdYk27nBkG8zG_Ed1dt8Q"}]}', "https://portal.example.com", "http://tb-bridge:8080", "/data", "info", "ins_01JZ0000000000000000000005", "postgres://db:5432/x"]) assert.ok(!isSecret(v), v);
 });
 

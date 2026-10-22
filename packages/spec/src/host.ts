@@ -289,7 +289,7 @@ export const HOST_BOX_OWNED_ENV = {
   TB_PORTAL_URL: "pairedPortalUrl",
   /** `{"keys":[…]}` = the public keys of the key-set statement the box verified (informational for apps) */
   TB_PORTAL_KEYS: "verifiedKeySet",
-  /** apps: `http://<bridge serviceName>:<bridge index runtime.port>` of the bridge this box runs */
+  /** apps: `http://<bridge serviceName>:<bridge index runtime.internalPort>` of the bridge this box runs (the internal surface; Core records the same URL) */
   TB_BRIDGE_URL: "bridgeUrl",
   /** bridge: `https://<publicHosts.main>` / `https://<publicHosts.keys>` */
   TB_PUBLIC_URL: "publicHosts.main",

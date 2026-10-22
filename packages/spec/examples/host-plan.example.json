@@ -9,7 +9,7 @@
   "iat": 1792663200,
   "exp": 1792664100,
   "jti": "01JZ0000000000000000000003",
-  "portalKeySet": "eyJhbGciOiJFZERTQSIsInR5cCI6InRiLWtleXNldCtqd3MiLCJraWQiOiJ4cjhubE91SURQOEdxSk9uRHZCZTZkSWMyand5MlQ4M2oyWXFsUHo2eDdBIn0.eyJpc3MiOiJ0Yjpwb3J0YWwtcm9vdCJ9.c2lnbmF0dXJlLWV4YW1wbGU",
+  "portalKeySet": "<compact tb-keyset+jws: the root-signed key-set statement, see CREDENTIALS 9.5>",
   "actions": [
     {
       "kind": "ensure_service",
