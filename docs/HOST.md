@@ -84,8 +84,11 @@ re-adopting kept data on a server is out of S1.
   `stop_service {serviceName}` (never removes a volume). `ensure_agent_runtime` is RESERVED (S2+: a container unit in the stack
   with an egress policy, REDTEAM M9); S1 boxes refuse it like every unknown kind (`schema_invalid`). Host-level units never exist.
 - `HostServiceSpec` (closed): `serviceName` (= `("tb-" + product + ("-" + component)?)` cut to 60, single label), `component`
-  (null = the main image, else the manifest service id), `release {product, releaseId, image (name@sha256 only), manifestDigest}`, `env`, `generatedSecrets` (names), `serviceRefs`
-  (another tb- service's env in this stack), `enrolCode` (the one-time `tbe_` code; the box sets TB_ENROL_CODE; never logged or
+  (null = the main image, else the manifest service id), `release {product, releaseId, image (name@sha256 only), manifestDigest}`, `env`, `generatedSecrets` (names), `serviceRefs` (key = the env
+  name in THIS service; value = `{serviceName, env}` of the SOURCE service: a tb- service the agent created in the same workspace
+  stack, and a variable that source holds on the box — one of its generated secrets or an env value of its current spec; the box
+  resolves it from values it holds; never a value from outside the box, never reported; must equal the manifest's whole-value
+  `{{services.<id>.env.<NAME>}}` entry), `enrolCode` (the one-time `tbe_` code; the box sets TB_ENROL_CODE; never logged or
   reported), `port`, `publicDomain` (bridge only) + `publicHosts {main, keys}` (C59), `healthPath`, `stopGraceSeconds` (≤ 120;
   bridge drain C131), `volumes` (NAMED only: `{name, mountPath, purpose}`; the box names them `<stack>_<serviceName>_<name>`),
   `resources` (a request the box clamps). Manifest mount paths must not start a segment with "." (the plan pattern refuses it).
@@ -132,16 +135,22 @@ actions run before the first engine call; a refused plan changes nothing.
 14. **firewall** — agent-owned, re-checked before every report and on every Docker `network create` event: DROP by default from
    any Docker bridge (`br-+`, `docker0`) to the host (INPUT, IPv4 + IPv6): :22, the engine API, other stacks' networks, IPv6
    host addresses, 169.254.169.254; explicit allows only for the engine's own network. A failed check → `firewall.ok = false`.
-15. **publicHosts** — only the bridge (kind bridge, component null): `main = w<lower ws ULID>.<zone>`,
+15. **containEscapes** (FIX-B3 L3) — every report cycle the agent lists ALL containers on the box; one outside its allowlist
+   (the engine's own containers by name + image digest, its own tb- services) with a container:/host network, pid or ipc mode,
+   privileged, added capabilities, devices, a docker.sock or host-path bind is stopped (`docker stop`, data kept) and reported
+   in `escapes` (code `escape_attempt`) until Core acknowledged it. Core marks the server `degraded` and alerts.
+16. **publicHosts** — only the bridge (kind bridge, component null): `main = w<lower ws ULID>.<zone>`,
    `keys = w<lower ws ULID>-keys.<zone>`, `zone` = the box's configured workspace zone.
 
 ## 6. Reports (metadata only — no log content, no env values, no secrets)
-`HostReport {server, at, lastSeq, results[], services[], facts, firewall, queued?}`, schema `host-report.schema.json`,
+`HostReport {server, at, lastSeq, results[], services[], facts, firewall, escapes?, queued?}`, schema `host-report.schema.json`,
 ≤ 64 KiB, every 30 s and after every plan (rate class `host_write`, 30/min per server). `results[] = {seq, index, ok, code?}`, one
 per action; `index: -1` = the whole plan was refused before any action. A result is re-sent until a report carrying it got 200.
 Error codes `HostErrorCode`: `bad_signature`, `wrong_server`, `replayed`, `seq_out_of_range`, `expired`, `schema_invalid`,
 `identity_changed`, `not_in_index`, `index_unavailable`, `downgrade_refused`, `env_not_declared`, `manifest_mismatch`,
-`secret_like_value`, `engine_error`, `health_timeout`, `firewall_failed`. Engine phase: actions run in order and stop at the first
+`secret_like_value`, `engine_error`, `health_timeout`, `firewall_failed`, `escape_attempt` (the `escapes[]` event:
+`{container, image, reasons[], stoppedAt, stopped}`, reasons `namespace_mode | privileged | capabilities | devices | docker_sock |
+host_bind`). Engine phase: actions run in order and stop at the first
 engine failure; the plan's seq counts as decided either way. Answer `HostReportAck {accepted: true, serverState, pendingSeq}` (`pendingSeq` = the next deliverable plan, or
 null: the box may poll at once). Core accepts a report older than the last one for its results only (state never goes back).
 
@@ -164,7 +173,7 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
 H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in
 index refused · H-6 downgrade refused (one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) ·
 H-8 the two namespace-escape probes refused (REDTEAM B3) · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
-running tb- services · H-11 firewall probe from an app network. Each row names its `HOST_POLICY` rule and its target
+running tb- services · H-11 firewall probe from an app network · H-12 escape attempt contained (FIX-B3 L3). Each row names its `HOST_POLICY` rule and its target
 (`agent-unit`, `box-probe`, `both`); `given` / `expect` are the test text.
 
 ## 10. Decisions on the draft's open items (Lead A, 2026-10-22)
@@ -202,3 +211,9 @@ for main; seq cap and jump limit; refused plans advance lastSeq; all checks befo
 | 5 | workspace already has infrastructure | refuse, 409 conflict `details.reason = infrastructure_set` (no replace in S1) |
 | 6 | DeviceScope / DeviceClientId / destinationId | accepted: scope `host`, client `tealbrick-host`, the workspace destination may be `srv_…` |
 | 7 | rows + auth | `servers.*` rows ship here; the `host` class is never a browser op (RT9) |
+
+### Coordinator points (2026-10-22)
+- `serviceRefs` defined exactly (§4): key = env name in this service; value = source `{serviceName, env}` in the same workspace
+  stack, resolved on the box, never a secret from outside the box.
+- `escape_attempt` code + `HostReport.escapes[]` + `Server.escapes` + rule `containEscapes` + row H-12 (FIX-B3 layer L3).
+- Bridge `TB_INTERNAL_HOST`: the box writes the hostname form (advertise only; bridge PR #17); no further contract change.

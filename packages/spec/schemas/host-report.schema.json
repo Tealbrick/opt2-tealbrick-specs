@@ -68,7 +68,8 @@
               "secret_like_value",
               "engine_error",
               "health_timeout",
-              "firewall_failed"
+              "firewall_failed",
+              "escape_attempt"
             ]
           }
         }
@@ -135,6 +136,55 @@
         "rulesDigest": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "escapes": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "container",
+          "image",
+          "reasons",
+          "stoppedAt",
+          "stopped"
+        ],
+        "properties": {
+          "container": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "image": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "reasons": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "namespace_mode",
+                "privileged",
+                "capabilities",
+                "devices",
+                "docker_sock",
+                "host_bind"
+              ]
+            }
+          },
+          "stoppedAt": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$"
+          },
+          "stopped": {
+            "type": "boolean"
+          }
         }
       }
     },

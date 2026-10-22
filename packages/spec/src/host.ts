@@ -76,7 +76,8 @@ export const HOST_PATTERNS = {
 // ───────────────────────────── server object (HOST.md §3) ─────────────────────────────
 /**
  * pending  = paired, no report yet · online = last report < offlineAfterS ago, firewall ok, no service failed ·
- * degraded = online but the firewall check failed, a service is `failed` or its health is `failing` ·
+ * degraded = online but the firewall check failed, a service is `failed` or its health is `failing`, or an escape attempt
+ *            was contained (FIX-B3 L3) ·
  * offline  = no report for offlineAfterS · detached = servers.detach ran (terminal; a new pairing makes a new `srv_`).
  */
 export type ServerState = "pending" | "online" | "degraded" | "offline" | "detached";
@@ -107,6 +108,24 @@ export interface HostServiceStatus {
   restarts: number;
 }
 
+/** FIX-B3 L3: why the agent stopped a container it found outside its allowlist. */
+export type HostEscapeReason = "namespace_mode" | "privileged" | "capabilities" | "devices" | "docker_sock" | "host_bind";
+/**
+ * FIX-B3 layer L3 (coordination/roadmap/FIX-B3-NAMESPACE-ESCAPE.md): every report cycle the agent lists ALL containers on the
+ * box; one outside its allowlist (the engine's own containers by name + image digest, and the tb- services it created) that
+ * uses a container:/host network, pid or ipc mode, privileged, added capabilities, devices, a docker.sock or host-path bind
+ * is stopped (`docker stop`, data kept) and reported here until Core acknowledged one report carrying it.
+ */
+export interface HostEscapeEvent {
+  /** the container name as Docker shows it (≤ 128) */
+  container: string;
+  image: string;
+  reasons: HostEscapeReason[];
+  stoppedAt: IsoTime;
+  /** false when `docker stop` failed (the agent retries every cycle) */
+  stopped: boolean;
+}
+
 export interface HostFirewallStatus {
   ok: boolean;
   /** sha256 of the agent's canonical rule listing (lets Core and QA see a change) */
@@ -128,6 +147,8 @@ export interface Server {
   lastSeq: number;
   services: HostServiceStatus[];
   firewall: HostFirewallStatus | null;
+  /** FIX-B3 L3: escape attempts the box contained, newest first (Core keeps the last 20); any one makes the state `degraded` */
+  escapes: HostEscapeEvent[];
   createdAt: IsoTime;
   detachedAt: IsoTime | null;
 }
@@ -223,7 +244,13 @@ export interface HostServiceSpec {
   env: Record<string, string>;
   /** names only (declared `generate: secret` / `provider-secret`, or TB_KEK): the box generates each value once and keeps it */
   generatedSecrets: string[];
-  /** env value = another service's env IN THIS STACK, exactly as the manifest's whole-value `{{services.<id>.env.<NAME>}}` says */
+  /**
+   * Env values the BOX fills from another service of the SAME workspace stack. Key = the env name in THIS service; value =
+   * `{serviceName, env}` of the SOURCE service: `serviceName` is a tb- service the agent created in this workspace stack,
+   * `env` is the name of a variable that source service holds on the box (one of its generatedSecrets, or an env value of
+   * its current spec). Resolved on the box from values the box holds; never a value from outside the box, never sent back.
+   * Must match the manifest's whole-value `{{services.<id>.env.<NAME>}}` entry exactly (HOST_POLICY.manifestMatch).
+   */
   serviceRefs?: Record<string, { serviceName: string; env: string }>;
   /** one-time enrolment code (K6, `tbe_…`, ≤ 24 h): the box sets it as TB_ENROL_CODE; never logged, never reported */
   enrolCode: string | null;
@@ -351,6 +378,7 @@ export const HOST_POLICY = {
   ownInfraOrigins: "After every applied change the agent rewrites the bridge's TB_OWN_INFRA_ORIGINS (exact `http://<serviceName>:<port>` origins of the tb- app services it created in this stack and that run, comma-separated, sorted) and TB_INTERNAL_HOST (= the bridge serviceName), then restarts the bridge (the allowlist is read at boot).",
   firewall: "Agent-owned rules, re-checked before every report and on every Docker network create event: traffic from any Docker bridge (br-+, docker0) to the host is DROPped by default (INPUT, IPv4 and IPv6), including :22, the engine API, other stacks' networks, IPv6 host addresses and 169.254.169.254; explicit allows only for the engine's own network to what it needs (the report says ok:false; firewall_failed on an action that needs it).",
   coreDown: "While Core is unreachable the box keeps the last applied state running, queues ≤ reportQueueMax reports, applies nothing without a fresh valid plan and takes no destructive action (HOST.md §7).",
+  containEscapes: "FIX-B3 L3: every report cycle the agent lists ALL containers; one outside its allowlist (engine containers by name + image digest, its own tb- services) with a container:/host namespace mode, privileged, added capabilities, devices, a docker.sock or host-path bind is stopped (data kept) and reported in `escapes` (code escape_attempt) until Core acknowledged it.",
   publicHosts: "`publicDomain` true only for release kind bridge, component null; then `publicHosts` = {main: \"w\" + lower(ws ULID) + \".\" + zone, keys: \"w\" + lower(ws ULID) + \"-keys.\" + zone}, `zone` = the box's configured workspace zone (schema_invalid otherwise).",
 } as const;
 export type HostPolicyRule = keyof typeof HOST_POLICY;
@@ -372,11 +400,13 @@ export type HostErrorCode =
   | "secret_like_value"
   | "engine_error"
   | "health_timeout"
-  | "firewall_failed";
+  | "firewall_failed"
+  /** FIX-B3 L3: a container outside the allowlist with escape settings was found and stopped (report `escapes`) */
+  | "escape_attempt";
 export const HOST_ERROR_CODES = [
   "bad_signature", "wrong_server", "replayed", "seq_out_of_range", "expired", "schema_invalid", "identity_changed",
   "not_in_index", "index_unavailable", "downgrade_refused", "env_not_declared", "manifest_mismatch", "secret_like_value",
-  "engine_error", "health_timeout", "firewall_failed",
+  "engine_error", "health_timeout", "firewall_failed", "escape_attempt",
 ] as const satisfies readonly HostErrorCode[];
 
 /**
@@ -397,6 +427,8 @@ export interface HostReport {
   services: HostServiceStatus[];
   facts: HostFacts;
   firewall: HostFirewallStatus;
+  /** FIX-B3 L3 events not yet acknowledged by Core (absent or [] = none) */
+  escapes?: HostEscapeEvent[];
   /** reports still queued on the box after this one (Core was down) */
   queued?: number;
 }
@@ -453,4 +485,7 @@ export const HOST_CONFORMANCE = [
   { id: "H-11", title: "firewall probe from an app network", rule: "firewall", target: "box-probe",
     given: "From a container on the stack network (and from a stack created AFTER the agent started): connect to host :22, the engine API port, another stack's container IP, the host's IPv6 address, 169.254.169.254, and the edge with Host: localhost.",
     expect: "Every connection fails (DROP/REJECT); the report carries firewall.ok true and an unchanged rulesDigest; breaking a rule makes the next report ok:false." },
+  { id: "H-12", title: "escape attempt contained (FIX-B3 L3)", rule: "containEscapes", target: "box-probe",
+    given: "Create a container straight through the Docker API (not through a plan) with network_mode container:<engine edge>, one with privileged, one with a docker.sock bind.",
+    expect: "Within one report cycle each is stopped (its data kept), the report carries one escapes entry per container with its reasons, the server shows degraded; allowlisted engine containers are never touched." },
 ] as const satisfies readonly HostConformanceRow[];

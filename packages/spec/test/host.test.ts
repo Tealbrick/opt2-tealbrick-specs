@@ -107,6 +107,11 @@ test("report schema: metadata only (no logs, no env)", () => {
   const r = example("host-report.example.json");
   r.results[0].code = "made_up";
   assert.equal(validateReport(r), false);
+  const e = example("host-report.example.json");
+  e.escapes = [{ container: "evil", image: "alpine:3", reasons: ["namespace_mode", "docker_sock"], stoppedAt: "2026-10-22T15:00:00Z", stopped: true }];
+  assert.equal(validateReport(e), true, JSON.stringify(validateReport.errors));
+  e.escapes[0].reasons = ["root_shell"];
+  assert.equal(validateReport(e), false, "unknown escape reason");
 });
 
 test("secret-like values are caught; platform and public values are not", () => {
@@ -206,8 +211,8 @@ test("credentials: K13 host key, host caller, device scope host only for tealbri
   assert.ok(!(DEVICE_FLOW.agentClientIds as readonly string[]).includes("tealbrick-host"));
 });
 
-test("conformance rows H-1..H-11, each bound to a policy rule", () => {
-  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 11 }, (_, i) => `H-${i + 1}`));
+test("conformance rows H-1..H-12, each bound to a policy rule", () => {
+  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 12 }, (_, i) => `H-${i + 1}`));
   for (const r of HOST_CONFORMANCE) {
     assert.ok(r.rule in HOST_POLICY, r.id);
     assert.ok(r.given.length > 20 && r.expect.length > 10, r.id);
