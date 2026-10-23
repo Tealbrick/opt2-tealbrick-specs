@@ -553,7 +553,9 @@ export interface DeviceDecision {
 }
 
 // catalog
-export type DeploymentView = "absent" | "deploying" | "running" | "failed" | "needs_keys" | "update_available";
+/** v0.1.60: `unmanaged` / `stopped` = the instance's state after a server detach (mode leave_running / stop): no management
+ *  actions apply (Core refuses them with 409 not_managed); removing the app only forgets it. */
+export type DeploymentView = "absent" | "deploying" | "running" | "failed" | "needs_keys" | "update_available" | "unmanaged" | "stopped";
 export interface SettingFieldView {
   key: string;
   type: SettingType;
