@@ -542,3 +542,6 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## v0.1.60 additions (server detach modes)
 - `servers.detach` input `ServerDetachInput {srv, mode?: "leave_running" | "stop"}`, default `leave_running` (the apps keep running on the owner's server; Portal stops managing them); `stop` stops every service, volumes kept. No mode deletes data. `Server.detachMode`. `DeployState` gains `unmanaged` and `stopped` for the instances of a detached server's workspace. The catalog overlay `DeploymentView` gains the same two values (no management actions apply; Core answers 409 `not_managed`). Host plans: the final plan carries `detach: {mode}`; error code `server_detached` for a plan after it. Conformance H-13..H-15 (HOST.md).
+
+## v0.1.61 additions (own-server install)
+- `Workspace.serverInstall {portalUrl, channel, zone} | null` (read only): the values the server install command needs; null when this Portal offers no own servers or the workspace already has infrastructure. The command text belongs to the host agent's installer. Conformance rows H-16..H-18 (HOST.md).
