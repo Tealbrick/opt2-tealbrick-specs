@@ -158,7 +158,7 @@ actions run before the first engine call; a refused plan changes nothing.
 ## 6. Reports (metadata only — no log content, no env values, no secrets)
 `HostReport {server, at, lastSeq, results[], services[], facts, firewall, escapes?, queued?}`, schema `host-report.schema.json`,
 ≤ 64 KiB, every 30 s and after every plan (rate class `host_write`, 30/min per server). `results[] = {seq, index, ok, code?}`, one
-per action; `index: -1` = the whole plan was refused before any action. A result is re-sent until a report carrying it got 200.
+per action; `index: -1` = the whole plan: `ok: false` refused before any action, `ok: true` applied (v0.1.60: the acknowledgement of a plan without actions, e.g. a leave_running final plan). A result is re-sent until a report carrying it got 200.
 Error codes `HostErrorCode`: `bad_signature`, `wrong_server`, `replayed`, `seq_out_of_range`, `expired`, `schema_invalid`,
 `identity_changed`, `not_in_index`, `index_unavailable`, `downgrade_refused`, `env_not_declared`, `manifest_mismatch`,
 `secret_like_value`, `engine_error`, `health_timeout`, `firewall_failed`, `server_detached` (v0.1.60), `escape_attempt` (the `escapes[]` event:

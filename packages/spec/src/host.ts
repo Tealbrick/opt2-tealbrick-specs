@@ -428,7 +428,8 @@ export const HOST_ERROR_CODES = [
 ] as const satisfies readonly HostErrorCode[];
 
 /**
- * One result per action of a decided plan. `index` = action index; -1 = the whole plan was refused before any engine call.
+ * One result per action of a decided plan. `index` = action index; -1 = the whole plan: `ok: false` = refused before any
+ * engine call, `ok: true` = applied (v0.1.60: how the box acknowledges a plan without actions, e.g. a leave_running final plan).
  * Engine phase: actions run in order and stop at the first engine failure (that action `engine_error` / `health_timeout`,
  * the rest not run → not reported); the seq counts as decided either way.
  */
