@@ -14,7 +14,7 @@ import type {
 } from "./credentials.ts";
 import type {
   DeviceHostTokenResult, DeviceRequestHost, DeviceStartHostInput, HostPlanJws, HostPlansQuery, HostReport, HostReportAck,
-  Server, ServerId, ServerList, ServerListInput, ServerRefInput,
+  Server, ServerDetachInput, ServerId, ServerList, ServerListInput, ServerRefInput,
 } from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
 
@@ -553,7 +553,9 @@ export interface DeviceDecision {
 }
 
 // catalog
-export type DeploymentView = "absent" | "deploying" | "running" | "failed" | "needs_keys" | "update_available";
+/** v0.1.60: `unmanaged` / `stopped` = the instance's state after a server detach (mode leave_running / stop): no management
+ *  actions apply (Core refuses them with 409 not_managed); removing the app only forgets it. */
+export type DeploymentView = "absent" | "deploying" | "running" | "failed" | "needs_keys" | "update_available" | "unmanaged" | "stopped";
 export interface SettingFieldView {
   key: string;
   type: SettingType;
@@ -795,7 +797,9 @@ export interface HookSetInput { ws: WorkspaceId; ins: InstanceId; hookId: string
 // instances (deployment + registration in one record)
 /** v0.1.22: `refused` = the bridge refused the app's manifest and the app never ran (terminal until a clean report or a new
  *  release; `lastError` carries the refusal code). It returns to `registering` / `running` on a clean bridge report. */
-export type DeployState = "queued" | "deploying" | "registering" | "running" | "failed" | "refused" | "cancelled" | "removing" | "removed";
+/** v0.1.60: after a server detach the instances of that workspace are `unmanaged` (mode leave_running: they keep running on the
+ *  owner's server, Portal no longer manages them) or `stopped` (mode stop: stopped there, data kept). Neither deletes data. */
+export type DeployState = "queued" | "deploying" | "registering" | "running" | "failed" | "refused" | "cancelled" | "removing" | "removed" | "unmanaged" | "stopped";
 /** v0.1.22: bridge manifest refusal codes Core copies into `Instance.lastError.code` (a manifest validator issue code passes
  *  through as a string; `manifest_rejected` = several codes in one report). */
 export type BridgeManifestRefusalCode = "manifest_mismatch" | "bridge_too_old" | "manifest_rejected" | (string & {});
@@ -1281,7 +1285,7 @@ export interface SchemaMap {
   BridgeConfig: BridgeConfig; BridgeAckInput: BridgeAckInput; BridgeAckResult: BridgeAckResult;
   RouteRegistryDoc: RouteRegistryDoc; Health: Health;
   /** v0.1.58 (S1-0) */
-  Server: Server; ServerList: ServerList; ServerListInput: ServerListInput; ServerRefInput: ServerRefInput;
+  Server: Server; ServerList: ServerList; ServerListInput: ServerListInput; ServerRefInput: ServerRefInput; ServerDetachInput: ServerDetachInput;
   HostPlansQuery: HostPlansQuery; HostPlanJws: HostPlanJws; HostReport: HostReport; HostReportAck: HostReportAck;
 }
 export type SchemaName = keyof SchemaMap;
@@ -1466,8 +1470,8 @@ export const ROUTES = [
   // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)
   { opId: "servers.list", method: "GET", path: "/servers", auth: BO, exposure: "gateway", transport: "json", query: ["ws"], input: "ServerListInput", output: "ServerList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
   { opId: "servers.get", method: "GET", path: "/servers/{srv}", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
-  /** S1 meaning: one final plan stops every service (volumes KEPT), the key is unpaired after that plan, the workspace infrastructure is cleared. No delete op in S1. */
-  { opId: "servers.detach", method: "POST", path: "/servers/{srv}/detach", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "ServerRefInput", output: "Server", rate: "write", bodyLog: "meta", audit: "server.detach", draftable: true, confirm: true, idempotent: true, registry: "provider" },
+  /** v0.1.60: `mode` leave_running (default: the apps keep running, Portal stops managing them) or stop (stop every service, volumes KEPT). One final plan, the key is unpaired after it, the workspace infrastructure is cleared. No data is deleted. */
+  { opId: "servers.detach", method: "POST", path: "/servers/{srv}/detach", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "ServerDetachInput", output: "Server", rate: "write", bodyLog: "meta", audit: "server.detach", draftable: true, confirm: true, idempotent: true, registry: "provider" },
 
   // v0.1.58 (S1-0): host-agent-facing (outbound only from the server; K13 host assertion)
   /** 200 application/jose = ONE plan (lowest unexpired seq > after); 304 after `wait` s. Carries one-time codes: never stored, never logged. */

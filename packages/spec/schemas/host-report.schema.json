@@ -69,7 +69,8 @@
               "engine_error",
               "health_timeout",
               "firewall_failed",
-              "escape_attempt"
+              "escape_attempt",
+              "server_detached"
             ]
           }
         }

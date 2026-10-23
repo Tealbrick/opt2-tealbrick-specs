@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { CALLER_TYPES, CREDENTIAL_KINDS, CREDENTIAL_REGISTRY, DEVICE_FLOW, TYP } from "../src/credentials.ts";
 import {
-  HOST_BOX_OWNED_ENV, HOST_CONFORMANCE, HOST_DENIED_ENV, HOST_ERROR_CODES, HOST_FORBIDDEN_KEYS, HOST_LIMITS, HOST_PATTERNS,
+  HOST_BOX_OWNED_ENV, HOST_CONFORMANCE, HOST_DENIED_ENV, HOST_DETACH_DEFAULT, HOST_ERROR_CODES, HOST_FORBIDDEN_KEYS, HOST_LIMITS, HOST_PATTERNS,
   HOST_PLATFORM_ENV, HOST_PLATFORM_GENERATED, HOST_POLICY, HOST_RESERVED_ACTION_KINDS, HOST_SECRET_VALUE_PATTERNS,
 } from "../src/host.ts";
 import { AUDIT_ACTIONS, RATE_CLASSES, ROUTES, TRANSPORTS } from "../src/routes.ts";
@@ -149,12 +149,27 @@ test("path rules: no system path, no empty/dot segment; health path is never a U
 test("final (detach) plan holds only stop actions; companions use their manifest id; volume ids may use underscores", () => {
   const p = plan();
   p.final = true;
+  p.detach = { mode: "stop" };
   assert.equal(validatePlan(p), false, "final plan with ensure_service");
   p.actions = [p.actions[1]];
   assert.equal(validatePlan(p), true, JSON.stringify(validatePlan.errors));
   p.actions = [];
-  assert.equal(validatePlan(p), true, "a final plan may be empty (the box stops all its services)");
+  assert.equal(validatePlan(p), true, "a stop plan may be empty (the box stops all its services)");
+  p.detach = { mode: "leave_running" };
+  assert.equal(validatePlan(p), true, "leave_running: a release notice without actions");
+  p.actions = [plan().actions[1]];
+  assert.equal(validatePlan(p), false, "leave_running never stops anything");
+  p.actions = [];
+  delete p.detach;
+  assert.equal(validatePlan(p), false, "a final plan names its detach mode");
+  p.detach = { mode: "wipe" };
+  assert.equal(validatePlan(p), false, "only the two modes exist");
   delete p.final;
+  p.detach = { mode: "stop" };
+  p.actions = [plan().actions[1]];
+  assert.equal(validatePlan(p), false, "detach only on a final plan");
+  delete p.detach;
+  p.actions = [];
   assert.equal(validatePlan(p), false, "a normal plan needs an action");
   const c = plan();
   const s = svc(c) as Record<string, any>;
@@ -193,6 +208,8 @@ test("routes: host rows take only the host class, never store or log bodies; ser
   assert.deepEqual([...detach.auth], ["browser"]);
   assert.equal(detach.confirm, true);
   assert.equal(detach.audit, "server.detach");
+  assert.equal(detach.input, "ServerDetachInput");
+  assert.equal(HOST_DETACH_DEFAULT, "leave_running");
   for (const r of servers.filter((x) => x.method === "GET")) assert.ok((r.auth as readonly string[]).includes("owner-cli"), r.opId);
   // RT1 unchanged: the owner CLI calls only reads, drafts.* and its own logout
   for (const r of ROUTES) if ((r.auth as readonly string[]).includes("owner-cli")) assert.ok(r.method === "GET" || r.opId.startsWith("drafts.") || r.opId === "owner_sessions.logout", r.opId);
@@ -215,8 +232,8 @@ test("credentials: K13 host key, host caller, device scope host only for tealbri
   assert.ok(!(DEVICE_FLOW.agentClientIds as readonly string[]).includes("tealbrick-host"));
 });
 
-test("conformance rows H-1..H-12, each bound to a policy rule", () => {
-  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 12 }, (_, i) => `H-${i + 1}`));
+test("conformance rows H-1..H-15, each bound to a policy rule", () => {
+  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 15 }, (_, i) => `H-${i + 1}`));
   for (const r of HOST_CONFORMANCE) {
     assert.ok(r.rule in HOST_POLICY, r.id);
     assert.ok(r.given.length > 20 && r.expect.length > 10, r.id);
