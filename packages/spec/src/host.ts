@@ -375,6 +375,7 @@ export const HOST_SECRET_VALUE_PATTERNS = [
  * actions run before the first engine call (a refused plan changes nothing). Ids are stable; HOST_CONFORMANCE refers to them.
  */
 export const HOST_POLICY = {
+  pairing: "Pairing (device flow, scope host, HOST.md \u00a72): the agent generates its key on the box and sends only the public key and the facts; the owner sees the user code and the approval URL, never the device code; polling honours authorization_pending and slow_down; the token answer is accepted only when key_thumbprint equals THIS box's key; access_denied, expiry or another pinned key end the flow with an error and no pairing state is kept.",
   verifySignature: "Plan JWS verifies under a key listed in the `portalKeySet` statement (active or pending), and that statement verifies under a root pinned in the agent build (dev or prod channel, chosen at build time); the key-set seq never goes back (bad_signature).",
   bindServer: "`server` and `aud`/`sub` equal this box; `workspace` equals the paired workspace (wrong_server).",
   monotonicSeq: "The box keeps lastSeq = the highest seq it DECIDED (applied, or refused after the signature and server binding verified), persisted across restarts, and polls with after = lastSeq. A verified plan with seq \u2264 lastSeq is refused (replayed); one with seq > lastSeq + seqMaxJump is refused without moving lastSeq (seq_out_of_range) and reported; a plan whose signature fails never moves lastSeq. Core serves only plans the box has not decided yet, so a reported refusal never blocks later plans.",
@@ -516,4 +517,13 @@ export const HOST_CONFORMANCE = [
   { id: "H-15", title: "no plan after a final plan", rule: "finalPlan", target: "agent-unit",
     given: "After a final plan of either mode: a valid plan with a higher seq, signed for this server.",
     expect: "Refused server_detached; nothing applied; the box stays unmanaged." },
+  { id: "H-16", title: "pairing by device flow", rule: "pairing", target: "agent-unit",
+    given: "tealbrick host pair against a Core that answers device.start, then authorization_pending, slow_down and finally the host token result.",
+    expect: "device.start carries only the public key and the facts; the owner is shown the user code and the approval URL, never the device code; the poll interval follows slow_down; the result is accepted because key_thumbprint equals the box's own key." },
+  { id: "H-17", title: "pairing key pin", rule: "pairing", target: "agent-unit",
+    given: "The same flow ending in access_denied, in expired_token, and in a token result whose key_thumbprint is another key.",
+    expect: "Each ends the flow with an error; the box keeps no server id and never polls host.plans." },
+  { id: "H-18", title: "public route for the bridge only", rule: "publicHosts", target: "both",
+    given: "Plans with the bridge (publicDomain, publicHosts) and an app; then on a real box the bridge's two public hosts.",
+    expect: "Only the bridge gets a public route (its two policy-checked hosts on its port); each host is verified once and serves TLS; an already active host is left alone; a failed verify fails the deploy; no app is reachable from outside." },
 ] as const satisfies readonly HostConformanceRow[];

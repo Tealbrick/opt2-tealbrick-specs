@@ -186,7 +186,7 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
 H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in
 index refused · H-6 downgrade refused (one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) ·
 H-8 forbidden runtime settings refused · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
-running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan. Each row names its `HOST_POLICY` rule and its target
+running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan · H-16 pairing by device flow · H-17 pairing key pin · H-18 public route for the bridge only. Each row names its `HOST_POLICY` rule and its target
 (`agent-unit`, `box-probe`, `both`); `given` / `expect` are the test text.
 
 ## 10. Decisions on the draft's open items (2026-10-22)
