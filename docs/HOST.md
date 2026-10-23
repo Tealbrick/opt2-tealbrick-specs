@@ -41,7 +41,7 @@ signature only proves that Core made a plan. The box enforces a closed local pol
    (409 conflict, `details.reason = infrastructure_set`; S1 never replaces — moving a workspace is a later migration feature),
    a paused or standalone workspace, a key already pinned for a live server (409 conflict).
 6. The agent polls `device.token` (RFC 8628). Result `DeviceHostTokenResult {scope: "host", server_id, workspace_id, key_thumbprint}`
-   — no token; the box checks `key_thumbprint` equals its own key and from now on signs host assertions.
+   — no token; the box checks `key_thumbprint` equals its own key and from now on signs host assertions. v0.1.62: the answer also carries `channel` (`"stable" | "dev"`, the chosen workspace's channel); the box uses it for every release-index check (it replaces a channel given at install time). Core refuses a channel change of a workspace that has a paired server (409 conflict, `details.reason = server_channel_locked`); to change it, detach and pair again.
 - The device code is single-use and lives 10 min (K2); it is redeemed before the box can fetch any plan.
 
 ## 3. Server object
@@ -114,7 +114,7 @@ actions run before the first engine call; a refused plan changes nothing.
    create and refuses another identity for that name forever, also after a stop (`identity_changed`). A reinstall of the same
    app (new TB_INSTANCE_ID) keeps the name and its volumes.
 5. **imageFromIndex** — the box fetches `index.json` + `index.jws` itself, verifies them with the release keys pinned in the agent
-   build; entry `releaseId` exists, product, channel (box config, default stable) and `manifestDigest` match, and `image` =
+   build; entry `releaseId` exists, product, channel (the box's channel: the pairing answer's `channel`, v0.1.62) and `manifestDigest` match, and `image` =
    entry.image (component null) | entry.services[component].image | the digest-pinned image of manifest runtime.services[component]
    (`not_in_index`). Index or manifest unreachable → nothing applied (`index_unavailable`).
 6. **noDowngrade** — a version floor per (product, component), persisted, across every serviceName, running or stopped. The
@@ -186,7 +186,7 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
 H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in
 index refused · H-6 downgrade refused (one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) ·
 H-8 forbidden runtime settings refused · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
-running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan · H-16 pairing by device flow · H-17 pairing key pin · H-18 public route for the bridge only. Each row names its `HOST_POLICY` rule and its target
+running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan · H-16 pairing by device flow · H-17 pairing key pin · H-18 public route for the bridge only · H-19 pairing takes the workspace channel. Each row names its `HOST_POLICY` rule and its target
 (`agent-unit`, `box-probe`, `both`); `given` / `expect` are the test text.
 
 ## 10. Decisions on the draft's open items (2026-10-22)
