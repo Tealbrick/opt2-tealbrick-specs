@@ -1,6 +1,6 @@
 # opt2 specs — HOST (customer server: pairing, signed plans, local policy, reports)
 
-Status: v0.1.58 (S1-0, frozen 2026-10-22; wording revised in v0.1.59). Sprint S1 "deploy outside Railway" (C308).
+Status: v0.1.58 (S1-0, frozen 2026-10-22; wording revised in v0.1.59; detach modes in v0.1.60). Sprint S1 "deploy outside Railway" (C308).
 Machine-readable source of truth: `packages/spec/src/host.ts` (types, `HOST_LIMITS`, `HOST_PATTERNS`, `HOST_POLICY`,
 `HOST_PLATFORM_ENV`, `HOST_BOX_OWNED_ENV`, `HOST_SECRET_VALUE_PATTERNS`, `HOST_CONFORMANCE`), route rows in `routes.ts`
 (`servers.*`, `host.*`, RT9), K13 + `TYP.hostAssertion` / `TYP.hostPlan` + `DEVICE_FLOW.hostClientIds` in `credentials.ts`,
@@ -54,17 +54,21 @@ firewall check failed or a service is `failed` / its health `failing` · `offlin
 |---|---|---|---|
 | `servers.list` | GET /servers?ws= | browser, owner-cli | the account's servers, newest first; `ws` = only that workspace's server |
 | `servers.get` | GET /servers/{srv} | browser, owner-cli | |
-| `servers.detach` | POST /servers/{srv}/detach `{srv}` | browser; draftable, confirm, Idempotency-Key | returns the Server; repeat-safe; S1: stop + keep data + unpair (below). No delete op in S1 |
+| `servers.detach` | POST /servers/{srv}/detach `{srv, mode?}` | browser; draftable, confirm, Idempotency-Key | returns the Server; repeat-safe; mode `leave_running` (default) or `stop` (below). No mode deletes data |
 | `host.plans` | GET /host/plans?after=&wait= | host; longpoll | ONE plan JWS or 304 |
 | `host.report` | POST /host/reports | host | `HostReport` → `HostReportAck`; also the heartbeat |
 
-**Detach (S1)**: Core issues one final plan (`final: true`, only `stop_service` actions) that stops every `tb-` service it
-created on the server (volumes KEPT), marks the server `detached`, clears the workspace infrastructure and marks that
-workspace's instances removed with data kept. Until the box reports that plan applied, Core keeps serving it on `host.plans`
-(re-signed with a new seq when it expires, so a box that was offline still gets it) and accepts `host.report`; after that every
-host assertion of the server is refused (401). The box, after applying a final plan, records the pairing as detached, refuses
-every later plan and stops polling. The data stays on the box. Re-pairing = a new device flow (new `srv_`);
-re-adopting kept data on a server is out of S1.
+**Detach (v0.1.60: two modes)**: `servers.detach {srv, mode?}`, default `leave_running`. Core issues one final plan
+(`final: true`, `detach: {mode}`), marks the server `detached` (`Server.detachMode`), clears the workspace infrastructure and
+sets that workspace's instances to `unmanaged` (leave_running: they keep running on the owner's server, Portal no longer
+manages them) or `stopped` (stop: stopped there, data kept). No mode deletes data.
+- `leave_running`: the final plan has no actions. The box stops nothing, leaves every container and volume as it is, turns
+  containment off, keeps its firewall rules (the owner removes them with an explicit command) and records itself unmanaged.
+- `stop`: the final plan holds stop_service actions; the box stops every tb- service it created, keeps every volume, then
+  records itself unmanaged.
+- Both: the box acknowledges the final plan in one last report, then refuses any later plan (`server_detached`) and stops
+  polling and reporting. Until that report Core keeps serving the final plan (re-signed with a new seq when it expires) and
+  accepts `host.report`; after it every host assertion of the server is refused (401). Re-pairing = a new device flow (new `srv_`).
 
 ## 4. Plans (signed by Core, CHECKED by the box)
 - `host.plans?after=<last applied seq>&wait=<s>`: Core answers `200 application/jose` with ONE plan — the lowest unexpired
@@ -132,8 +136,9 @@ actions run before the first engine call; a refused plan changes nothing.
    "/data") (`manifest_mismatch`). Not on own servers in S1: TB_RESTORE_FROM (snapshot restore), TB_KEK_PREVIOUS (KEK rotation).
 9. **noSecretValues** — no env value matches `HOST_SECRET_VALUE_PATTERNS` (`secret_like_value`).
 10. **generatedNotSent** — the adapter GENERATES the engine config; no compose/engine spec from outside reaches the engine.
-11. **neverDeleteVolumes** / **finalPlan** — no action deletes a volume in S1. A `final` plan (only stop actions, may be empty)
-   makes the box stop EVERY tb- service it created, keep all data, refuse every later plan and stop polling (§3).
+11. **neverDeleteVolumes** / **finalPlan** — no action deletes a volume. A `final` plan carries `detach: {mode}`:
+   leave_running (no actions: stop nothing) or stop (stop EVERY tb- service it created, keep all data); then the box refuses
+   every later plan (`server_detached`) and stops polling (§3).
 12. **resources** — clamped to the facts minus 1 GiB RAM / 0.5 CPU reserve; box defaults when null.
 13. **ownInfraOrigins** — after every applied change: rewrite the bridge's `TB_OWN_INFRA_ORIGINS` (exact
    `http://<serviceName>:<port>` origins of the running tb- APP services the agent created in this stack, sorted, comma-separated)
@@ -156,7 +161,7 @@ actions run before the first engine call; a refused plan changes nothing.
 per action; `index: -1` = the whole plan was refused before any action. A result is re-sent until a report carrying it got 200.
 Error codes `HostErrorCode`: `bad_signature`, `wrong_server`, `replayed`, `seq_out_of_range`, `expired`, `schema_invalid`,
 `identity_changed`, `not_in_index`, `index_unavailable`, `downgrade_refused`, `env_not_declared`, `manifest_mismatch`,
-`secret_like_value`, `engine_error`, `health_timeout`, `firewall_failed`, `escape_attempt` (the `escapes[]` event:
+`secret_like_value`, `engine_error`, `health_timeout`, `firewall_failed`, `server_detached` (v0.1.60), `escape_attempt` (the `escapes[]` event:
 `{container, image, reasons[], stoppedAt, stopped}`, reasons `namespace_mode | privileged | capabilities | devices | docker_sock |
 host_bind`). Engine phase: actions run in order and stop at the first
 engine failure; the plan's seq counts as decided either way. Answer `HostReportAck {accepted: true, serverState, pendingSeq}` (`pendingSeq` = the next deliverable plan, or
@@ -181,7 +186,7 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
 H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in
 index refused · H-6 downgrade refused (one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) ·
 H-8 forbidden runtime settings refused · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
-running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped. Each row names its `HOST_POLICY` rule and its target
+running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan. Each row names its `HOST_POLICY` rule and its target
 (`agent-unit`, `box-probe`, `both`); `given` / `expect` are the test text.
 
 ## 10. Decisions on the draft's open items (2026-10-22)

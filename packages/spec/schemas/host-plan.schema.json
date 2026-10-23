@@ -58,7 +58,22 @@
     },
     "final": {
       "const": true,
-      "description": "detach: only stop_service actions (HOST_POLICY.finalPlan)"
+      "description": "detach: the final plan (HOST_POLICY.finalPlan); requires `detach`"
+    },
+    "detach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "leave_running",
+            "stop"
+          ]
+        }
+      }
     },
     "portalKeySet": {
       "type": "string",
@@ -75,31 +90,66 @@
       }
     }
   },
-  "if": {
-    "required": [
-      "final"
-    ]
-  },
-  "then": {
-    "properties": {
-      "actions": {
-        "items": {
-          "properties": {
-            "kind": {
-              "const": "stop_service"
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "final"
+        ]
+      },
+      "then": {
+        "required": [
+          "detach"
+        ],
+        "properties": {
+          "actions": {
+            "items": {
+              "properties": {
+                "kind": {
+                  "const": "stop_service"
+                }
+              }
             }
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "detach"
+          ]
+        },
+        "properties": {
+          "actions": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "detach"
+        ],
+        "properties": {
+          "detach": {
+            "properties": {
+              "mode": {
+                "const": "leave_running"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "actions": {
+            "maxItems": 0
           }
         }
       }
     }
-  },
-  "else": {
-    "properties": {
-      "actions": {
-        "minItems": 1
-      }
-    }
-  },
+  ],
   "$defs": {
     "srvId": {
       "type": "string",
