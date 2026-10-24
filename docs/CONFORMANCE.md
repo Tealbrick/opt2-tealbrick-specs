@@ -265,3 +265,19 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `RM-16` [Core] persona and `modelRoleRequirements` go only to a bridge with cap `model_roles`; a bridge without it gets neither and `KeyStatus.rolesSupported` is `false`.
 - `RM-17` [SDK] `modelRole()` → `null` on a 404 without refuse code (bridge without the cap); a required role then gives `needs_keys`.
 - `RM-11` [Knowledge] `knowledge__ask` answers when `reasoning` resolves and is reachable by a granted agent; without it the tool says which role to set.
+
+## v0.1.68 rows (C336 RQ-2, RQ-3; proposed by QA on specs#47)
+- `A11.deep_datasets_anyof_empty` — `anyOf: []` → a dataset read is refused or `not_found`; a read naming no dataset is refused.
+- `A11.deep_datasets_noneof` — `noneOf` excludes the listed datasets from reads, lists and overviews.
+- `A11.deep_datasets_identity` — alias, quoted, NFD, zero-width and case variants of a dataset name never match another dataset's canonical id (resolved first; unknown → `not_found`).
+- `A11.deep_datasets_merge` — two narrowings → `anyOf` intersect, `noneOf` unite, the key survives the policy app's merge.
+- `A11.deep_datasets_old_reader` — a v1-only reader refuses a `v: 2` narrowing (`narrowing_unsupported`).
+- `A11.deep_datasets_malformed` — `{}`, `null`, non-array, non-string, over-limit → `narrowing_unsupported`.
+- `B29.hook_target_tool_list` / `_call` / `_relay` — `target.tool` = the resolution's tool on each path; absent for static ops and search; a resolution that differs from the requested name → `dynamic_resolve_failed`.
+- `B29.hook_tool_bypass` — case, space and alias variants of a held tool are refused or resolve to the same canonical tool (the hold applies).
+- `C-SO-1` — a secretOutput call writes no idempotency row, no receipt output, no log line with a canary secret, and calls no `after` hook (the check fails if one is called).
+- `C-SO-2` — an agent caller is refused `secret_output_app_only` and the tool is not listed for agents.
+- `C-SO-3` — `ctx.schedule` of the op is refused `secret_output_not_schedulable`.
+- `C-SO-4` — a handler that throws an error containing a canary → the envelope and the receipt carry neither the canary nor the message.
+- `C-SO-5` — hold, then approve → the output reaches only the retry; nothing is stored.
+

@@ -317,7 +317,7 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
  *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles"] as const;
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "hook_tool", "secret_output"] as const;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
@@ -425,7 +425,7 @@ export interface HookCallInfo {
    *  config (never from input or a manifest name); a policy app matches "calls from product X" on it, since an instance id
    *  changes on reinstall. Absent for agents, and for a caller the bridge cannot map (then treat it as unverified). */
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId };
-  /** v0.1.66 (C336 RQ-2): `tool` = the dynamic catalog entry name for a dynamic call (`crud`/`effect`/`holdFamily` are then
+  /** v0.1.68 (C336 RQ-2, cap `hook_tool`): `tool` = `DynamicResolution.tool` of a dynamic call (`crud`/`effect`/`holdFamily` are then
    *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
   target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
   input?: JsonValue;
