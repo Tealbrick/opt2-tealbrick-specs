@@ -116,6 +116,7 @@ Own-infrastructure bridge (PRD §3 rule 5): `tealbrick bridge enrol --code - [--
 - Connect to the bridge like any MCP client (relay stdio or remote URL); hold no policy, no grants, no person credential; the agent process env is allow-listed (CREDENTIALS §12).
 - On a held result (`structuredContent {status: "held", holdId, expiresAt, checkWith}`) they show "waiting for owner approval in <product>" and poll `checkWith` (≥ 10 s interval) until `approved` (then repeat the same call, SDK-API §4.3), `denied`, or expiry. They never approve, retry with different input, or treat a hold as an error.
 - Eve code lives only in `harness-eve` (REPOS §2).
+- Knowledge hooks (harness wave 1): `tealbrick hook [<event>] [--harness claude-code|hermes]` and `harness-claude` `knowledgeHooks()` follow HARNESS-HOOKS.md (no policy, fail-open, exit 0 always). `tealbrick hook --print-settings` prints the Claude Code `hooks` block; nothing writes it implicitly (§6 rule).
 
 ## 8. Environment variables (CLI; one name per setting)
 | Name | Meaning |
