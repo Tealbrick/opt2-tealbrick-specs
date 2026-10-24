@@ -1153,8 +1153,9 @@ export const PUSH = {
   appIdMax: 200,
   /** at most one push per (workspace, kind) in this window */
   minIntervalPerWorkspaceS: 60,
-  /** push kinds in this version; the payload is `{ kind, ws }` + this fixed text, nothing else */
-  kinds: { decisions: "A decision is waiting" },
+  /** push kinds in this version; the payload is this fixed text + `{ kind, ws }` (decisions) or `{ kind, osn }` (session_added), nothing else.
+   *  session_added (C337, residual risk of a phished tbm code): to the person's OTHER push devices when a new tbm session is created. */
+  kinds: { decisions: "A decision is waiting", session_added: "New TBM sign-in on your account. Not you? Open TBM." },
 } as const satisfies { clients: readonly OwnerSessionClient[]; platforms: readonly PushPlatform[]; tokenMax: number; appIdMax: number; minIntervalPerWorkspaceS: number; kinds: Record<string, string> };
 export type PushKind = keyof typeof PUSH.kinds;
 
