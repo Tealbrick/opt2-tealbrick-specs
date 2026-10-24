@@ -316,8 +316,9 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule). */
 /** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
- *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles"] as const;
+ *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
+ *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -385,8 +386,10 @@ export interface StatusReport {
   /** v0.1.63 (BRIDGE §15.5): one row per declared role per instance — labels only, never a base URL, key name or key value.
    *  `set` = a binding resolves for it; `policyOk` = that binding meets the declared `minPolicy`. Absent (older bridge) = unknown. */
   roles?: ModelRoleStatus[];
-  /** display-only, ≤ 80 chars, no third-party identifiers */
-  scopeSummaries: { agt: AgentId; ins: InstanceId; label: string }[];
+  /** display-only, ≤ 80 chars, no third-party identifiers. v0.1.65 (C331 D8): `sources` = the app's ScopeSummaryResult.sources,
+   *  forwarded as given (≤ SCOPE_SOURCES_MAX, each label ≤ SCOPE_SOURCE_LABEL_MAX; a malformed item is dropped, never repaired);
+   *  absent when the app's SDK does not report them. */
+  scopeSummaries: { agt: AgentId; ins: InstanceId; label: string; sources?: ScopeSourceItem[] }[];
   connectionsCreated: { con: ConnectionId; agt: AgentId; method: "pairing"; clientName: string; createdAt: IsoTime; pairingJti: Ulid }[];
   connectionsRevoked: { con: ConnectionId; reason: "refresh_reuse" | "client_revoke" }[];
   claims: ClaimRecord[];
@@ -494,7 +497,23 @@ export interface BridgeOpBodies {
 }
 /** v0.1.50 (C283 A1): `admittedOps` = this agent's STATIC ops with a scopeType whose crud an owner-set primary row admits
  *  (possibly above grant.crud); the bridge lists those tools too. Display only (the SDK authorizes each call). */
-export interface ScopeSummaryResult { agent: AgentId; label: string; admittedOps?: string[] }
+export interface ScopeSummaryResult {
+  agent: AgentId;
+  label: string;
+  admittedOps?: string[];
+  /** v0.1.65 (C331 D8): the scope instances this agent is assigned (display only, ≤ SCOPE_SOURCES_MAX). Absent = the SDK does not
+   *  report sources; [] = the agent has no assignment. */
+  sources?: ScopeSourceItem[];
+}
+/** v0.1.65 (C331 D8): one scope instance an agent may use, as the app's owner UI names it (a Connect account, a Knowledge area).
+ *  `id` = the app's OWN scope instance id (ScopeInstance.id, e.g. Connect `cna_…`), never a provider's id (no Stripe, Slack or
+ *  Google id). `label` = the scope instance label (≤ 60) with control characters and every format character (`\p{Cc}`,
+ *  `\p{Cf}`: zero-width, bidi marks) removed by the SDK and again by Core; apps never use a third-party identifier (an email
+ *  address, a phone number, a handle) as an instance label they create (the owner may type one). `access` = an access level id of
+ *  that scope type. Display only: Core shows it on the canvas; the SDK authorizes every call. */
+export interface ScopeSourceItem { type: SnakeId; id: string; label: string; access: SnakeId }
+export const SCOPE_SOURCES_MAX = 20;
+export const SCOPE_SOURCE_LABEL_MAX = 60;
 
 // ── MCP surface (BRIDGE §7) ──────────────────────────────────────────────────
 export const TOOL_NAME_RULE = {

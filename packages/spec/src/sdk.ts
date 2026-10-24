@@ -22,7 +22,8 @@ import type {
   OpResult,
   PreUpdateSnapshotRef,
   SchemaVersion,
-  ScopeSummaryResult
+  ScopeSourceItem,
+  ScopeSummaryResult,
 } from "./bridge.ts";
 import type {
   AgentId,
@@ -40,6 +41,7 @@ import type {
   InstanceRef,
   KeySetStatementClaims,
   PersonId,
+  PersonOpClient,
   PersonTicketLaunchClaims,
   PortalRef,
   PortalRootChannel,
@@ -71,7 +73,7 @@ import type {
 import type { ModelRole } from "./models.ts";
 
 // Wire shapes owned by bridge.ts / credentials.ts / manifest.ts, re-exported for SDK users (not re-declared).
-export type { AppAttention, AppStatus, BridgeOp, BridgeOpBodies, CallEnvelope, ClaimRequest, ClaimResponse, HookRequest, HookResponseByPhase, InstanceSlice, OnBehalfOfContext, OpCallBody, OpResult, ScopeSummaryResult };
+export type { AppAttention, AppStatus, BridgeOp, BridgeOpBodies, CallEnvelope, ClaimRequest, ClaimResponse, HookRequest, HookResponseByPhase, InstanceSlice, OnBehalfOfContext, OpCallBody, OpResult, ScopeSourceItem, ScopeSummaryResult };
 
 // ════════════════════════════════════════════════════════════════════════════
 // §A  @opt2-tealbrick/manifest — pure, synchronous, no I/O
@@ -826,8 +828,11 @@ export interface ScopeStore {
   set(principal: PersonPrincipal, agent: AgentId, type: string, instanceId: string, access: string | null): Promise<void>;
   /** applies manifest defaultGrants once per (agent, type) */
   applyDefaults(agent: SliceAgent): Promise<void>;
-  /** renders scopes[].summaryTemplate, ≤ 80 chars */
+  /** renders scopes[].summaryTemplate, ≤ 80 chars; v0.1.65: a type with no row for this agent adds `summaryEmpty` when declared */
   summary(agent: AgentId): Promise<string>;
+  /** v0.1.65 (C331 D8): this agent's rows as ScopeSourceItem (instance label, access id), ordered by type then label, at most
+   *  SCOPE_SOURCES_MAX; the default `scope_summary` answer carries them as `sources`. */
+  sources(agent: AgentId): Promise<ScopeSourceItem[]>;
 }
 
 // ── Keys (CORE §10) ──
@@ -963,9 +968,15 @@ export interface PersonPrincipal {
   ws: WorkspaceId;
   instance: InstanceId;
   iss: PortalRef | BridgeRef | InstanceRef;
-  /** epoch ms; absolute 8 h */
+  /** epoch ms; absolute 8 h (v0.1.64: for a relayed op = K14 exp × 1000) */
   sessionExpiresAt: number;
+  /** v0.1.64 (C326): native owner-session client of a relayed person op (K14 `cli`, SDK-API §21); absent for browser sessions */
+  via?: PersonOpClient;
 }
+/** v0.1.64 (C332a(4), SDK-API §21): false when a relayed decision (`via` set) may not decide a hold of this family — a family in
+ *  PERSON_OP_RELAY.refuseFamiliesFor[via], a null / unknown family, or a `via` without an entry there (all deny by default).
+ *  Browser sessions (`via` undefined) → true. */
+export declare function familyAllowedFor(via: PersonOpClient | undefined, family: HoldFamily | null): boolean;
 export declare const SESSION_COOKIE: "tb_session";
 export declare const CSRF_HEADER: "TB-CSRF";
 export interface SessionInfo {
