@@ -389,7 +389,8 @@ export interface StatusReport {
    *  v0.1.25 (C117): kind `config` + code `hook_not_listed` (+ `ins` of the hook app) = a matching declared hook missing from config.hooks (call refused).
    *  v0.1.14 (L3): `bridge_op` = a failed catalog / resolve / mark / scope_summary call to an app (code = the app's refusal or transport error).
    *  v0.1.17 (L3, C104): `manifest` = an app manifest the bridge refused (code = the refusal, e.g. `manifest_mismatch`, a validator code, `bridge_too_old`)
-   *  v0.1.63: kind `config` + code `persona_too_long` = an agent persona over PERSONA_MAX_CHARS, dropped for that agent (BRIDGE §15.6) */
+   *  v0.1.63: kind `config` + code `persona_too_long` = an agent persona over PERSONA_MAX_CHARS, dropped for that agent (BRIDGE §15.6);
+   *  spec follow-up #49: code `persona_invalid` = a persona that does not match PERSONA_PATTERN, dropped the same way */
   rejected: {
     kind: "config" | "grant" | "slice" | "assertion" | "ticket" | "pairing" | "claim" | "bridge_op" | "manifest";
     code: BridgeErrorCode | string;
