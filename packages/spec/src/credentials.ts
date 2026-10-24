@@ -92,8 +92,9 @@ export const LIFETIME_S = {
    *  account disable and the absolute life end it as before.
    *  v0.1.64 (C332): applies to stored client `tbm` (Teal Brick Mobile) too. */
   ownerTbdSessionIdle: 7 * 86400,
-  /** v0.1.64 (C326): K14 relayed person op, exp − iat (> queueTtlS + bridgeForwardS; the app refuses it later) */
-  personOp: 20,
+  /** v0.1.64 (C326): K14 relayed person op, exp − iat. > queueTtlS + bridgeForwardS, and exp + PERSON_OP_RELAY.expLeewayS ≤ Core's
+   *  answer deadline (coreWaitS): the app never runs a K14 after Core answered the caller (QA S3). */
+  personOp: 10,
   agentAccess: 900,
   agentRefreshSliding: 30 * 86400,
   /** previous refresh token accepted once within this window (CORE I12) */
@@ -292,8 +293,9 @@ export interface PersonTicketKeysClaims extends BaseClaims<PortalOrStandaloneIss
 export type PersonTicketClaims = PersonTicketLaunchClaims | PersonTicketKeysClaims;
 
 // ── K14 relayed person op (v0.1.64, C326) ────────────────────────────────────
-/** Owner-session clients whose K3 may call `person_ops.call` (PERSON_OP_RELAY.clients). The CLI (`cli`) never may. */
-export type PersonOpClient = "tbd" | "tbm";
+/** Owner-session clients whose K3 may call `person_ops.call` (= PERSON_OP_RELAY.clients). v0.1.64: `tbm` only (C337b); `cli` and
+ *  `tbd` never (a `tbd` K3 shares the OS user with the owner's agents, CREDENTIALS v0.1.64). Widening = a spec patch + QA. */
+export type PersonOpClient = "tbm";
 /**
  * Core mints one K14 per allow-listed `person_ops.call` from a K3 of a `PersonOpClient`. It is never returned to the K3 holder:
  * Core hands it to the workspace bridge on `bridge_api.person_ops` (the bridge pulls; Portal never calls in), the bridge
@@ -636,10 +638,10 @@ export const CREDENTIAL_REGISTRY = [
   {
     id: "K14", name: "relayed person op (v0.1.64, C326)", form: "jwt", typ: TYP.personOp, prefix: null,
     issuer: "portal", issuerKey: "K12 Portal signing key (never a standalone issuer)", holder: "bridge", holderDetail: "workspace bridge, in memory, only to forward it once to the target app; never returned to the K3 holder, never logged; Core keeps it sealed until the row ends",
-    storage: ["issuer_sealed", "verifier_jti_set"], maxLifetimeS: 20, oneTime: true,
+    storage: ["issuer_sealed", "verifier_jti_set"], maxLifetimeS: 10, oneTime: true,
     audienceRule: "iss = tb:portal only; aud = tb:ins:<target>; sub = tb:per:<workspace owner>; op ∈ PERSON_OP_RELAY.allow for the target product (write ops only for cli ∈ writeClients); cli ∈ PERSON_OP_RELAY.clients",
     verifier: "app SDK on POST /tb/v1/person-op (Portal keys only; refused in standalone / app-alone mode)",
-    checks: ["iss = tb:portal", "ws = own workspace", "aud = own instance", "exp − iat ≤ LIFETIME_S.personOp", "jti unused, then consumed (tb_used_jti) BEFORE the body checks", "slice personNbf ≤ iat", "bd = sha256 hex of the raw body bytes", "(own product, op) ∈ PERSON_OP_RELAY.allow, write ops only for cli ∈ writeClients", "op is an op of audience person in the own manifest (or tb.holds_list / tb.holds_decide)"],
+    checks: ["iss = tb:portal", "ws = own workspace", "aud = own instance", "exp − iat ≤ LIFETIME_S.personOp", "now ≤ exp + PERSON_OP_RELAY.expLeewayS (not the general LEEWAY_S)", "cli ∈ PERSON_OP_RELAY.clients", "jti unused, then consumed (tb_used_jti) BEFORE the body checks", "slice personNbf ≤ iat", "bd = sha256 hex of the raw body bytes", "(own product, op) ∈ PERSON_OP_RELAY.allow, write ops only for cli ∈ writeClients", "op is an op of audience person in the own manifest (or tb.holds_list / tb.holds_decide)"],
     acceptedAt: ["app private network POST /tb/v1/person-op (header TB-Person-Op), forwarded only by the workspace bridge"],
     revocation: "one-time; not minted for a revoked or idle-expired K3", revocationLatency: "n/a (≤ 60 s life)", pause: "not paused (owner access by design, like K11)",
   },

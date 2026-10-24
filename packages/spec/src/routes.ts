@@ -152,7 +152,7 @@ export const AUDIT_ACTIONS = [
   "server.detach",
   /** v0.1.64 (C332): an owner session (client tbm) set or removed its push device */
   "push_device.register", "push_device.unregister",
-  /** v0.1.64 (C326): one allow-listed person op relayed for a K3 of client tbd/tbm (details: client, product, op, outcome; never input or output) */
+  /** v0.1.64 (C326): one allow-listed person op relayed for a K3 of client tbm (details: client, product, op, outcome; never input or output) */
   "person_op.relay",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -1177,13 +1177,16 @@ export const PERSON_OP_RELAY = {
   allow: [
     { product: "inbox", read: ["items_list", "item_get"], write: ["item_decide", "item_snooze", "item_ack"] },
   ],
-  refuseFamiliesFor: { tbm: ["money", "destructive"], tbd: [] },
+  /** a `via` with no entry here refuses EVERY hold decision (deny by default, QA-SPEC43-1) */
+  refuseFamiliesFor: { tbm: ["money", "destructive"] },
   /** Core holds the K3 request this long for the bridge's answer, then 504 person_op_timeout */
   coreWaitS: 12,
   /** a queued row the bridge has not TAKEN by then expires and is never handed out (no late delivery after Core's answer) */
-  queueTtlS: 5,
+  queueTtlS: 4,
   /** the bridge's forward timeout to the app; queueTtlS + bridgeForwardS < coreWaitS */
-  bridgeForwardS: 5,
+  bridgeForwardS: 4,
+  /** the only leeway on K14 `exp` (the general LEEWAY_S does not apply): personOp + expLeewayS ≤ coreWaitS */
+  expLeewayS: 2,
   /** at most this many rows queued or taken per workspace, else 409 conflict {reason: "busy"} */
   queueMaxPerWorkspace: 8,
   maxInputBytes: 32_768,
@@ -1194,7 +1197,7 @@ export const PERSON_OP_RELAY = {
 } as const satisfies {
   clients: readonly PersonOpClient[]; writeClients: readonly PersonOpClient[];
   allow: readonly { product: ProductId; read: readonly string[]; write: readonly string[] }[];
-  refuseFamiliesFor: Record<PersonOpClient, readonly HoldFamily[]>; coreWaitS: number; queueTtlS: number; bridgeForwardS: number;
+  refuseFamiliesFor: Record<PersonOpClient, readonly HoldFamily[]>; coreWaitS: number; queueTtlS: number; bridgeForwardS: number; expLeewayS: number;
   queueMaxPerWorkspace: number; maxInputBytes: number; maxOutputBytes: number; pollWaitS: number;
 };
 /** K3 input: the op input is passed through verbatim (the app validates it against its manifest schema). */
@@ -1591,7 +1594,7 @@ export const ROUTES = [
   /** v0.1.64 (C332): the calling owner session's push device (client in PUSH.clients); revoke / logout / expiry deletes it. */
   { opId: "push_devices.register", method: "PUT", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PushDeviceRegisterInput", output: "PushDevice", rate: "write", bodyLog: "none", audit: "push_device.register", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "push_devices.unregister", method: "DELETE", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: "push_device.unregister", draftable: false, confirm: false, idempotent: false, registry: "credential" },
-  /** v0.1.64 (C326): allow-listed person op of one app instance for a K3 of client tbd/tbm, relayed through the workspace bridge (PERSON_OP_RELAY). */
+  /** v0.1.64 (C326): allow-listed person op of one app instance for a K3 of client tbm, relayed through the workspace bridge (PERSON_OP_RELAY). */
   { opId: "person_ops.call", method: "POST", path: "/workspaces/{ws}/instances/{ins}/person-ops/{op}", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PersonOpCallInput", output: "PersonOpCallResult", rate: "person_op", bodyLog: "none", audit: "person_op.relay", draftable: false, confirm: false, idempotent: false, registry: "instance" },
   /** v0.1.64 (C332a(3)): public, read-only; lets a native client check that a custom URL is a Teal Brick Portal before sign-in. */
   { opId: "portal.info", method: "GET", path: "/portal/info", auth: ["public"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "PortalInfo", rate: "public_strict", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "route" },
@@ -1648,7 +1651,7 @@ export type PublicOpId = WithAuth<Row, "public">["opId"];
 type Check<T extends true> = T;
 type OwnerCliRow = WithAuth<Row, "owner-cli">;
 /** RT1: owner CLI may call only reads, drafts.*, and its own logout. v0.1.64 (C326, C332): plus its own push device
- *  (push_devices.*, client tbm) and the allow-listed person-op relay (person_ops.call, clients tbd/tbm). Nothing else. */
+ *  (push_devices.*, client tbm) and the allow-listed person-op relay (person_ops.call, client tbm). Nothing else. */
 export type InvariantOwnerCli = Check<
   [Exclude<OwnerCliRow, { method: "GET" } | { opId: `drafts.${string}` | "owner_sessions.logout" | "push_devices.register" | "push_devices.unregister" | "person_ops.call" }>] extends [never] ? true : false
 >;
