@@ -17,6 +17,7 @@ import type {
   Server, ServerDetachInput, ServerId, ServerList, ServerListInput, ServerRefInput,
 } from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
+import type { DataPolicy, ModelRole } from "./models.ts";
 
 export type Crud = CrudAction;
 /** I14 shape `{write?, outward?, destructive?: {max, per}}` — owned by ./credentials.ts (FreeCaps). */
@@ -366,6 +367,9 @@ export interface AgentCard {
   ws: WorkspaceId;
   name: string;
   purpose: string;
+  /** v0.1.63 (C320, C312a): markdown ≤ PERSONA_MAX_CHARS (8,000), "" = none. The owner's system-prompt fragment; the
+   *  signed config carries it (`agents[].persona`) and the bridge gives it to the agent first (BRIDGE §15.6). */
+  persona: string;
   harnessOptionId: string;
   /** Display only (N8); Portal never calls agents. */
   endpointLabel: string | null;
@@ -379,8 +383,8 @@ export interface AgentCard {
 export type AgentListInput = WorkspaceRef & PageQuery;
 export type AgentList = Page<AgentCard>;
 /** The ONE create path. Mode is always "free" for owner-created cards. */
-export interface AgentCreateInput { ws: WorkspaceId; name: string; purpose: string; harnessOptionId: string; endpointLabel?: string }
-export interface AgentUpdateInput { ws: WorkspaceId; agt: AgentId; name?: string; purpose?: string; harnessOptionId?: string; endpointLabel?: string | null }
+export interface AgentCreateInput { ws: WorkspaceId; name: string; purpose: string; harnessOptionId: string; endpointLabel?: string; /** v0.1.63 */ persona?: string }
+export interface AgentUpdateInput { ws: WorkspaceId; agt: AgentId; name?: string; purpose?: string; harnessOptionId?: string; endpointLabel?: string | null; /** v0.1.63; "" clears */ persona?: string }
 export interface AgentDeleteResult { agt: AgentId; revokedConnections: number; configRevision: number }
 export interface InstructionsInput { ws: WorkspaceId; agt: AgentId; harnessOptionId?: string }
 export interface InstructionSet {
@@ -598,6 +602,8 @@ export interface OfferSummary {
   taxNote: string;
 }
 export interface ReleaseSummary { id: ReleaseId; version: string; channel: "stable" | "dev"; publishedAt: IsoTime }
+/** v0.1.63: one declared model role as the catalog shows it. */
+export interface CatalogModelRole { role: ModelRole; required: boolean; minPolicy: DataPolicy; help?: string; when?: Condition }
 export interface CatalogEntry {
   slug: ProductId;
   name: string;
@@ -613,6 +619,8 @@ export interface CatalogEntry {
   offers: OfferSummary[];
   deploySteps: DeployStep[];
   keyRequirements: KeyRequirement[];
+  /** v0.1.63 (C322(3)): manifest `settings.modelRoles[]` (`when` unresolved; the setup screen lists them before deploy) */
+  modelRoles: CatalogModelRole[];
   scopeTypes: { type: string; label: string; labelPlural: string }[];
   /** the configure screen only (manifest `ui.configurePath`) */
   hasConfigureUi: boolean;
@@ -977,8 +985,13 @@ export interface KeyStatus {
   bridgeReady: boolean;
   reportedAt: IsoTime | null;
   items: { name: string; label: string; required: boolean; source: KeySource; set: boolean | null; usedBy: ProductId[] }[];
+  /** v0.1.63 (C330(4)): one row per declared role per instance, from the latest bridge report (labels only; null = the
+   *  bridge has not reported roles yet). The "Keys and models" step of the setup screen reads this. */
+  roles: { role: ModelRole; product: ProductId; ins: InstanceId; required: boolean; minPolicy: DataPolicy; set: boolean | null; policyOk: boolean | null; provider: string | null; model: string | null; dataPolicy: DataPolicy | null }[];
 }
-export interface KeyTicketInput { ws: WorkspaceId; names?: string[]; returnTo?: string }
+/** v0.1.63: suggested binding the key page pre-fills (from a recipe or the setup screen); never a key value. */
+export interface ModelRoleHint { role: ModelRole; provider?: string; model?: string; dataPolicy?: DataPolicy }
+export interface KeyTicketInput { ws: WorkspaceId; names?: string[]; returnTo?: string; /** v0.1.63, ≤ 8 */ roles?: ModelRoleHint[] }
 /** v0.1.13 (C86): `path` = app-relative, starts with `/`, ≤ 512 chars; refused `path_invalid` (400) when it has a scheme,
  *  a host, `//`, `\\`, a `..` segment (also after percent-decoding) or control characters. The bridge serves it under
  *  `/a/<product>` of the TARGET app only. */

@@ -41,6 +41,7 @@ import type {
   SemVer,
   SnakeId,
 } from "./manifest.ts";
+import type { DataPolicy, ModelRole } from "./models.ts";
 
 // ── Common ───────────────────────────────────────────────────────────────────
 /** Compact JWS string (`header.payload.signature`). */
@@ -97,6 +98,10 @@ export type BridgeErrorCode =
   | "manifest_mismatch"
   | "key_not_declared"
   | "key_not_set"
+  /** v0.1.63 (C330(4), BRIDGE §15.4): model-role resolve refusals */
+  | "role_not_declared"
+  | "role_not_set"
+  | "role_policy_too_low"
   | "tool_name_too_long"
   /** v0.1.11 (BSD-07): an app / neighbour `internalUrl` outside the private-network forms (BRIDGE §5.7); the app is not routed */
   | "internal_url_refused"
@@ -119,6 +124,8 @@ export interface WorkspaceConfig extends Omit<ConfigClaims, "iss">, ConfigCreden
   hooks: HookEntry[];
   skills: SkillsBundle;
   keyRequirements: KeyRequirementEntry[];
+  /** v0.1.63 (C330(4)): manifest `settings.modelRoles[]` per instance, `when` resolved by Core. Absent (older Core) = none. */
+  modelRoleRequirements?: ModelRoleRequirementEntry[];
   enrolCodes: EnrolCodeEntry[];
 }
 /** CREDENTIALS §5.1 credential section as it appears in the config body. */
@@ -160,6 +167,8 @@ export interface AgentEntry {
   agt: AgentId;
   name: string;
   mode: AgentMode;
+  /** v0.1.63 (C320, C312a): the card's persona (markdown, ≤ PERSONA_MAX_CHARS); absent = none. BRIDGE §15.6. */
+  persona?: string;
 }
 export interface HookEntry {
   /** `<product>.<hookId>` */
@@ -196,6 +205,16 @@ export interface KeyRequirementEntry {
   product: ProductId;
   required: boolean;
   source: KeySource;
+  /** `"app"` or a service id */
+  usedBy: ("app" | ServiceId)[];
+}
+/** v0.1.63: one declared model role of one instance (BRIDGE §15). */
+export interface ModelRoleRequirementEntry {
+  role: ModelRole;
+  ins: InstanceId;
+  product: ProductId;
+  required: boolean;
+  minPolicy: DataPolicy;
   /** `"app"` or a service id */
   usedBy: ("app" | ServiceId)[];
 }
@@ -344,6 +363,9 @@ export interface StatusReport {
   }[];
   /** presence booleans only — never values */
   keys: { name: string; ins: InstanceId; set: boolean }[];
+  /** v0.1.63 (BRIDGE §15.5): one row per declared role per instance — labels only, never a base URL, key name or key value.
+   *  `set` = a binding resolves for it; `policyOk` = that binding meets the declared `minPolicy`. Absent (older bridge) = unknown. */
+  roles?: ModelRoleStatus[];
   /** display-only, ≤ 80 chars, no third-party identifiers */
   scopeSummaries: { agt: AgentId; ins: InstanceId; label: string }[];
   connectionsCreated: { con: ConnectionId; agt: AgentId; method: "pairing"; clientName: string; createdAt: IsoTime; pairingJti: Ulid }[];
@@ -777,6 +799,31 @@ export interface AppStatusResponse {
   sliceRevision: number;
   keysRev: number;
 }
+/** v0.1.63 (BRIDGE §15.5): presence + labels of one declared role; `provider`/`model`/`dataPolicy` null when unset. */
+export interface ModelRoleStatus {
+  role: ModelRole;
+  ins: InstanceId;
+  set: boolean;
+  policyOk: boolean;
+  provider: string | null;
+  model: string | null;
+  dataPolicy: DataPolicy | null;
+}
+/** v0.1.63 (BRIDGE §15.4): `GET /tb/v1/model-roles/<role>` with `TB-Assert`; `Cache-Control: no-store`. */
+export interface ModelRoleFetchResponse {
+  role: ModelRole;
+  /** MODEL_PROVIDERS id */
+  provider: string;
+  model: string;
+  baseUrl: string | null;
+  /** the bound key's value; null for a provider that needs no key */
+  key: string | null;
+  dataPolicy: DataPolicy;
+  /** embeddings only: vector size, when the owner set it */
+  dims: number | null;
+  /** one revision for keys AND role bindings */
+  keysRev: number;
+}
 /** `GET /tb/v1/keys/<name>` with `TB-Assert`; `Cache-Control: no-store`. */
 export interface KeyFetchResponse {
   name: string;
@@ -835,6 +882,8 @@ export const BRIDGE_INTERNAL_PATHS = {
   claim: "/tb/v1/claim",
   status: "/tb/v1/status",
   keys: "/tb/v1/keys/{name}",
+  /** v0.1.63 (BRIDGE §15.4) */
+  modelRoles: "/tb/v1/model-roles/{role}",
   call: "/tb/v1/call",
   /** v0.1.57 (C274c): app event ingest (BRIDGE §14.1) */
   events: "/tb/v1/events",

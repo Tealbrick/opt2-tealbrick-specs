@@ -31,6 +31,7 @@ Persistent state lives on ONE volume (`TB_DATA_DIR`, the same env name as apps).
 | S5 | Pending claims (instance/service public keys not yet in `instanceKeys`) | volume | ~300 B each | the instance re-claims with a new K6 (Portal op) |
 | S6 | Used one-time `jti`s of pairing codes and keys tickets, each until `exp` + leeway | volume | small | lost only with the volume; such items expire within ≤ 10 min |
 | S9 | Standalone only (§11): self-issued config (the frozen final config + local pause/revocation overlay from the 4 admin ops) and the owner keys (`ownerKeys`) | volume | small | standalone bridge without backup cannot recover; restore from backup |
+| S10 | v0.1.63 (§15): model-role bindings `{role, ins?, provider, model, baseUrl?, keyName?, dataPolicy, zdrAttestedAt?, dims?}` (sealed, beside S3; one `keysRev` for both) | volume | ≤ 64 KB | owner re-enters them on the Keys and models page; apps with a required role show `needs_keys` |
 | S7 | Manifests by digest, dynamic catalogs and resolve cache (5 min) | memory | small | refetched from apps |
 | S8 | Proof `jti` replay set (≤ 90 s), MCP sessions, OAuth authorization codes (60 s), authorization requests (10 min), key-page sessions (15 min), app health table, rate buckets | memory | small | clients re-initialize / retry |
 
@@ -513,3 +514,47 @@ app `tb.*`, invalid payload → refused, nothing stored; same `(app instance, ke
 agent outside `eligible` → nothing; purge → stored rows of that agent and instance gone; purge without agent → every
 agent's rows for that instance gone; `"events"` in every StatusReport of a bridge that
 passes all of these, never otherwise.
+
+## 15. Workspace model-role registry and agent persona (v0.1.63; C322(3), C330(4), C320, C312a)
+
+Martin (C330(4)): "a role / model / key structure - in the bridge … Observer, which should be rented inference with zero data retention / local lane". Vocabularies, the provider catalog and the persona limit are data in `packages/spec/src/models.ts` (`MODEL_ROLES`, `DATA_POLICIES`, `DATA_POLICY_RANK`, `MODEL_PROVIDERS`, `PERSONA_MAX_CHARS`, `PERSONA_RESOURCE_URI`). The bridge still calls no model (§1.1): it stores bindings, checks policy and hands a resolved binding to the declaring app.
+
+### 15.1 Bindings (S10)
+- One binding per role per scope: `ins` absent = workspace default; `ins` set = override for that app instance. Resolve order for a caller: its instance override, then the workspace default.
+- `keyName` names a key in S3. v0.1.63: S3 also holds owner-named provider keys (label ≤ 60, e.g. "OpenAI main") next to requirement-named keys; ONE key may serve many roles and apps. A provider with `keyNeeded: false` has no `keyName`.
+- `provider` is a `MODEL_PROVIDERS` id; `baseUrl` is required when the provider has no `defaultBaseUrl`, else optional (override). `dims` only for `embeddings`.
+- Any binding or key change bumps `keysRev` (one revision for keys and bindings), so app long-polls (§10.3) and `tb-exec` restarts work unchanged.
+- Bindings never come from Portal and never reach Portal (only §15.5 labels). Standalone (§11) is unchanged: bindings live on the volume.
+
+### 15.2 Keys and models page (extends §9.3)
+- Same origin, ticket (`pur: keys`), session, CSRF and CSP rules as §9.3. Title "Keys and models".
+- Section "Provider keys": write-only values as today (set, replace, delete); each key shows "Serves: <role> (<apps>)…" from S10. Deleting a key that serves a binding asks first and leaves the binding unset.
+- Section "Models": one row per role that `modelRoleRequirements[]` of the config declares (all instances), with: role, apps that use it, required/optional, min policy, current binding (provider, model, base URL, key, data policy) and an "Override for one app" action. Provider choices = `MODEL_PROVIDERS` rows whose `roles` contain the role. Ticket claim `roles[]` (CREDENTIALS K11, v0.1.63) pre-fills provider/model/policy for display only; nothing is stored without the owner's submit.
+- Data policy choice: `local` only for a base URL that passes §15.3; `zdr` only for a provider with `zdrOffered: true` and only with the owner's tick "I confirm a zero-data-retention contract with this provider" (stores `zdrAttestedAt`); else `standard`.
+- Embeddings: changing provider, model or `dims` of a set binding warns "Apps re-index their memory after this change" before submit.
+
+### 15.3 Data policy check
+- `local` holds when the base URL host is: a Railway private host (`*.railway.internal`), an origin in `TB_OWN_INFRA_ORIGINS` (§10.2), loopback, an RFC 1918 / RFC 4193 address, or a tailnet name (`*.ts.net`). Any other host → the page refuses `local` (form error), and a stored `local` binding whose URL no longer passes (env change) counts as `standard`.
+- `zdr` is owner-attested; the bridge cannot verify a contract and says so on the page.
+- A binding satisfies a requirement when `DATA_POLICY_RANK[binding] >= DATA_POLICY_RANK[minPolicy]`.
+
+### 15.4 Resolve by apps — `GET /tb/v1/model-roles/<role>` (internal listener)
+`TB-Assert` (instance or service key), like §9.4. Checks in order:
+1. `role` in `MODEL_ROLES`, and `modelRoleRequirements[]` has an entry for the caller's instance with that role and the caller (`app` or the service id) in `usedBy` → else `403 role_not_declared`.
+2. A binding resolves (§15.1) → else `404 role_not_set`.
+3. The binding meets the entry's `minPolicy` (§15.3) → else `403 role_policy_too_low` with `details {needed, have}`; NOTHING of the binding (not even the provider) is sent.
+4. The bound key is set (when `keyNeeded`) → else `404 role_not_set`.
+Answer `ModelRoleFetchResponse {role, provider, model, baseUrl, key, dataPolicy, dims, keysRev}` (`baseUrl` = binding value or the provider default), `Cache-Control: no-store`. Paused caller or workspace → `403 paused`. Values are never logged.
+`tb-exec`: for a service with manifest `modelRoles[].env`, it resolves each declared role at start and sets the named env vars (`provider`, `model`, `baseUrl`, `key`, `dims`); an unset optional role sets nothing; it restarts the child when `keysRev` changes (as for keys).
+
+### 15.5 Status
+`StatusReport.roles[] {role, ins, set, policyOk, provider, model, dataPolicy}` — one row per `modelRoleRequirements[]` entry, labels only: NEVER a base URL, key name or key value. Core shows them in `keys.status.roles` (PORTAL-API v0.1.63).
+
+### 15.6 Agent persona
+- Config `agents[].persona` (markdown ≤ `PERSONA_MAX_CHARS`) comes from the agent card (PORTAL-API v0.1.63).
+- MCP `initialize.instructions`: when the agent has a persona, the text starts with "Your persona, set by the owner:" + the persona, then a blank line, then the existing tools/skills lines (§7). The persona part is not cut by the 4 KB limit of the tools/skills part.
+- Resource `tb://agent/persona` (`text/markdown`) in `resources/list` for that agent only; read = the persona; a persona change sends `notifications/resources/list_changed` on that agent's sessions. A paused agent gets neither (only the pause text).
+- Harness packs translate the persona into the harness's own system prompt (C312a); the bridge is the one source.
+
+### 15.7 Tests (bridge conformance rows RM-*)
+RM-2 resolve: declared + set → binding; undeclared → `role_not_declared`; unset → `role_not_set`; a `zdr` requirement vs a `standard` binding → `role_policy_too_low`, no binding field in the body. RM-3 `local` refused for a public URL, accepted for each §15.3 form. RM-4 one key bound to three roles; replacing it bumps `keysRev` once; the page lists "Serves". RM-5 status `roles[]` and logs carry no base URL, key name or value. RM-6 an instance override wins over the workspace default; another app keeps the default. RM-7 persona first in `instructions`; `tb://agent/persona` reads it; a change sends `list_changed`. RM-12 standalone: resolve works without Portal.

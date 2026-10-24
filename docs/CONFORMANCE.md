@@ -250,3 +250,12 @@ version (C292 pattern).
 Machine-readable: `HOST_CONFORMANCE` in `packages/spec/src/host.ts` (id, title, given, expect, policy rule, target). Targets: `agent-unit` = the host agent's own unit tests against plans signed by a test key set; `box-probe` = the probe suite on a real box (QA lead); `both`. The spec package itself tests the schema side (`test/host.test.ts`: every `HOST_FORBIDDEN_KEYS` key refused at every level, reserved/unknown action kinds, tag-only images, system mount paths, secret-like values).
 - H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in index refused · H-6 downgrade refused (the one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) · H-8 forbidden runtime settings refused · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped (forbidden runtime settings; reported in `escapes`). v0.1.60: H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan (`server_detached`). v0.1.61: H-16 pairing by device flow · H-17 pairing key pin · H-18 public route for the bridge only. v0.1.62: H-19 pairing takes the workspace channel.
 - Core side (Portal Core tests, not this package): approve with scope host creates the server + sets the infrastructure in one consent; `host.plans` serves only unexpired plans with seq > after; a detached server gets only its final stop plan, then 401.
+
+## v0.1.63 — model roles and persona rows RM-1..RM-12 (C322(3), C330(4), C320)
+Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets.
+- `RM-1` [manifest package] `settings.modelRoles` validates; M-MR-1..5 each refuse their bad case with their code.
+- `RM-2`..`RM-7`, `RM-12` [bridge] as BRIDGE §15.7.
+- `RM-8` [Core] persona > 8,000 chars → `validation_failed`; the GUI renders it escaped.
+- `RM-9` [Knowledge + GUI] Knowledge without `embeddings` reports `degraded` + attention (not `needs_keys`) and the GUI opens it with the attention banner.
+- `RM-10` [GUI] setup screen readable at 10+ agents (roles table once; per-agent rows collapsed).
+- `RM-11` [Knowledge] `knowledge__ask` answers when `reasoning` resolves and is reachable by a granted agent; without it the tool says which role to set.
