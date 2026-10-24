@@ -318,6 +318,11 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
  *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it. */
 export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles"] as const;
+/** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
+ *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
+ *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
+ *  limit (BRIDGE §1.2 S2) keeps pause and revoke deliverable. */
+export const CONFIG_CORE_MAX_BYTES = 3_000_000;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;

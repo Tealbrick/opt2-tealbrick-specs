@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { BRIDGE_CAPS, type ModelRoleStatus } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, type ModelRoleStatus } from "../src/bridge.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -174,9 +174,7 @@ test("spec follow-up (QA-SPEC42-11, local check): gateways and never-local range
   for (const cidr of NEVER_LOCAL) assert.match(cidr, /^[0-9a-f.:]+\/\d{1,3}$/, cidr);
   assert.ok(NEVER_LOCAL.includes("100.100.100.200/32"), "cloud metadata inside CGNAT");
   assert.ok(OWN_HOSTS_MAX > 0 && OWN_HOSTS_MAX <= 64);
-  // 1 MB of persona text (UTF-16 units, up to 2 MB as UTF-8 JSON worst case for BMP text) stays under the 4 MB config limit
-  assert.equal(PERSONA_WORKSPACE_MAX_CHARS, 1_000_000);
-  assert.ok(PERSONA_WORKSPACE_MAX_CHARS * 3 < 4 * 1024 * 1024);
+  assert.equal(PERSONA_WORKSPACE_MAX_CHARS, 250_000);
 });
 
 // ── Spec follow-up (QA-SPEC49-1/-2/-6): a reference classifier for BRIDGE §15.3, run against the shared fixture ──
@@ -217,7 +215,7 @@ function verifiedLocal(h: ReturnType<typeof hostOf>, origin: string, ownInfra: s
 const ownNetIpLiteral = (h: ReturnType<typeof hostOf>) =>
   (h.ip4 !== null && [...PRIVATE4, "100.64.0.0/10"].some((c) => inV4(h.ip4 as string, c))) || (h.ip6 !== null && (hex1(h.ip6) & 0xfe00) === 0xfc00);
 function parse(input: string): URL | null {
-  if (/[\\@\s?#]/.test(input) || [...input].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)) return null;
+  if (/[\\@\s?#\uff20\ufe6b\uff3c]|%40|%5c/i.test(input) || [...input].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)) return null;
   try {
     const u = new URL(input);
     return u.protocol === "http:" || u.protocol === "https:" ? u : null;
@@ -267,4 +265,23 @@ test("spec follow-up: every local-check fixture row matches the BRIDGE §15.3 re
 test("spec follow-up (QA-SPEC49-7): the SDK model error codes are pinned", async () => {
   const { SDK_MODEL_ERROR_CODES } = await import("../src/sdk.ts");
   assert.deepEqual([...SDK_MODEL_ERROR_CODES], ["role_undeclared", "model_endpoint_refused"]);
+});
+
+test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed config near the bridge limit", () => {
+  // worst cases per UTF-16 unit once control characters and lone surrogates are refused: CJK (3 bytes), `"` / `\\` / LF
+  // (2 bytes as JSON escapes), astral emoji (4 bytes per 2 units); the config is stored as base64url (x 4/3)
+  const b64 = (s: string) => Math.ceil((Buffer.byteLength(JSON.stringify(s)) * 4) / 3);
+  for (const unit of ["字", '"', "\\", "\n", "\t", "😀"]) {
+    const s = unit.repeat(PERSONA_WORKSPACE_MAX_CHARS / unit.length);
+    assert.ok(s.length <= PERSONA_WORKSPACE_MAX_CHARS);
+    assert.ok(b64(s) <= 1_000_100, `${JSON.stringify(unit)}: ${b64(s)}`);
+  }
+  assert.ok(CONFIG_CORE_MAX_BYTES + 1_000_000 <= 4 * 1024 * 1024, "1 MB headroom to the bridge limit");
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const schema = load("workspace-config.schema.json");
+  const agent = ajv.compile({ $defs: schema.$defs, $ref: "#/$defs/agentEntry" });
+  const base = { agt: "agt_01JA0000000000000000000001", name: "A", mode: "free" };
+  assert.equal(agent({ ...base, persona: "line one\n\tindented" }), true, JSON.stringify(agent.errors));
+  for (const bad of ["\u0001", "a\u007fb", "\u0085", "\r\n", "\u0000"]) assert.equal(agent({ ...base, persona: bad }), false, JSON.stringify(bad));
+  assert.equal(schema.$defs.agentEntry.properties.persona.pattern, PERSONA_PATTERN);
 });

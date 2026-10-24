@@ -80,9 +80,13 @@ export const MODEL_ROLE_HINTS_MAX = 8;
  *  code units (JavaScript `.length`, as BRIDGE §14 `summary`); JSON Schema `maxLength` (code points) is only an outer bound. */
 export const PERSONA_MAX_CHARS = 8000;
 
-/** Total persona text per workspace (UTF-16 units over all agents): keeps the signed config under the bridge's 4 MB
- *  limit (BRIDGE §1.2 S2). Core refuses an agents.create/update that would pass it (`validation_failed`). */
-export const PERSONA_WORKSPACE_MAX_CHARS = 1_000_000;
+/** Total persona text per workspace (UTF-16 units over all agents), QA-SPEC49-11. With control characters and lone
+ *  surrogates forbidden (PERSONA_PATTERN, well-formed UTF-16), one unit costs at most 3 bytes in JSON, so 250,000 units are
+ *  ≤ 1 MB after base64url — well inside CONFIG_CORE_MAX_BYTES. Core refuses a create/update past it (`validation_failed`). */
+export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
+/** Persona text: no control characters except TAB and LF (C0, DEL and C1 refused; clients turn CRLF into LF before sending).
+ *  JSON Schema form; Core also refuses lone surrogates (`String.prototype.isWellFormed`). */
+export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$" as const;
 
 /** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
 export const OWN_HOSTS_MAX = 32;

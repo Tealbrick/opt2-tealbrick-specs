@@ -489,9 +489,10 @@
           "$ref": "#/$defs/agentMode"
         },
         "persona": {
-          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6).",
+          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6). Spec follow-up (QA-SPEC49-11): no control characters except TAB and LF (PERSONA_PATTERN).",
           "type": "string",
-          "maxLength": 8000
+          "maxLength": 8000,
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$"
         }
       }
     },

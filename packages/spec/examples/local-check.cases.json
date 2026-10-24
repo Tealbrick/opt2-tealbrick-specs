@@ -585,6 +585,131 @@
       "kind": "own_host",
       "input": "https://169.254.170.2",
       "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://[fe80::1]",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://[febf::1]",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://[fec0::1]",
+      "expect": "accepted_warn_public"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://[fe00::1]",
+      "expect": "accepted_warn_public"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://[fbff::1]",
+      "expect": "accepted_warn_public"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://[fd00::1]",
+      "expect": "accepted"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://[fe00::1]",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://[fbff::1]",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://100.127.255.255",
+      "expect": "accepted"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://100.128.0.1",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://100.63.255.255",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://169.254.0.1",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://169.255.0.1",
+      "expect": "accepted_warn_public"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://0.255.255.255",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://1.0.0.0",
+      "expect": "accepted_warn_public"
+    },
+    {
+      "kind": "base",
+      "input": "http://[fd12:3456::1]:11434/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://[fdff:ffff::1]/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://[fe00::1]/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1\u0001x",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1\u001f",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1%40evil.example",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1%5c@x",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1＠evil.example/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1＼evil",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://10.0.0.1%40evil.example",
+      "expect": "refused"
     }
   ]
 }
