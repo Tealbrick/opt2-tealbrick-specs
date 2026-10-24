@@ -540,3 +540,15 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.ok(opts.subject.id);
   assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 });
+
+test("v0.1.66 (C331 D1): licences.staff_comp is the one staff route; browser only, draftable, idempotent, audited", async () => {
+  const row = ROUTES.find((r) => r.opId === "licences.staff_comp");
+  assert.ok(row);
+  assert.deepEqual([row.method, row.path, [...row.auth], row.draftable, row.confirm, row.idempotent, row.audit], ["POST", "/me/staff-comps", ["browser"], true, true, true, "licence.staff_comp"]);
+  assert.deepEqual(ROUTES.filter((r) => /staff/u.test(r.opId) || /staff/u.test(r.path)).map((r) => r.opId), ["licences.staff_comp"], "PORTAL-API §6: no other staff route");
+  assert.ok((AUDIT_ACTIONS as readonly string[]).includes("licence.staff_comp"));
+  const { STAFF_COMP_MAX_DAYS, STAFF_COMP_DEFAULT_DAYS } = await import("../src/routes.ts");
+  assert.deepEqual([STAFF_COMP_DEFAULT_DAYS, STAFF_COMP_MAX_DAYS], [14, 30]);
+  const input: import("../src/routes.ts").StaffCompInput = { product: "knowledge", days: 14, reason: "DEV demo" };
+  assert.equal(input.days, STAFF_COMP_DEFAULT_DAYS);
+});
