@@ -270,7 +270,7 @@ export interface Operation {
 
 /** One entry of a dynamic operation's catalog (bridge op `POST /tb/v1/bridge/catalog`, search results). */
 export interface DynamicCatalogEntry {
-  /** `^[a-z][a-z0-9_]{1,47}$`, unique within the app. */
+  /** `^[a-z][a-z0-9_]{1,47}$`, unique within the app; v0.1.68 (C354): never contains `__` (reserved for resolved variants such as `<name>__first_contact`). */
   name: string;
   title: string;
   description: string;
@@ -422,6 +422,9 @@ export interface Hook {
 /** v0.1.15 (C104): declared minimum versions (features the validator cannot see, e.g. a before hook that answers `hold`). */
 export interface ManifestRequires {
   bridge?: string;
+  /** v0.1.68 (C354): bridge capabilities the release needs (BRIDGE_CAPS, e.g. "secret_output"). Core refuses to deploy it
+   *  onto a workspace bridge that does not declare each one (`bridge_cap_missing`); a cap is never inferred from a version. */
+  bridgeCaps?: string[];
 }
 
 export interface Companion {

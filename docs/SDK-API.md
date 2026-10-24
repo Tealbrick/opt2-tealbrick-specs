@@ -578,4 +578,5 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
   2. **Not schedulable.** `ctx.schedule` of the op refuses `secret_output_not_schedulable`; the job runner never stores its result.
   3. **Nothing kept.** No idempotency row (a replay with the same key runs again: a new credential). The receipt (`receipt: true`) keeps the input digest and the `redact` summary only, never output, so issuance is audited. No log line, status field or hook payload carries the output.
   4. **Error paths.** A handler error of the op returns its code with a fixed message (`operation failed`); the handler's message is dropped. A failed output validation reports its code only. A `failed` receipt carries no message.
-  5. The app's release states `requires.bridge` of the first bridge with the `secret_output` cap (MANIFEST M-OP-12).
+  5. The manifest declares `requires.bridgeCaps: ["secret_output"]` (MANIFEST M-OP-12, C354); Core refuses a bridge without the cap. No version number is used for this gate.
+  6. A schedule created before the op had `secretOutput` (or by an older release) is refused when it runs (`secret_output_not_schedulable`); the handler never runs from a job.
