@@ -17,7 +17,7 @@ import type {
   Server, ServerDetachInput, ServerId, ServerList, ServerListInput, ServerRefInput,
 } from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
-import type { DataPolicy, ModelRole } from "./models.ts";
+import type { DataPolicy, ModelRole, PolicyBasis } from "./models.ts";
 
 export type Crud = CrudAction;
 /** I14 shape `{write?, outward?, destructive?: {max, per}}` — owned by ./credentials.ts (FreeCaps). */
@@ -1037,6 +1037,8 @@ export interface KeyStatusRole {
   /** MODEL_ID_PATTERN */
   model: string | null;
   dataPolicy: DataPolicy | null;
+  /** spec follow-up (QA-SPEC49-2): from the bridge row; absent = unknown/unset */
+  policyBasis?: PolicyBasis;
 }
 /** v0.1.63: suggested binding the key page pre-fills (from a recipe or the setup screen); never a key value. */
 export interface ModelRoleHint {

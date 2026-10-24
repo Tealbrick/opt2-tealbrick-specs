@@ -333,6 +333,10 @@ export type SdkAuditAction = (typeof SDK_AUDIT_ACTIONS)[number];
 // §B  @opt2-tealbrick/miniapp-sdk — server
 // ════════════════════════════════════════════════════════════════════════════
 
+/** v0.1.63 + spec follow-up #49: `TbError.code` values the model-role helpers throw (SDK-API "modelFetch"). */
+export const SDK_MODEL_ERROR_CODES = ["role_undeclared", "model_endpoint_refused"] as const;
+export type SdkModelErrorCode = (typeof SDK_MODEL_ERROR_CODES)[number];
+
 export declare class TbError extends Error {
   constructor(code: string, message: string, httpStatus?: number);
   readonly code: string;
@@ -845,6 +849,11 @@ export interface KeyApi {
   getKey(name: string): Promise<string | null>;
   /** v0.1.63; throws `role_undeclared` (programming error) for a role the manifest does not declare with `usedBy` `app` */
   modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
+  /** spec follow-up (QA-SPEC49-2c): the resolved binding plus a `fetch` bound to its canonical base URL origin with the
+   *  connect-time guard (BRIDGE §15.3): resolves the host, refuses NEVER_LOCAL and (for `local`) any address outside the
+   *  local ranges, pins the checked address for the request, refuses other origins and cross-origin redirects. The app
+   *  adds the provider's auth header itself from `binding.key`. null = as modelRole(). */
+  modelFetch(role: ModelRole): Promise<{ binding: ResolvedModelRole; fetch: (path: string, init?: RequestInit) => Promise<Response> } | null>;
   onKeysChanged(cb: (names: string[]) => void): () => void;
   status(): Promise<KeyStatus[]>;
 }

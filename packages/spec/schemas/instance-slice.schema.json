@@ -209,7 +209,7 @@
       "required": ["held"],
       "description": "v0.1.15 (C105a): the workspace apps policy; companion grants carry held = this list.",
       "properties": {
-        "held": { "type": "array", "uniqueItems": true, "items": { "enum": ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] } }
+        "held": { "type": "array", "maxItems": 8, "uniqueItems": true, "items": { "enum": ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] } }
       }
     },
     "appCallers": {

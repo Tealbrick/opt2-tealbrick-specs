@@ -85,8 +85,8 @@ All also carry `iat`, `exp`, `jti`. K1 is Clerk's format and is never in `tb:` f
 | `bridge` | slice | `{id, keys: [jwk]}` — keys the app accepts for call proofs |
 | `connections` | config | `[{con, agt, method: "key" \| "pairing", gen, publicKey? (key method), status: "active" \| "revoked"}]` |
 | `instanceKeys` | config | `[{ins, svc?, jwk}]` — keys the bridge accepts for instance assertions |
-| `pause` | config, slice | `{workspace: boolean, agents: agt_[], instances: ins_[]}` (connections are revoked, not paused) |
-| `revoked` | config, slice | `{jtis: [{jti, exp}]}` — grants / pairing codes withdrawn before `exp`; entries drop after `exp` |
+| `pause` | config, slice | `{workspace: boolean, agents: agt_[], instances: ins_[]}` (connections are revoked, not paused). C353 (QA-SPEC49-15/-18): in a SLICE `pause.agents` is always `[]` — a paused edge agent is marked by `agents[].status = "paused"` (same byte length as `"active"`; pausing adds at most the own instance id, ≈ 42 chars) — and `pause.instances` holds at most its own instance |
+| `revoked` | config, slice | `{jtis: [{jti, exp}]}` (unique) — grants / pairing codes withdrawn before `exp`; entries drop after `exp`. C353: a SLICE carries only jtis of COMPANION grants that target or originate at its instance; agent-grant, pairing-code and other apps' jtis are bridge-only (the bridge never forwards a call under a revoked agent grant) |
 | `personNbf` | slice | epoch seconds; app UI sessions created before it are invalid (§12) |
 | `standalone` | config, slice | absent, or `{issuer: "tb:brg:<id>", kid, ownerKeys: [jwk]}` (§17) |
 | grants | config (agent grants), slice (companion grants held by that app) | K10 compact strings |
@@ -193,7 +193,7 @@ All: V0 rules; the three call-proof variants are told apart by exactly one of `g
 - K11 redemption sessions: `launch` → the app SDK sets one cookie (HttpOnly, Secure, SameSite=Lax, Path `/a/<product>/`, 8 h absolute) bound to `per` + `ins`; invalid when its creation time < slice `personNbf` ("sign out everywhere" in Portal bumps `personNbf`). `keys` → the bridge sets a key-page cookie (Path `/keys`, 15 min). The key page is write-only: it shows presence, never values.
 
 ## 13. Pause matrix
-Enforcement points: **B** = bridge (`gate()` step 1 on config `pause`; connection status), **C** = Core (stops minting / issuing), **A** = app SDK (`authorize()` step 0 on slice `pause`, CORE I1). Online latency: bridge ≤ 60 s (config long-poll, C9); app ≤ 60 s after the bridge (slice long-poll). Offline from Portal: Core cannot reach the bridge; grants expire ≤ 12 h and a config older than 12 h fails closed (C9).
+Enforcement points: **B** = bridge (`gate()` step 1 on config `pause`; connection status), **C** = Core (stops minting / issuing), **A** = app SDK (`authorize()` step 0 on slice `pause` and slice `agents[].status`, CORE I1; C353). Online latency: bridge ≤ 60 s (config long-poll, C9); app ≤ 60 s after the bridge (slice long-poll). Offline from Portal: Core cannot reach the bridge; grants expire ≤ 12 h and a config older than 12 h fails closed (C9).
 | Path that reaches an app | Workspace kill switch | Agent pause | Connection revoke | Instance pause |
 |---|---|---|---|---|
 | K5 → MCP `tools/call` (direct or relay) | B refuse `paused` ≤ 60 s; C no grants | B refuse for that agent ≤ 60 s; tools/list empty; C no grants | B rejects that `con`'s K5 and refresh (`invalid_token`) ≤ 60 s | B refuse calls to it, its tools removed ≤ 60 s; C no grants with `aud` = it |

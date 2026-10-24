@@ -489,9 +489,10 @@
           "$ref": "#/$defs/agentMode"
         },
         "persona": {
-          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6).",
+          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6). C353 / QA-SPEC49-23: PERSONA_PATTERN — TAB, LF, the PERSONA_MARKERS characters, or anything not Cc/Cf/Cs/Default_Ignorable/U+2028/U+2029; no two variation selectors in a row. Unicode-mode regex.",
           "type": "string",
-          "maxLength": 8000
+          "maxLength": 8000,
+          "pattern": "^(?![\\s\\S]*[\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]{2})(?:[\\t\\n]|[\\u00AD\\u034F\\u061C\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$"
         }
       }
     },
@@ -661,7 +662,16 @@
       ],
       "properties": {
         "role": {
-          "enum": ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"]
+          "enum": [
+            "embeddings",
+            "rerank",
+            "reasoning",
+            "utility",
+            "dreaming",
+            "summarize",
+            "vision",
+            "transcribe"
+          ]
         },
         "ins": {
           "$ref": "#/$defs/insId"
@@ -673,7 +683,11 @@
           "type": "boolean"
         },
         "minPolicy": {
-          "enum": ["local", "zdr", "standard"]
+          "enum": [
+            "local",
+            "zdr",
+            "standard"
+          ]
         },
         "usedBy": {
           "type": "array",
@@ -915,6 +929,7 @@
         "jtis": {
           "type": "array",
           "maxItems": 20000,
+          "uniqueItems": true,
           "items": {
             "type": "object",
             "additionalProperties": false,
