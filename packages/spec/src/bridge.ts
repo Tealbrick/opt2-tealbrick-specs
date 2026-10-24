@@ -41,6 +41,7 @@ import type {
   SemVer,
   SnakeId,
 } from "./manifest.ts";
+import type { DataPolicy, ModelRole } from "./models.ts";
 
 // ── Common ───────────────────────────────────────────────────────────────────
 /** Compact JWS string (`header.payload.signature`). */
@@ -97,6 +98,10 @@ export type BridgeErrorCode =
   | "manifest_mismatch"
   | "key_not_declared"
   | "key_not_set"
+  /** v0.1.63 (C330(4), BRIDGE §15.4): model-role resolve refusals */
+  | "role_not_declared"
+  | "role_not_set"
+  | "role_policy_too_low"
   | "tool_name_too_long"
   /** v0.1.11 (BSD-07): an app / neighbour `internalUrl` outside the private-network forms (BRIDGE §5.7); the app is not routed */
   | "internal_url_refused"
@@ -119,6 +124,9 @@ export interface WorkspaceConfig extends Omit<ConfigClaims, "iss">, ConfigCreden
   hooks: HookEntry[];
   skills: SkillsBundle;
   keyRequirements: KeyRequirementEntry[];
+  /** v0.1.63 (C330(4)): manifest `settings.modelRoles[]` per instance, `when` resolved by Core. Absent (older Core, or a bridge
+   *  without cap `model_roles`, to which Core never sends it) = none. */
+  modelRoleRequirements?: ModelRoleRequirementEntry[];
   enrolCodes: EnrolCodeEntry[];
 }
 /** CREDENTIALS §5.1 credential section as it appears in the config body. */
@@ -160,6 +168,9 @@ export interface AgentEntry {
   agt: AgentId;
   name: string;
   mode: AgentMode;
+  /** v0.1.63 (C320, C312a): the card's persona (markdown, ≤ PERSONA_MAX_CHARS UTF-16 units); absent = none. Sent only to a
+   *  bridge with cap `model_roles` (an older bridge's config schema refuses unknown agent fields). BRIDGE §15.6. */
+  persona?: string;
 }
 export interface HookEntry {
   /** `<product>.<hookId>` */
@@ -196,6 +207,16 @@ export interface KeyRequirementEntry {
   product: ProductId;
   required: boolean;
   source: KeySource;
+  /** `"app"` or a service id */
+  usedBy: ("app" | ServiceId)[];
+}
+/** v0.1.63: one declared model role of one instance (BRIDGE §15). */
+export interface ModelRoleRequirementEntry {
+  role: ModelRole;
+  ins: InstanceId;
+  product: ProductId;
+  required: boolean;
+  minPolicy: DataPolicy;
   /** `"app"` or a service id */
   usedBy: ("app" | ServiceId)[];
 }
@@ -293,7 +314,11 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps).
  *  v0.1.57 (C274c/C274d): + `events` = the bridge implements BRIDGE §14 in full (ingest, per-agent log, delivery on /mcp).
  *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule). */
-export const BRIDGE_CAPS = ["owner_rows", "events"] as const;
+/** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
+ *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
+ *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
+ *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops"] as const;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
@@ -344,6 +369,9 @@ export interface StatusReport {
   }[];
   /** presence booleans only — never values */
   keys: { name: string; ins: InstanceId; set: boolean }[];
+  /** v0.1.63 (BRIDGE §15.5): one row per declared role per instance — labels only, never a base URL, key name or key value.
+   *  `set` = a binding resolves for it; `policyOk` = that binding meets the declared `minPolicy`. Absent (older bridge) = unknown. */
+  roles?: ModelRoleStatus[];
   /** display-only, ≤ 80 chars, no third-party identifiers. v0.1.65 (C331 D8): `sources` = the app's ScopeSummaryResult.sources,
    *  forwarded as given (≤ SCOPE_SOURCES_MAX, each label ≤ SCOPE_SOURCE_LABEL_MAX; a malformed item is dropped, never repaired);
    *  absent when the app's SDK does not report them. */
@@ -354,7 +382,8 @@ export interface StatusReport {
   /** v0.1.24 (C116): kind `config` + code `standalone_without_grants` = the final standalone document carries no agent grants (applied, fail closed).
    *  v0.1.25 (C117): kind `config` + code `hook_not_listed` (+ `ins` of the hook app) = a matching declared hook missing from config.hooks (call refused).
    *  v0.1.14 (L3): `bridge_op` = a failed catalog / resolve / mark / scope_summary call to an app (code = the app's refusal or transport error).
-   *  v0.1.17 (L3, C104): `manifest` = an app manifest the bridge refused (code = the refusal, e.g. `manifest_mismatch`, a validator code, `bridge_too_old`) */
+   *  v0.1.17 (L3, C104): `manifest` = an app manifest the bridge refused (code = the refusal, e.g. `manifest_mismatch`, a validator code, `bridge_too_old`)
+   *  v0.1.63: kind `config` + code `persona_too_long` = an agent persona over PERSONA_MAX_CHARS, dropped for that agent (BRIDGE §15.6) */
   rejected: {
     kind: "config" | "grant" | "slice" | "assertion" | "ticket" | "pairing" | "claim" | "bridge_op" | "manifest";
     code: BridgeErrorCode | string;
@@ -462,9 +491,11 @@ export interface ScopeSummaryResult {
   sources?: ScopeSourceItem[];
 }
 /** v0.1.65 (C331 D8): one scope instance an agent may use, as the app's owner UI names it (a Connect account, a Knowledge area).
- *  `label` = the scope instance label (≤ 60, no control characters); apps never use a third-party identifier (an email address,
- *  a phone number, a handle) as an instance label they create (the owner may type one). `access` = an access level id of that
- *  scope type. Display only: Core shows it on the canvas; the SDK authorizes every call. */
+ *  `id` = the app's OWN scope instance id (ScopeInstance.id, e.g. Connect `cna_…`), never a provider's id (no Stripe, Slack or
+ *  Google id). `label` = the scope instance label (≤ 60) with control characters and every format character (`\p{Cc}`,
+ *  `\p{Cf}`: zero-width, bidi marks) removed by the SDK and again by Core; apps never use a third-party identifier (an email
+ *  address, a phone number, a handle) as an instance label they create (the owner may type one). `access` = an access level id of
+ *  that scope type. Display only: Core shows it on the canvas; the SDK authorizes every call. */
 export interface ScopeSourceItem { type: SnakeId; id: string; label: string; access: SnakeId }
 export const SCOPE_SOURCES_MAX = 20;
 export const SCOPE_SOURCE_LABEL_MAX = 60;
@@ -793,6 +824,32 @@ export interface AppStatusResponse {
   sliceRevision: number;
   keysRev: number;
 }
+/** v0.1.63 (BRIDGE §15.5): presence + labels of one declared role; `provider`/`model`/`dataPolicy` null when unset. Labels
+ *  only — exactly these keys (schema `model-role-status.schema.json#/$defs/modelRoleStatus`). */
+export interface ModelRoleStatus {
+  role: ModelRole;
+  ins: InstanceId;
+  set: boolean;
+  policyOk: boolean;
+  provider: string | null;
+  model: string | null;
+  dataPolicy: DataPolicy | null;
+}
+/** v0.1.63 (BRIDGE §15.4): `GET /tb/v1/model-roles/<role>` with `TB-Assert`; `Cache-Control: no-store`. */
+export interface ModelRoleFetchResponse {
+  role: ModelRole;
+  /** MODEL_PROVIDERS id */
+  provider: string;
+  model: string;
+  baseUrl: string | null;
+  /** the bound key's value; null for a provider that needs no key */
+  key: string | null;
+  dataPolicy: DataPolicy;
+  /** embeddings only: vector size, when the owner set it */
+  dims: number | null;
+  /** one revision for keys AND role bindings */
+  keysRev: number;
+}
 /** `GET /tb/v1/keys/<name>` with `TB-Assert`; `Cache-Control: no-store`. */
 export interface KeyFetchResponse {
   name: string;
@@ -851,6 +908,8 @@ export const BRIDGE_INTERNAL_PATHS = {
   claim: "/tb/v1/claim",
   status: "/tb/v1/status",
   keys: "/tb/v1/keys/{name}",
+  /** v0.1.63 (BRIDGE §15.4) */
+  modelRoles: "/tb/v1/model-roles/{role}",
   call: "/tb/v1/call",
   /** v0.1.57 (C274c): app event ingest (BRIDGE §14.1) */
   events: "/tb/v1/events",
