@@ -21,7 +21,7 @@ export interface ModelProvider {
   /** stable id, stored in bindings */
   id: string;
   label: string;
-  /** roles the provider serves (from provider docs; the key page "Test" call is the proof) */
+  /** roles the provider serves (from provider docs; the app's first real call is the proof — the bridge calls no model) */
   roles: readonly ModelRole[];
   /** an API key is needed (false for local servers without auth) */
   keyNeeded: boolean;
@@ -55,6 +55,14 @@ export const MODEL_PROVIDERS: readonly ModelProvider[] = [
   { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true },
   { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true },
 ];
+
+/**
+ * App attention codes for model roles (MANIFEST §7.1). `model_role_missing`: a required role does not resolve (readiness
+ * `needs_keys`). `model_role_optional`: an optional role is unset and the app runs with less (readiness `degraded`).
+ * `embeddings_changed`: the embeddings binding differs from the one the app's index was built with; the app keeps the old
+ * one until the owner approves a re-embed. Core's update gate treats these as configuration, not regression (PORTAL-API v0.1.63).
+ */
+export const MODEL_ROLE_ATTENTION = ["model_role_missing", "model_role_optional", "embeddings_changed"] as const;
 
 /** Agent card persona (PORTAL-API §4.7): markdown, the system-prompt fragment the owner edits. */
 export const PERSONA_MAX_CHARS = 8000;

@@ -258,4 +258,6 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `RM-8` [Core] persona > 8,000 chars → `validation_failed`; the GUI renders it escaped.
 - `RM-9` [Knowledge + GUI] Knowledge without `embeddings` reports `degraded` + attention (not `needs_keys`) and the GUI opens it with the attention banner.
 - `RM-10` [GUI] setup screen readable at 10+ agents (roles table once; per-agent rows collapsed).
+- `RM-13` [Core + bridge + GUI] no key value and no base URL reaches Portal: StatusReport body, Core logs, Core DB rows, GUI network traffic (BRIDGE §15.7).
+- `RM-14` [Core] update gate: needs_keys → degraded `model_role_optional` passes; ok → needs_keys `model_role_missing` rolls back.
 - `RM-11` [Knowledge] `knowledge__ask` answers when `reasoning` resolves and is reachable by a granted agent; without it the tool says which role to set.
