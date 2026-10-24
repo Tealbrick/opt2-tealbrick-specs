@@ -316,8 +316,9 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule). */
 /** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
- *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles"] as const;
+ *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
+ *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops"] as const;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;

@@ -10,7 +10,7 @@
 import type { CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, StatusReport } from "./bridge.ts";
 import type {
   AgentId, BridgeId, ConnectionId, DeviceClientId, DeviceRequestId, DeviceScope, Ed25519PublicJwk,
-  FreeCaps, InstanceId, OwnerSessionClient, PersonId, WorkspaceId,
+  FreeCaps, InstanceId, OwnerSessionClient, PersonId, PersonOpClient, WorkspaceId,
 } from "./credentials.ts";
 import type {
   DeviceHostTokenResult, DeviceRequestHost, DeviceStartHostInput, HostPlanJws, HostPlansQuery, HostReport, HostReportAck,
@@ -38,6 +38,10 @@ export type AuditEventId = Id<"aud">;
 export type ReceiptId = Id<"rcp">;
 /** CORE §1: owner native session (K3), provider link. */
 export type OwnerSessionId = Id<"osn">;
+/** v0.1.64 (C332): the push device of one owner session (Teal Brick Mobile). */
+export type PushDeviceId = Id<"pdv">;
+/** v0.1.64 (C326): one relayed person op (Core queue row; K14 `pop` claim). */
+export type PersonOpId = Id<"pop">;
 export type ProviderLinkId = Id<"lnk">;
 export type IsoTime = string;
 export type Digest = `sha256:${string}`;
@@ -61,7 +65,11 @@ export type RateClass =
   | "read" | "write" | "sensitive" | "public_strict" | "device_poll"
   | "bridge_poll" | "bridge_write" | "webhook" | "stream" | "internal"
   /** v0.1.58 (S1-0): per server */
-  | "host_poll" | "host_write";
+  | "host_poll" | "host_write"
+  /** v0.1.64 (C326): per bridge, the person-op relay pull and result posts */
+  | "bridge_relay"
+  /** v0.1.64 (C326): per owner session, person_ops.call */
+  | "person_op";
 /** none = request/response bodies never logged; meta = field names + byte sizes only. Values never. */
 export type BodyLog = "none" | "meta";
 
@@ -107,6 +115,8 @@ export const RATE_CLASSES = {
   internal: { perMinute: 0, key: "none" },
   host_poll: { perMinute: 6, key: "principal" },
   host_write: { perMinute: 30, key: "principal" },
+  bridge_relay: { perMinute: 240, key: "principal" },
+  person_op: { perMinute: 30, key: "principal" },
 } as const satisfies Record<RateClass, { perMinute: number; key: "principal" | "ip" | "none" }>;
 
 // ───────────────────────────── audit action registry ─────────────────────────────
@@ -141,6 +151,10 @@ export const AUDIT_ACTIONS = [
   "server.pair",
   /** v0.1.58 (S1-0): stop every service on the server, keep data, unpair the key */
   "server.detach",
+  /** v0.1.64 (C332): an owner session (client tbm) set or removed its push device */
+  "push_device.register", "push_device.unregister",
+  /** v0.1.64 (C326): one allow-listed person op relayed for a K3 of client tbm (details: client, product, op, outcome; never input or output) */
+  "person_op.relay",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -184,6 +198,14 @@ export type ErrorCode =
    *  unknown: Core never puts old code on possibly migrated data); 409 on instances.update / rollback / retry / remove and the
    *  revive path while frozen. `update_kept_new`: the new version was kept (it reported and did not fail its boot). */
   | "update_held" | "update_kept_new"
+  /** v0.1.64 (C326): 403, person_ops.call for an op/product not in PERSON_OP_RELAY.allow, or a K3 whose client is not in
+   *  PERSON_OP_RELAY.clients (details.reason "op" | "client") */
+  | "person_op_not_allowed"
+  /** v0.1.64 (C326): 504, the bridge did not post the app's answer within PERSON_OP_RELAY.coreWaitS (the op may still have
+   *  run once; the client reloads before it repeats a write) */
+  | "person_op_timeout"
+  /** v0.1.64 (C332): 403, push_devices.register from a K3 whose client is not in PUSH.clients */
+  | "push_client_not_allowed"
   | "internal";
 /** CORE §8: the one error envelope. */
 export interface ErrorEnvelope { error: { code: ErrorCode; message: string; requestId: string; details?: Record<string, unknown> } }
@@ -455,7 +477,8 @@ export interface ConnectionRef { ws: WorkspaceId; agt: AgentId; con: ConnectionI
 // device flow — this file is the ONE wire source (B6); CREDENTIALS §6 and CLI.md cite these type names.
 // RFC 8628 field names on start/token. No unbound list exists: the owner reaches a request only with its user code (B2).
 /** scope "owner" → K3 owner native session; only the owner's own tools (`tealbrick-cli`, `tbd`), never `kit`, never a key (B3). */
-export interface DeviceStartOwnerInput { scope: "owner"; client_id: "tealbrick-cli" | "tbd"; machine_label: string }
+/** v0.1.64: client_id `tbm` (Teal Brick Mobile). */
+export interface DeviceStartOwnerInput { scope: "owner"; client_id: "tealbrick-cli" | "tbd" | "tbm"; machine_label: string }
 /** scope "agent" → key connections; one request may carry 1..64 {agt?, public_key} pairs from one machine (S4). */
 export interface DeviceStartAgentInput {
   scope: "agent";
@@ -1138,9 +1161,125 @@ export interface ZipFile { contentType: "application/zip"; filename: string }
 export interface DesktopDownload { releaseId: ReleaseId; version: string; url: string; sha256: string; notarized: boolean; minOs: string; publishedAt: IsoTime }
 
 // owner native sessions (K3: owner CLI and TBD human sign-in)
-export interface OwnerSession { id: OwnerSessionId; client: OwnerSessionClient; machineLabel: string; createdAt: IsoTime; lastUsedAt: IsoTime | null; idleExpiresAt: IsoTime; expiresAt: IsoTime; current: boolean }
+export interface OwnerSession {
+  id: OwnerSessionId; client: OwnerSessionClient; machineLabel: string; createdAt: IsoTime; lastUsedAt: IsoTime | null; idleExpiresAt: IsoTime; expiresAt: IsoTime; current: boolean;
+  /** v0.1.64 (C332): the session's push device (client tbm only); absent = none. Never the token. */
+  pushDevice?: { platform: PushPlatform; registeredAt: IsoTime };
+}
 export interface OwnerSessionList { items: OwnerSession[] }
 export interface OwnerSessionRef { osn: OwnerSessionId }
+
+// v0.1.64 (C332): push devices of owner sessions (Teal Brick Mobile). PORTAL-API "v0.1.64" A.
+export type PushPlatform = "ios" | "android";
+/** APNs needs the environment of the app build; FCM ignores it (send "production"). */
+export type PushEnvironment = "sandbox" | "production";
+/** One push device per owner session; a new register replaces the old row. The token never leaves Core again. */
+export interface PushDeviceRegisterInput {
+  platform: PushPlatform;
+  /** APNs device token (hex) or FCM registration token; 1..PUSH.tokenMax chars */
+  token: string;
+  /** iOS bundle id / Android package name; must be in Core's configured app ids (else validation_failed) */
+  appId: string;
+  environment: PushEnvironment;
+}
+export interface PushDevice { id: PushDeviceId; platform: PushPlatform; appId: string; environment: PushEnvironment; registeredAt: IsoTime; lastPushAt: IsoTime | null }
+
+/** v0.1.64 (C332): push rules (Core sender, CORE "v0.1.64" changelog). Push text never carries content (EVAL IN-3, v1 notify rule). */
+export const PUSH = {
+  /** owner-session clients that may register a push device */
+  clients: ["tbm"],
+  platforms: ["ios", "android"],
+  tokenMax: 4096,
+  appIdMax: 200,
+  /** at most one push per (workspace, kind) in this window */
+  minIntervalPerWorkspaceS: 60,
+  /** push kinds in this version; the payload is this fixed text + `{ kind, ws }` (decisions) or `{ kind, osn }` (session_added), nothing else.
+   *  session_added (C337, residual risk of a phished tbm code): to the person's OTHER push devices when a new tbm session is created. */
+  kinds: { decisions: "A decision is waiting", session_added: "New TBM sign-in on your account. Not you? Open TBM." },
+} as const satisfies { clients: readonly OwnerSessionClient[]; platforms: readonly PushPlatform[]; tokenMax: number; appIdMax: number; minIntervalPerWorkspaceS: number; kinds: Record<string, string> };
+export type PushKind = keyof typeof PUSH.kinds;
+
+// v0.1.64 (C326): person-op relay for native owner sessions (TBD, TBM). PORTAL-API "v0.1.64" B, BRIDGE §16, SDK-API §21.
+/**
+ * The ONE allow-list (Core AND the app SDK check it). Every other (product, op) → person_op_not_allowed; adding an entry is a
+ * spec patch + QA, with a reviewed statement that the op's output carries no credential (RT7 by review: the result body is
+ * app data, not a spec type). Standard ops `tb.*` may never be added except `tb.holds_list` / `tb.holds_decide` (key, export
+ * and scope ops never travel this path).
+ * - `read` ops: every client in `clients`. `write` ops: only `writeClients` — a `tbd` K3 lives on a Mac where the owner's own
+ *   agents run under the same OS user (CREDENTIALS §12), so it must never become an approval credential (review B1).
+ * - `refuseFamiliesFor` (C332a(4)): a write that decides a held action refuses `family_needs_portal` when the K14 `cli` is the
+ *   key and the family is listed OR UNKNOWN (fail closed). Core does not see families; the app enforces it.
+ */
+export const PERSON_OP_RELAY = {
+  /** v0.1.64: `tbm` only. `tbd` (same OS user as the owner's agents) waits for its own design — CREDENTIALS v0.1.64. */
+  clients: ["tbm"],
+  writeClients: ["tbm"],
+  allow: [
+    { product: "inbox", read: ["items_list", "item_get"], write: ["item_decide", "item_snooze", "item_ack"] },
+  ],
+  /** a `via` with no entry here refuses EVERY hold decision (deny by default, QA-SPEC43-1) */
+  refuseFamiliesFor: { tbm: ["money", "destructive"] },
+  /** Core holds the K3 request this long for the bridge's answer, then 504 person_op_timeout */
+  coreWaitS: 12,
+  /** a queued row the bridge has not TAKEN by then expires and is never handed out (no late delivery after Core's answer) */
+  queueTtlS: 4,
+  /** the bridge's forward timeout to the app; queueTtlS + bridgeForwardS < coreWaitS */
+  bridgeForwardS: 4,
+  /** the only leeway on K14 `exp` (the general LEEWAY_S does not apply): personOp + expLeewayS ≤ coreWaitS */
+  expLeewayS: 2,
+  /** at most this many rows queued or taken per workspace, else 409 conflict {reason: "busy"} */
+  queueMaxPerWorkspace: 8,
+  maxInputBytes: 32_768,
+  /** the result travels as a JSON string inside a json-transport post (256 KiB cap): keep well below it */
+  maxOutputBytes: 98_304,
+  /** bridge_api.person_ops long-poll wait */
+  pollWaitS: 25,
+} as const satisfies {
+  clients: readonly PersonOpClient[]; writeClients: readonly PersonOpClient[];
+  allow: readonly { product: ProductId; read: readonly string[]; write: readonly string[] }[];
+  refuseFamiliesFor: Record<PersonOpClient, readonly HoldFamily[]>; coreWaitS: number; queueTtlS: number; bridgeForwardS: number; expLeewayS: number;
+  queueMaxPerWorkspace: number; maxInputBytes: number; maxOutputBytes: number; pollWaitS: number;
+};
+/** K3 input: the op input is passed through verbatim (the app validates it against its manifest schema). */
+export interface PersonOpCallInput {
+  ws: WorkspaceId; ins: InstanceId; op: string; input: Record<string, unknown>;
+  /** 16..64 chars [A-Za-z0-9_-], new per user action; minted into K14 `idk`; the app uses it as its idempotency key (SDK §4.4) */
+  idempotencyKey: string;
+}
+/** The app's answer. `status` = the app's HTTP status; `body` = the app's JSON body (output, or its CORE §8 error envelope). */
+export interface PersonOpCallResult { status: number; body: unknown }
+/** Bridge pull (long-poll). */
+export interface BridgePersonOpsQuery { wait?: number }
+export interface BridgePersonOp {
+  id: PersonOpId; ins: InstanceId; op: string;
+  /** K14, typ tb-person-op+jwt; forwarded once in header TB-Person-Op */
+  jws: CompactJws;
+  /** the exact input bytes (UTF-8 JSON text) whose sha256 is K14 `bd`; forwarded as the body unchanged */
+  body: string;
+  expiresAt: IsoTime;
+}
+export interface BridgePersonOpBatch { items: BridgePersonOp[] }
+export interface BridgePersonOpResultInput {
+  pop: PersonOpId;
+  /** app HTTP status; -1 = not delivered (the app was not reached, the op did not run → Core 502 upstream_timeout);
+   *  0 = outcome unknown (timeout after sending, body over maxOutputBytes → Core 504 person_op_timeout) */
+  status: number;
+  /** the app's JSON body as text, ≤ PERSON_OP_RELAY.maxOutputBytes */
+  body: string;
+}
+
+// v0.1.64 (C332a(3)): public Portal identity for native clients checking a custom Portal URL before sign-in.
+export interface PortalInfo {
+  /** constant: a client refuses any other value */
+  service: "tealbrick-portal";
+  api: "v1";
+  /** SPEC_VERSION Core runs */
+  spec: string;
+  /** display name of this Portal (operator setting; default "Teal Brick") */
+  name: string;
+  /** owner-session clients the device flow accepts here */
+  ownerClients: OwnerSessionClient[];
+}
 
 // drafts + recipes (Consent Registry)
 /** Any string value in a step input may be replaced by a ref to an earlier step output (CORE §13). */
@@ -1330,6 +1469,9 @@ export interface SchemaMap {
   /** v0.1.58 (S1-0) */
   Server: Server; ServerList: ServerList; ServerListInput: ServerListInput; ServerRefInput: ServerRefInput; ServerDetachInput: ServerDetachInput;
   HostPlansQuery: HostPlansQuery; HostPlanJws: HostPlanJws; HostReport: HostReport; HostReportAck: HostReportAck;
+  /** v0.1.64 (C326, C332) */
+  PushDeviceRegisterInput: PushDeviceRegisterInput; PushDevice: PushDevice; PersonOpCallInput: PersonOpCallInput; PersonOpCallResult: PersonOpCallResult;
+  BridgePersonOpsQuery: BridgePersonOpsQuery; BridgePersonOpBatch: BridgePersonOpBatch; BridgePersonOpResultInput: BridgePersonOpResultInput; PortalInfo: PortalInfo;
 }
 export type SchemaName = keyof SchemaMap;
 
@@ -1489,6 +1631,13 @@ export const ROUTES = [
   { opId: "owner_sessions.list", method: "GET", path: "/owner-sessions", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "OwnerSessionList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "owner_sessions.revoke", method: "DELETE", path: "/owner-sessions/{osn}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "OwnerSessionRef", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.revoke", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "owner_sessions.logout", method: "POST", path: "/owner-sessions/logout", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.revoke", draftable: false, confirm: false, idempotent: false, registry: "credential" },
+  /** v0.1.64 (C332): the calling owner session's push device (client in PUSH.clients); revoke / logout / expiry deletes it. */
+  { opId: "push_devices.register", method: "PUT", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PushDeviceRegisterInput", output: "PushDevice", rate: "write", bodyLog: "none", audit: "push_device.register", draftable: false, confirm: false, idempotent: false, registry: "credential" },
+  { opId: "push_devices.unregister", method: "DELETE", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: "push_device.unregister", draftable: false, confirm: false, idempotent: false, registry: "credential" },
+  /** v0.1.64 (C326): allow-listed person op of one app instance for a K3 of client tbm, relayed through the workspace bridge (PERSON_OP_RELAY). */
+  { opId: "person_ops.call", method: "POST", path: "/workspaces/{ws}/instances/{ins}/person-ops/{op}", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PersonOpCallInput", output: "PersonOpCallResult", rate: "person_op", bodyLog: "none", audit: "person_op.relay", draftable: false, confirm: false, idempotent: false, registry: "instance" },
+  /** v0.1.64 (C332a(3)): public, read-only; lets a native client check that a custom URL is a Teal Brick Portal before sign-in. */
+  { opId: "portal.info", method: "GET", path: "/portal/info", auth: ["public"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "PortalInfo", rate: "public_strict", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "route" },
 
   // drafts + recipes (Consent Registry)
   { opId: "drafts.list", method: "GET", path: "/drafts", auth: BO, exposure: "gateway", transport: "json", query: ["cursor", "limit", "ws", "state"], input: "DraftListInput", output: "DraftList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "consent" },
@@ -1509,6 +1658,9 @@ export const ROUTES = [
   { opId: "bridge_api.enrol", method: "POST", path: "/bridge/enrol", auth: ["public"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeEnrolInput", output: "BridgeEnrolResult", rate: "public_strict", bodyLog: "none", audit: "bridge.enrol", draftable: false, confirm: false, idempotent: false, registry: "instance" },
   { opId: "bridge_api.config", method: "GET", path: "/bridge/config", auth: ["bridge"], exposure: "gateway", transport: "longpoll", query: ["after", "wait"], input: "BridgeConfigInput", output: "BridgeConfig", rate: "bridge_poll", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
   { opId: "bridge_api.ack", method: "POST", path: "/bridge/ack", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeAckInput", output: "BridgeAckResult", rate: "bridge_write", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
+  /** v0.1.64 (C326): the bridge pulls queued person ops for its workspace (BRIDGE §16); empty batch after `wait` s. */
+  { opId: "bridge_api.person_ops", method: "GET", path: "/bridge/person-ops", auth: ["bridge"], exposure: "gateway", transport: "json_slow", query: ["wait"], input: "BridgePersonOpsQuery", output: "BridgePersonOpBatch", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
+  { opId: "bridge_api.person_op_result", method: "POST", path: "/bridge/person-ops/{pop}/result", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgePersonOpResultInput", output: "Ok", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
 
   // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)
   { opId: "servers.list", method: "GET", path: "/servers", auth: BO, exposure: "gateway", transport: "json", query: ["ws"], input: "ServerListInput", output: "ServerList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "provider" },
@@ -1538,9 +1690,10 @@ export type PublicOpId = WithAuth<Row, "public">["opId"];
 
 type Check<T extends true> = T;
 type OwnerCliRow = WithAuth<Row, "owner-cli">;
-/** RT1: owner CLI may call only reads, drafts.*, and its own logout. */
+/** RT1: owner CLI may call only reads, drafts.*, and its own logout. v0.1.64 (C326, C332): plus its own push device
+ *  (push_devices.*, client tbm) and the allow-listed person-op relay (person_ops.call, client tbm). Nothing else. */
 export type InvariantOwnerCli = Check<
-  [Exclude<OwnerCliRow, { method: "GET" } | { opId: `drafts.${string}` | "owner_sessions.logout" }>] extends [never] ? true : false
+  [Exclude<OwnerCliRow, { method: "GET" } | { opId: `drafts.${string}` | "owner_sessions.logout" | "push_devices.register" | "push_devices.unregister" | "person_ops.call" }>] extends [never] ? true : false
 >;
 /** RT2: draftable ops are browser-callable mutations (never GET, never public/bridge/device/webhook). */
 export type InvariantDraftable = Check<
