@@ -517,7 +517,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.deepEqual([...EVENT_AUDIENCES], ["target", "granted"]);
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events"]);
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles"]);
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {

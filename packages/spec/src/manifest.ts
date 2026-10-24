@@ -2,6 +2,7 @@
 // Mirrors specs/manifest.schema.json exactly; MANIFEST.md holds the cross-field rules.
 // Data only: the `as const` vocabularies below are the ONE declaration of these literals.
 // `@opt2-tealbrick/manifest` re-exports them; no other package declares them.
+import type { DataPolicy, ModelRole } from "./models.ts";
 
 // ---------- Shared vocabularies ----------
 
@@ -374,9 +375,29 @@ export interface KeyRequirement {
   step?: SnakeId;
 }
 
+/**
+ * v0.1.63 (C322(3), C330(4)): a model role the app (or a service) uses. The workspace bridge resolves it from the owner's
+ * role registry (BRIDGE §15) and never serves a binding below `minPolicy`. MANIFEST §7.1, rules M-MR-1..5.
+ */
+export interface ModelRoleRequirement {
+  role: ModelRole;
+  /** true: the app reports `needs_keys` + attention `model_role_missing` while unset; false: it runs without (attention optional) */
+  required: boolean;
+  /** default `standard`; Observer-type apps that read sensitive data declare `zdr` or `local` */
+  minPolicy?: DataPolicy;
+  /** `"app"` or `runtime.services[].id` */
+  usedBy: string[];
+  /** env names `tb-exec` fills for services from the resolved binding (M-MR-4) */
+  env?: { provider?: EnvName; model?: EnvName; baseUrl?: EnvName; key?: EnvName; dims?: EnvName };
+  help?: string;
+  when?: Condition;
+}
+
 export interface Settings {
   steps: SettingStep[];
   keys?: KeyRequirement[];
+  /** v0.1.63 */
+  modelRoles?: ModelRoleRequirement[];
 }
 
 // ---------- Hooks, companions, unlocks ----------
