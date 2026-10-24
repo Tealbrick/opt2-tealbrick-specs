@@ -541,7 +541,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 });
 
-test("v0.1.66 (C331 D1): licences.staff_comp is the one staff route; browser only, draftable, idempotent, audited", async () => {
+test("v0.1.67 (C331 D1): licences.staff_comp is the one staff route; browser only, draftable, idempotent, audited", async () => {
   const row = ROUTES.find((r) => r.opId === "licences.staff_comp");
   assert.ok(row);
   assert.deepEqual([row.method, row.path, [...row.auth], row.draftable, row.confirm, row.idempotent, row.audit], ["POST", "/me/staff-comps", ["browser"], true, true, true, "licence.staff_comp"]);

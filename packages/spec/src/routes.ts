@@ -129,7 +129,7 @@ export const AUDIT_ACTIONS = [
   "bridge.enrolment_code_issue", "bridge.enrol",
   "ticket.launch", "ticket.keys",
   "licence.assign", "licence.unassign", "licence.move", "licence.create", "licence.revoke",
-  /** v0.1.66 (C331 D1): a staff member gave their own account a free (promo) licence on a non-live Core */
+  /** v0.1.67 (C331 D1): a staff member gave their own account a free (promo) licence on a non-live Core */
   "licence.staff_comp",
   "order.create", "order.paid", "order.failed",
   "skills.override_put", "skills.override_delete",
@@ -1016,7 +1016,7 @@ export interface LicenceRef { lic: LicenceId }
 export interface LicenceTargetInput { lic: LicenceId; ws: WorkspaceId }
 export interface LicenceChange { licence: Licence; configRevisions: { ws: WorkspaceId; revision: number }[] }
 /**
- * v0.1.66 (C331 D1): a free licence (comp, kind promo) for the CALLER'S OWN account, for demo and recipe flows on DEV. Only a
+ * v0.1.67 (C331 D1): a free licence (comp, kind promo) for the CALLER'S OWN account, for demo and recipe flows on DEV. Only a
  * caller who resolves as an operator in TB_ADMIN_OPERATORS, only on a non-live Core (environment not live, Stripe key not live,
  * TB_STRIPE_ALLOW_LIVE unset) and only with TB_STAFF_COMPS=1; else 403 `forbidden` with `details.reason` `staff_only` |
  * `live_environment` | `staff_comps_off`. `days` 1..STAFF_COMP_MAX_DAYS (default STAFF_COMP_DEFAULT_DAYS); `reason` 3..300;
@@ -1437,7 +1437,7 @@ export const ROUTES = [
   { opId: "licences.list", method: "GET", path: "/licences", auth: BO, exposure: "gateway", transport: "json", query: ["cursor", "limit", "product", "assigned"], input: "LicenceListInput", output: "LicenceList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
   { opId: "licences.assign", method: "POST", path: "/licences/{lic}/assign", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "LicenceTargetInput", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.assign", draftable: true, confirm: true, idempotent: false, registry: "entitlement" },
   { opId: "licences.unassign", method: "POST", path: "/licences/{lic}/unassign", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "LicenceRef", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.unassign", draftable: true, confirm: true, idempotent: false, registry: "entitlement" },
-  /** v0.1.66 (C331 D1): staff only, non-live Core only; draftable so a CLI or recipe can prepare it (the person applies in the browser) */
+  /** v0.1.67 (C331 D1): staff only, non-live Core only; draftable so a CLI or recipe can prepare it (the person applies in the browser) */
   { opId: "licences.staff_comp", method: "POST", path: "/me/staff-comps", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "StaffCompInput", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.staff_comp", draftable: true, confirm: true, idempotent: true, registry: "entitlement" },
   { opId: "licences.move", method: "POST", path: "/licences/{lic}/move", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "LicenceTargetInput", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.move", draftable: true, confirm: true, idempotent: false, registry: "entitlement" },
   { opId: "licences.unpaid", method: "GET", path: "/workspaces/{ws}/unpaid", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "WorkspaceRef", output: "UnpaidCount", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
