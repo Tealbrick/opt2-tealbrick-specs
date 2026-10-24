@@ -323,6 +323,10 @@ export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles"] as const;
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
  *  limit (BRIDGE §1.2 S2) keeps pause and revoke deliverable. */
 export const CONFIG_CORE_MAX_BYTES = 3_000_000;
+/** Spec follow-up (QA-SPEC49-13): pairing codes (K2b) of a workspace that are live OR cancelled-but-unexpired (their jti sits
+ *  in `revoked.jtis` until `exp`). Core refuses a new code at this count, so cancellations cannot grow the config past the
+ *  kill-path budget. */
+export const PAIRING_CODES_OPEN_MAX = 100;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;

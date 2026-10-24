@@ -710,6 +710,26 @@
       "kind": "own_host",
       "input": "https://10.0.0.1%40evil.example",
       "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1%5Cevil",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1%5cevil",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1＠evil",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1﹫evil",
+      "expect": "refused"
     }
   ]
 }

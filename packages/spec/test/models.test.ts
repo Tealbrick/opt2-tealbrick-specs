@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, type ModelRoleStatus } from "../src/bridge.ts";
+import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX } from "../src/bridge.ts";
 import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
@@ -282,6 +282,9 @@ test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed c
   const agent = ajv.compile({ $defs: schema.$defs, $ref: "#/$defs/agentEntry" });
   const base = { agt: "agt_01JA0000000000000000000001", name: "A", mode: "free" };
   assert.equal(agent({ ...base, persona: "line one\n\tindented" }), true, JSON.stringify(agent.errors));
-  for (const bad of ["\u0001", "a\u007fb", "\u0085", "\r\n", "\u0000"]) assert.equal(agent({ ...base, persona: bad }), false, JSON.stringify(bad));
+  for (const bad of ["\u0001", "a\u007fb", "\u0085", "\r\n", "\u0000", "a\u2028b", "\u2029", "\u202e", "\u2067x", "\ufeff", "x\ud800", "\udc00y"])
+    assert.equal(agent({ ...base, persona: bad }), false, JSON.stringify(bad));
+  for (const good of ["😀 emoji pairs pass", "字", "tab\there"]) assert.equal(agent({ ...base, persona: good }), true, good);
+  assert.equal(PAIRING_CODES_OPEN_MAX, 100);
   assert.equal(schema.$defs.agentEntry.properties.persona.pattern, PERSONA_PATTERN);
 });

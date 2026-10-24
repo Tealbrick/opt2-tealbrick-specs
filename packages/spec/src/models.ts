@@ -84,9 +84,11 @@ export const PERSONA_MAX_CHARS = 8000;
  *  surrogates forbidden (PERSONA_PATTERN, well-formed UTF-16), one unit costs at most 3 bytes in JSON, so 250,000 units are
  *  ≤ 1 MB after base64url — well inside CONFIG_CORE_MAX_BYTES. Core refuses a create/update past it (`validation_failed`). */
 export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
-/** Persona text: no control characters except TAB and LF (C0, DEL and C1 refused; clients turn CRLF into LF before sending).
- *  JSON Schema form; Core also refuses lone surrogates (`String.prototype.isWellFormed`). */
-export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f]*$" as const;
+/** Persona text: no control characters except TAB and LF (C0, DEL and C1 refused; clients turn CRLF into LF before sending),
+ *  no line/paragraph separators (U+2028/2029), no bidi embedding/override/isolate controls (U+202A–202E, U+2066–2069), no
+ *  BOM (U+FEFF), no lone surrogates (in a unicode-mode regex `\ud800-\udfff` matches only unpaired halves; Core also checks
+ *  `String.prototype.isWellFormed`). The review shows the persona in full, so nothing may hide or reorder text. */
+export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069\\ufeff\\ud800-\\udfff]*$" as const;
 
 /** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
 export const OWN_HOSTS_MAX = 32;
