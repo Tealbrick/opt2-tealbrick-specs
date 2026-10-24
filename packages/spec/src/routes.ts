@@ -66,7 +66,9 @@ export type RateClass =
   /** v0.1.58 (S1-0): per server */
   | "host_poll" | "host_write"
   /** v0.1.64 (C326): per bridge, the person-op relay pull and result posts */
-  | "bridge_relay";
+  | "bridge_relay"
+  /** v0.1.64 (C326): per owner session, person_ops.call */
+  | "person_op";
 /** none = request/response bodies never logged; meta = field names + byte sizes only. Values never. */
 export type BodyLog = "none" | "meta";
 
@@ -113,6 +115,7 @@ export const RATE_CLASSES = {
   host_poll: { perMinute: 6, key: "principal" },
   host_write: { perMinute: 30, key: "principal" },
   bridge_relay: { perMinute: 240, key: "principal" },
+  person_op: { perMinute: 30, key: "principal" },
 } as const satisfies Record<RateClass, { perMinute: number; key: "principal" | "ip" | "none" }>;
 
 // ───────────────────────────── audit action registry ─────────────────────────────
@@ -1157,30 +1160,47 @@ export type PushKind = keyof typeof PUSH.kinds;
 
 // v0.1.64 (C326): person-op relay for native owner sessions (TBD, TBM). PORTAL-API "v0.1.64" B, BRIDGE §15, SDK-API §21.
 /**
- * The ONE allow-list. Core refuses every other (product, op) with person_op_not_allowed; adding an entry is a spec patch + QA.
- * `refuseFamiliesFor`: the app SDK refuses a decision on a held action of these families when the K14 `cli` is the key
- * (C332a(4): money and delete stay in Portal for TBM); Core passes `cli` and does not see families.
+ * The ONE allow-list (Core AND the app SDK check it). Every other (product, op) → person_op_not_allowed; adding an entry is a
+ * spec patch + QA, with a reviewed statement that the op's output carries no credential (RT7 by review: the result body is
+ * app data, not a spec type). Standard ops `tb.*` may never be added except `tb.holds_list` / `tb.holds_decide` (key, export
+ * and scope ops never travel this path).
+ * - `read` ops: every client in `clients`. `write` ops: only `writeClients` — a `tbd` K3 lives on a Mac where the owner's own
+ *   agents run under the same OS user (CREDENTIALS §12), so it must never become an approval credential (review B1).
+ * - `refuseFamiliesFor` (C332a(4)): a write that decides a held action refuses `family_needs_portal` when the K14 `cli` is the
+ *   key and the family is listed OR UNKNOWN (fail closed). Core does not see families; the app enforces it.
  */
 export const PERSON_OP_RELAY = {
   clients: ["tbd", "tbm"],
+  writeClients: ["tbm"],
   allow: [
-    { product: "inbox", ops: ["items_list", "item_get", "item_decide", "item_snooze", "item_ack"] },
+    { product: "inbox", read: ["items_list", "item_get"], write: ["item_decide", "item_snooze", "item_ack"] },
   ],
   refuseFamiliesFor: { tbm: ["money", "destructive"], tbd: [] },
   /** Core holds the K3 request this long for the bridge's answer, then 504 person_op_timeout */
   coreWaitS: 12,
-  /** a queued request the bridge has not taken by then is dropped (never delivered late) */
-  queueTtlS: 30,
-  maxInputBytes: 65_536,
-  maxOutputBytes: 262_144,
+  /** a queued row the bridge has not TAKEN by then expires and is never handed out (no late delivery after Core's answer) */
+  queueTtlS: 5,
+  /** the bridge's forward timeout to the app; queueTtlS + bridgeForwardS < coreWaitS */
+  bridgeForwardS: 5,
+  /** at most this many rows queued or taken per workspace, else 409 conflict {reason: "busy"} */
+  queueMaxPerWorkspace: 8,
+  maxInputBytes: 32_768,
+  /** the result travels as a JSON string inside a json-transport post (256 KiB cap): keep well below it */
+  maxOutputBytes: 98_304,
   /** bridge_api.person_ops long-poll wait */
   pollWaitS: 25,
 } as const satisfies {
-  clients: readonly PersonOpClient[]; allow: readonly { product: ProductId; ops: readonly string[] }[];
-  refuseFamiliesFor: Record<PersonOpClient, readonly HoldFamily[]>; coreWaitS: number; queueTtlS: number; maxInputBytes: number; maxOutputBytes: number; pollWaitS: number;
+  clients: readonly PersonOpClient[]; writeClients: readonly PersonOpClient[];
+  allow: readonly { product: ProductId; read: readonly string[]; write: readonly string[] }[];
+  refuseFamiliesFor: Record<PersonOpClient, readonly HoldFamily[]>; coreWaitS: number; queueTtlS: number; bridgeForwardS: number;
+  queueMaxPerWorkspace: number; maxInputBytes: number; maxOutputBytes: number; pollWaitS: number;
 };
 /** K3 input: the op input is passed through verbatim (the app validates it against its manifest schema). */
-export interface PersonOpCallInput { ws: WorkspaceId; ins: InstanceId; op: string; input: Record<string, unknown> }
+export interface PersonOpCallInput {
+  ws: WorkspaceId; ins: InstanceId; op: string; input: Record<string, unknown>;
+  /** 16..64 chars [A-Za-z0-9_-], new per user action; minted into K14 `idk`; the app uses it as its idempotency key (SDK §4.4) */
+  idempotencyKey: string;
+}
 /** The app's answer. `status` = the app's HTTP status; `body` = the app's JSON body (output, or its CORE §8 error envelope). */
 export interface PersonOpCallResult { status: number; body: unknown }
 /** Bridge pull (long-poll). */
@@ -1196,7 +1216,8 @@ export interface BridgePersonOp {
 export interface BridgePersonOpBatch { items: BridgePersonOp[] }
 export interface BridgePersonOpResultInput {
   pop: PersonOpId;
-  /** app HTTP status; 0 = the app could not be reached (Core answers 502 upstream_timeout) */
+  /** app HTTP status; -1 = not delivered (the app was not reached, the op did not run → Core 502 upstream_timeout);
+   *  0 = outcome unknown (timeout after sending, body over maxOutputBytes → Core 504 person_op_timeout) */
   status: number;
   /** the app's JSON body as text, ≤ PERSON_OP_RELAY.maxOutputBytes */
   body: string;
@@ -1569,7 +1590,7 @@ export const ROUTES = [
   { opId: "push_devices.register", method: "PUT", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PushDeviceRegisterInput", output: "PushDevice", rate: "write", bodyLog: "none", audit: "push_device.register", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "push_devices.unregister", method: "DELETE", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: "push_device.unregister", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   /** v0.1.64 (C326): allow-listed person op of one app instance for a K3 of client tbd/tbm, relayed through the workspace bridge (PERSON_OP_RELAY). */
-  { opId: "person_ops.call", method: "POST", path: "/workspaces/{ws}/instances/{ins}/person-ops/{op}", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PersonOpCallInput", output: "PersonOpCallResult", rate: "write", bodyLog: "none", audit: "person_op.relay", draftable: false, confirm: false, idempotent: false, registry: "instance" },
+  { opId: "person_ops.call", method: "POST", path: "/workspaces/{ws}/instances/{ins}/person-ops/{op}", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PersonOpCallInput", output: "PersonOpCallResult", rate: "person_op", bodyLog: "none", audit: "person_op.relay", draftable: false, confirm: false, idempotent: false, registry: "instance" },
   /** v0.1.64 (C332a(3)): public, read-only; lets a native client check that a custom URL is a Teal Brick Portal before sign-in. */
   { opId: "portal.info", method: "GET", path: "/portal/info", auth: ["public"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "PortalInfo", rate: "public_strict", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "route" },
 

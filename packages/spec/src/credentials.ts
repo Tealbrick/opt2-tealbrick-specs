@@ -92,8 +92,8 @@ export const LIFETIME_S = {
    *  account disable and the absolute life end it as before.
    *  v0.1.64 (C332): applies to stored client `tbm` (Teal Brick Mobile) too. */
   ownerTbdSessionIdle: 7 * 86400,
-  /** v0.1.64 (C326): K14 relayed person op, exp − iat */
-  personOp: 60,
+  /** v0.1.64 (C326): K14 relayed person op, exp − iat (> queueTtlS + bridgeForwardS; the app refuses it later) */
+  personOp: 20,
   agentAccess: 900,
   agentRefreshSliding: 30 * 86400,
   /** previous refresh token accepted once within this window (CORE I12) */
@@ -298,14 +298,18 @@ export type PersonOpClient = "tbd" | "tbm";
  * Core mints one K14 per allow-listed `person_ops.call` from a K3 of a `PersonOpClient`. It is never returned to the K3 holder:
  * Core hands it to the workspace bridge on `bridge_api.person_ops` (the bridge pulls; Portal never calls in), the bridge
  * forwards it with the input to the app's private `POST /tb/v1/person-op`, and the app SDK verifies it (SDK-API §21).
- * Bound to one person, one instance, one op and the exact input bytes; one-time; ≤ 60 s.
+ * Bound to one person, one instance, one op and the exact input bytes; one-time; ≤ LIFETIME_S.personOp. Issuer is Core only
+ * (tb:portal): a standalone bridge or app-alone app never mints or accepts K14 (the route answers 503 there).
  */
-export interface PersonOpClaims extends BaseClaims<PortalOrStandaloneIssuer, PersonRef, InstanceRef> {
+export interface PersonOpClaims extends BaseClaims<PortalRef, PersonRef, InstanceRef> {
   ws: WorkspaceId;
   /** the person-audience op id (manifest or standard), = the allow-list entry */
   op: string;
-  /** sha256 of the exact input bytes the bridge forwards (the app checks it on the raw body before parsing) */
+  /** "sha256:" + lowercase hex of SHA-256 over the UTF-8 bytes of the exact body string the bridge forwards (NOT the CORE §3
+   *  JCS digest; no BOM). The app checks it on the raw body before parsing. */
   bd: Sha256Digest;
+  /** = PersonOpCallInput.idempotencyKey; the app's idempotency key for this call (SDK §4.4) */
+  idk: string;
   /** owner-session client the call came from; the app reads it as PersonPrincipal.via */
   cli: PersonOpClient;
   /** the relay row id (`pop_…`), echoed in the bridge result post */
@@ -631,11 +635,11 @@ export const CREDENTIAL_REGISTRY = [
   },
   {
     id: "K14", name: "relayed person op (v0.1.64, C326)", form: "jwt", typ: TYP.personOp, prefix: null,
-    issuer: "portal", issuerKey: "K12 Portal signing key", holder: "bridge", holderDetail: "workspace bridge, in memory, only to forward it once to the target app; never returned to the K3 holder, never logged",
-    storage: ["verifier_jti_set"], maxLifetimeS: 60, oneTime: true,
-    audienceRule: "aud = tb:ins:<target>; sub = tb:per:<workspace owner>; op ∈ PERSON_OP_RELAY.allow for the target product; cli ∈ PERSON_OP_RELAY.clients",
-    verifier: "app SDK on POST /tb/v1/person-op (Portal key set from the slice trust set)",
-    checks: ["ws = own workspace", "aud = own instance", "op = an op of audience person in the own manifest (or a standard person op)", "bd = sha256 of the raw body", "exp − iat ≤ 60", "jti unused (tb_used_jti)", "slice personNbf ≤ iat"],
+    issuer: "portal", issuerKey: "K12 Portal signing key (never a standalone issuer)", holder: "bridge", holderDetail: "workspace bridge, in memory, only to forward it once to the target app; never returned to the K3 holder, never logged; Core keeps it sealed until the row ends",
+    storage: ["issuer_sealed", "verifier_jti_set"], maxLifetimeS: 20, oneTime: true,
+    audienceRule: "iss = tb:portal only; aud = tb:ins:<target>; sub = tb:per:<workspace owner>; op ∈ PERSON_OP_RELAY.allow for the target product (write ops only for cli ∈ writeClients); cli ∈ PERSON_OP_RELAY.clients",
+    verifier: "app SDK on POST /tb/v1/person-op (Portal keys only; refused in standalone / app-alone mode)",
+    checks: ["iss = tb:portal", "ws = own workspace", "aud = own instance", "exp − iat ≤ LIFETIME_S.personOp", "jti unused, then consumed (tb_used_jti) BEFORE the body checks", "slice personNbf ≤ iat", "bd = sha256 hex of the raw body bytes", "(own product, op) ∈ PERSON_OP_RELAY.allow, write ops only for cli ∈ writeClients", "op is an op of audience person in the own manifest (or tb.holds_list / tb.holds_decide)"],
     acceptedAt: ["app private network POST /tb/v1/person-op (header TB-Person-Op), forwarded only by the workspace bridge"],
     revocation: "one-time; not minted for a revoked or idle-expired K3", revocationLatency: "n/a (≤ 60 s life)", pause: "not paused (owner access by design, like K11)",
   },

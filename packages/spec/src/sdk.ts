@@ -946,6 +946,9 @@ export interface PersonPrincipal {
   /** v0.1.64 (C326): native owner-session client of a relayed person op (K14 `cli`, SDK-API §21); absent for browser sessions */
   via?: PersonOpClient;
 }
+/** v0.1.64 (C332a(4), SDK-API §21): false when a relayed decision (`via` set) may not decide a hold of this family — a family in
+ *  PERSON_OP_RELAY.refuseFamiliesFor[via], or null / unknown (fail closed). Browser sessions (`via` undefined) → true. */
+export declare function familyAllowedFor(via: PersonOpClient | undefined, family: HoldFamily | null): boolean;
 export declare const SESSION_COOKIE: "tb_session";
 export declare const CSRF_HEADER: "TB-CSRF";
 export interface SessionInfo {

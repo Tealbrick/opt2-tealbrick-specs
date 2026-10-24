@@ -45,19 +45,41 @@ test("person-op relay: K3 only, clients tbd/tbm (never cli), one allow-list, bod
   assert.equal(call.confirm, false);
   assert.ok(!(PERSON_OP_RELAY.clients as readonly string[]).includes("cli"));
   for (const c of PERSON_OP_RELAY.clients) assert.ok((OWNER_SESSION_CLIENTS as readonly string[]).includes(c));
+  assert.equal(call.rate, "person_op");
+  assert.ok("person_op" in RATE_CLASSES);
   const products = PERSON_OP_RELAY.allow.map((a) => a.product);
   assert.equal(new Set(products).size, products.length, "one entry per product");
   for (const a of PERSON_OP_RELAY.allow) {
-    assert.ok(a.ops.length > 0);
-    for (const op of a.ops as readonly string[]) assert.ok(!op.startsWith("tb.") || ["tb.holds_list", "tb.holds_decide"].includes(op), op);
+    const ops = [...a.read, ...a.write] as string[];
+    assert.ok(ops.length > 0);
+    assert.equal(new Set(ops).size, ops.length, "an op is read OR write");
+    // key, export and scope ops never travel this path (review S5)
+    for (const op of ops) assert.ok(!op.startsWith("tb.") || ["tb.holds_list", "tb.holds_decide"].includes(op), op);
   }
   assert.deepEqual([...PERSON_OP_RELAY.refuseFamiliesFor.tbm].sort(), ["destructive", "money"]);
   for (const f of Object.values(PERSON_OP_RELAY.refuseFamiliesFor).flat()) assert.ok((HOLD_FAMILIES as readonly string[]).includes(f), f);
-  // Core waits less than the K3 transport allows; the bridge poll wait fits its transport
-  assert.ok(PERSON_OP_RELAY.coreWaitS * 1000 < TRANSPORTS.json.timeoutMs);
+  for (const c of PERSON_OP_RELAY.writeClients) assert.ok((PERSON_OP_RELAY.clients as readonly string[]).includes(c));
+});
+
+test("person-op relay: a tbd K3 is never an approval credential (review B1)", () => {
+  assert.ok(!(PERSON_OP_RELAY.writeClients as readonly string[]).includes("tbd"));
+  assert.deepEqual([...PERSON_OP_RELAY.writeClients], ["tbm"]);
+});
+
+test("person-op relay: no delivery after Core answered; results fit the post (review B3, S2)", () => {
+  const { coreWaitS, queueTtlS, bridgeForwardS, pollWaitS, maxOutputBytes, maxInputBytes } = PERSON_OP_RELAY;
+  // an untaken row expires, and a taken one is forwarded with a timeout, before Core gives up
+  assert.ok(queueTtlS + bridgeForwardS < coreWaitS);
+  // K14 outlives queue + forward (no false refusals) but not much more
+  assert.ok(LIFETIME_S.personOp > queueTtlS + bridgeForwardS && LIFETIME_S.personOp <= 2 * coreWaitS);
+  assert.ok(coreWaitS * 1000 < TRANSPORTS.json.timeoutMs);
   const pull = row("bridge_api.person_ops");
-  assert.ok(PERSON_OP_RELAY.pollWaitS * 1000 < TRANSPORTS[pull.transport].timeoutMs);
-  assert.ok(PERSON_OP_RELAY.queueTtlS <= LIFETIME_S.personOp);
+  assert.ok(pollWaitS * 1000 < TRANSPORTS[pull.transport].timeoutMs);
+  const result = row("bridge_api.person_op_result");
+  // the body travels JSON-escaped inside a string: keep it below half the transport cap
+  assert.ok(maxOutputBytes * 2 < TRANSPORTS[result.transport].bodyCapKb * 1024);
+  assert.ok(maxInputBytes * 2 < TRANSPORTS[row("person_ops.call").transport].bodyCapKb * 1024);
+  assert.ok(PERSON_OP_RELAY.queueMaxPerWorkspace > 0);
   for (const opId of ["bridge_api.person_ops", "bridge_api.person_op_result"]) {
     const r = row(opId);
     assert.deepEqual([...r.auth], ["bridge"], opId);
@@ -76,7 +98,7 @@ test("K14: Portal-signed, held only by the bridge, one-time, ≤ 60 s, its own t
   assert.equal(k14.holder, "bridge");
   assert.equal(k14.oneTime, true);
   assert.equal(k14.maxLifetimeS, LIFETIME_S.personOp);
-  assert.equal(LIFETIME_S.personOp, 60);
+  assert.equal(LIFETIME_S.personOp, 20);
   const typs = Object.values(TYP);
   assert.equal(new Set(typs).size, typs.length, "one typ per kind");
 });
