@@ -160,6 +160,9 @@ export type ErrorCode =
   | "offer_unavailable" | "checkout_failed" | "upstream_timeout"
   /** v0.1.56 (C296): Instance.lastError of a companion that could not start because a required key it uses is not set */
   | "needs_keys"
+  /** v0.1.68 (C336, BRIDGE v0.1.68): 409, the release needs a bridge capability the workspace bridge does not declare
+   *  (e.g. `secret_output`); `details.cap` names it */
+  | "bridge_cap_missing"
   /** v0.1.13 (C86): tickets.launch `path` outside the target app */
   | "path_invalid"
   /** v0.1.13 (C82): instances.consent for a consent the release does not ask for */
