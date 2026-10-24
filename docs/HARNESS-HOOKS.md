@@ -25,14 +25,14 @@ packages). Implemented by `@opt2-tealbrick/harness-claude` (`runHook`, `knowledg
 
 | Event | Claude Code | Hermes (plugin) | Call | Output |
 |---|---|---|---|---|
-| `session_start` | SessionStart (`source: compact` = rehydrate) | session start | context tool (§4) with `{purpose: "session_start", maxChars, query: <project>}` | context text |
+| `session_start` | SessionStart (`source: compact` = rehydrate) | session start | context tool (§4) with `{purpose: "session_start" \| "after_compact", maxChars}`; recall fallback queries the project name | context text |
 | `prompt` | UserPromptSubmit | `pre_llm_call` only when no context engine | context tool with `purpose: "prompt"`, else `knowledge__recall {query: <prompt>, limit: 5}`; skipped for prompts < 12 chars | context text |
 | `pre_compact` | PreCompact | pre-compression | `knowledge__remember` per item (or one `items[]` call when the op has `items`) | none |
 | `stop` | Stop | — | `knowledge__remember`, marked items only (backstop) | none |
 | `session_end` | SessionEnd (CLI only) | session end | as `pre_compact` | none |
 
 Items (wave 1 rule until the promotion benchmark, WP-HARNESS-WAVE1 X8): lines starting with `remember:`, `#remember` or
-`[remember]` in any turn, plus one digest of the last 8 user turns at `pre_compact` / `session_end` (tags `harness, digest`).
+`[remember]` in any turn (kind `note`), plus one digest of the last 8 user turns at `pre_compact` / `session_end` (kind `digest`, tags `harness, digest`).
 ≤ 20 items per call, ≤ 2,000 chars per item.
 
 ## 3. Budgets
@@ -47,14 +47,13 @@ The budget includes relay start-up. Claude Code hook `timeout` (seconds) is set 
 
 ## 4. Tool resolution
 
-From the agent's `tools/list`, in order: `knowledge__context` (planned hot op) → `knowledge__gb_context_pack` (engine entry) →
-`knowledge__recall`. Arguments are fitted to the tool's `inputSchema` (unknown keys dropped; a missing required key = skip).
+From the agent's `tools/list`, in order: `knowledge__context` (Knowledge ≥ 0.1.25) → `knowledge__recall`. GBrain's
+`gb_context_pack` is not used by hooks: it resolves entity names by alias/title, and a hook has no real entity names. Arguments are fitted to the tool's `inputSchema` (unknown keys dropped; a missing required key = skip).
 Save = `knowledge__remember`. Names resolve at run time, so a Knowledge release that adds the hot ops needs no hook release.
 
 | Tool | Arguments sent | Notes |
 |---|---|---|
-| `knowledge__context` | `{purpose: "session_start" \| "after_compact" \| "prompt", maxChars, query?, area?}` | `after_compact` = session start right after a compaction |
-| `knowledge__gb_context_pack` | `{entities: "<name>,…" (comma-separated string, ≤ 8 names), budget_tokens: ⌊maxChars / 4⌋, session_id?}` | session start only (the project name is the entity); never for `prompt` (falls back to recall) |
+| `knowledge__context` | `{purpose: "session_start" \| "after_compact" \| "prompt", maxChars (200–20,000), query? (prompt only), area?}` | no entities, no query at session start (newest cited memories); inject `structuredContent.text`; `refs` are for `knowledge__get` |
 | `knowledge__recall` | `{query, limit, area?}` | `limit` 8 at session start, 5 per prompt |
 | `knowledge__remember` (today) | `{text, title?, tags, area?}` one call per item, `_meta` key per item (HH-6) | |
 | `knowledge__remember` (with `items`) | `{items: [{text, kind: "note" \| "digest", tags}] (≤ 50), source: {harness, session?}, area?}` | `_meta` key = `"tbb-" + sha256(sorted item keys + "\n" + area + "\n" + session)[0..48]`: a changed batch gets a new key; Knowledge dedupes per item |
