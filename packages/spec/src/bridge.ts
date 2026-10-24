@@ -337,6 +337,10 @@ export const CONFIG_KILLPATH_MAX_BYTES = 4_000_000;
  *  requires EVERY re-minted slice to stay at or under it; slices add no bytes on pause (`agents[].status`), so the check is
  *  about the slice's normal content (edge-agent directory, companion grants). */
 export const SLICE_JWS_MAX_CHARS = 65_536;
+/** QA-SPEC49-22: owner changes keep every worst-case slice at or under this, so the ~9.5k chars of automatic, never-refused
+ *  growth (Portal key-set rotation ≤ 8 keys + KSS, bridge key rotation, tb-views URL, bridge caps ≤ 16, app callers) always
+ *  fit under SLICE_JWS_MAX_CHARS and pause/revoke stay deliverable. */
+export const SLICE_CORE_MAX_CHARS = 56_000;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;

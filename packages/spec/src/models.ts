@@ -84,12 +84,15 @@ export const PERSONA_MAX_CHARS = 8000;
  *  surrogates forbidden (PERSONA_PATTERN, well-formed UTF-16), one unit costs at most 3 bytes in JSON, so 250,000 units are
  *  ≤ 1 MB after base64url — well inside CONFIG_CORE_MAX_BYTES. Core refuses a create/update past it (`validation_failed`). */
 export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
-/** Persona text (C353): REFUSE only characters that hide or reorder text and that no script needs — C0 controls except TAB
- *  and LF, DEL and C1, Hangul fillers U+115F/U+1160/U+3164, U+2028/2029, bidi embeddings/overrides U+202A–202E and isolates
- *  U+2066–2069, invisible operators U+2060–2064, deprecated format U+206A–206F, BOM U+FEFF, interlinear annotation
- *  U+FFF9–FFFB, tag characters U+E0000–E007F, lone surrogates (unicode-mode regex; Core also checks isWellFormed()). Clients
- *  turn CRLF into LF. Characters real scripts need stay ALLOWED and are SHOWN as markers (PERSONA_MARKERS). */
-export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u115f\\u1160\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\u3164\\ufeff\\ufff9-\\ufffb\\ud800-\\udfff\\u{e0000}-\\u{e007f}]*$" as const;
+/** Persona text (C353, QA-SPEC49-23): one rule by Unicode property, so no range can be forgotten. A persona is accepted when
+ *  every character is TAB, LF, a PERSONA_MARKERS character (allowed, shown as a marker), or NOT in \p{Cc}, \p{Cf}, \p{Cs}
+ *  (lone surrogates), \p{Default_Ignorable_Code_Point}, U+2028 or U+2029 — and no two variation selectors stand in a row
+ *  (no script needs that; runs could carry a hidden message). So bidi controls, tag characters, Hangul fillers (U+115F,
+ *  U+1160, U+3164, U+FFA0), BOM, invisible operators etc. are refused, and every allowed invisible character is a marker.
+ *  Unicode-mode regex (`u` flag) of the runtime (Node 24 / current browsers); Core's verdict wins. Clients turn CRLF into LF.
+ *  Core also checks isWellFormed(). */
+export const PERSONA_PATTERN =
+  "^(?![\\s\\S]*[\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]{2})(?:[\\t\\n]|[\\u00AD\\u034F\\u061C\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$" as const;
 
 /** C353: allowed invisible characters that scripts need (Persian, Hebrew, Arabic, Sinhala, Mongolian, Japanese IVS, emoji
  *  ZWJ sequences). The drafts review and the persona editor show each one as a visible labelled marker (e.g. `⟨ZWJ⟩`) next
@@ -98,7 +101,9 @@ export const PERSONA_MARKERS: readonly { from: number; to: number; label: string
   { from: 0x00ad, to: 0x00ad, label: "SHY" },
   { from: 0x034f, to: 0x034f, label: "CGJ" },
   { from: 0x061c, to: 0x061c, label: "ALM" },
+  { from: 0x180b, to: 0x180d, label: "FVS" },
   { from: 0x180e, to: 0x180e, label: "MVS" },
+  { from: 0x180f, to: 0x180f, label: "FVS" },
   { from: 0x200b, to: 0x200b, label: "ZWSP" },
   { from: 0x200c, to: 0x200c, label: "ZWNJ" },
   { from: 0x200d, to: 0x200d, label: "ZWJ" },
