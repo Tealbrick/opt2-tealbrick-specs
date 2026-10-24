@@ -35,7 +35,8 @@ export type ReleasesRef = "tb:releases";
 export const CALLER_TYPES = ["person", "agent", "app", "bridge", "portal", "host"] as const;
 export type CallerType = (typeof CALLER_TYPES)[number];
 
-export const CREDENTIAL_KINDS = ["K1", "K2", "K2b", "K3", "K4", "K5", "K6", "K7", "K8", "K9", "K10", "K11", "K12", "K13"] as const;
+/** v0.1.64 (C326, C332): K14 = relayed person op (Core-minted on the authority of an allow-listed K3 call; PORTAL-API "v0.1.64" B). */
+export const CREDENTIAL_KINDS = ["K1", "K2", "K2b", "K3", "K4", "K5", "K6", "K7", "K8", "K9", "K10", "K11", "K12", "K13", "K14"] as const;
 export type CredentialKindId = (typeof CREDENTIAL_KINDS)[number];
 
 // ── JOSE `typ` values: one per token kind / proof; every endpoint accepts exactly one ──
@@ -62,6 +63,8 @@ export const TYP = {
   hostAssertion: "tb-host-assert+jwt",
   /** v0.1.58 (S1-0): a host plan, signed by a Portal signing key (K12); verified on the box (HOST.md §4). A signed DOCUMENT, not a credential kind. */
   hostPlan: "tb-host-plan+jws",
+  /** v0.1.64 (C326): relayed person op (K14), accepted only by the app SDK on `POST /tb/v1/person-op` (SDK-API §21). */
+  personOp: "tb-person-op+jwt",
 } as const;
 export type Typ = (typeof TYP)[keyof typeof TYP];
 
@@ -86,8 +89,11 @@ export const LIFETIME_S = {
   /** v0.1.53 (C289): idle limit of an owner session whose stored `owner_sessions.client` is `tbd` (TBD device flow; the CLI uses the
    *  device flow too but is stored as `cli`); slides on every use like the
    *  CLI idle limit and never passes `ownerCliSessionAbsolute` (30 d). CLI sessions keep `ownerCliSessionIdle` (24 h). Revoke,
-   *  account disable and the absolute life end it as before. */
+   *  account disable and the absolute life end it as before.
+   *  v0.1.64 (C332): applies to stored client `tbm` (Teal Brick Mobile) too. */
   ownerTbdSessionIdle: 7 * 86400,
+  /** v0.1.64 (C326): K14 relayed person op, exp − iat */
+  personOp: 60,
   agentAccess: 900,
   agentRefreshSliding: 30 * 86400,
   /** previous refresh token accepted once within this window (CORE I12) */
@@ -285,6 +291,27 @@ export interface PersonTicketKeysClaims extends BaseClaims<PortalOrStandaloneIss
 }
 export type PersonTicketClaims = PersonTicketLaunchClaims | PersonTicketKeysClaims;
 
+// ── K14 relayed person op (v0.1.64, C326) ────────────────────────────────────
+/** Owner-session clients whose K3 may call `person_ops.call` (PERSON_OP_RELAY.clients). The CLI (`cli`) never may. */
+export type PersonOpClient = "tbd" | "tbm";
+/**
+ * Core mints one K14 per allow-listed `person_ops.call` from a K3 of a `PersonOpClient`. It is never returned to the K3 holder:
+ * Core hands it to the workspace bridge on `bridge_api.person_ops` (the bridge pulls; Portal never calls in), the bridge
+ * forwards it with the input to the app's private `POST /tb/v1/person-op`, and the app SDK verifies it (SDK-API §21).
+ * Bound to one person, one instance, one op and the exact input bytes; one-time; ≤ 60 s.
+ */
+export interface PersonOpClaims extends BaseClaims<PortalOrStandaloneIssuer, PersonRef, InstanceRef> {
+  ws: WorkspaceId;
+  /** the person-audience op id (manifest or standard), = the allow-list entry */
+  op: string;
+  /** sha256 of the exact input bytes the bridge forwards (the app checks it on the raw body before parsing) */
+  bd: Sha256Digest;
+  /** owner-session client the call came from; the app reads it as PersonPrincipal.via */
+  cli: PersonOpClient;
+  /** the relay row id (`pop_…`), echoed in the bridge result post */
+  pop: `pop_${Ulid}`;
+}
+
 // ── Proofs that are not credentials (≤ 60 s, jti replay set at the verifier) ──
 export interface AgentAssertionClaims extends BaseClaims<AgentRef, AgentRef, BridgeRef> {
   con: ConnectionId;
@@ -380,14 +407,16 @@ export const OAUTH_GRANT_TYPES = {
 } as const;
 
 /** K3 client label recorded at Core (opaque token, so not a claim). */
-export const OWNER_SESSION_CLIENTS = ["cli", "tbd"] as const;
+/** v0.1.64 (C322(8), C332): `tbm` = Teal Brick Mobile (device flow client_id `tbm`, scope owner). */
+export const OWNER_SESSION_CLIENTS = ["cli", "tbd", "tbm"] as const;
 export type OwnerSessionClient = (typeof OWNER_SESSION_CLIENTS)[number];
 
 /** Device flow (K2, RFC 8628) parameters. */
 export const DEVICE_FLOW = {
-  clientIds: ["tealbrick-cli", "tbd", "kit", "tealbrick-host"],
+  /** v0.1.64: `tbm` (Teal Brick Mobile) — scope owner only in this version (no agent scope until the node contract, C332) */
+  clientIds: ["tealbrick-cli", "tbd", "kit", "tealbrick-host", "tbm"],
   /** scope=owner only for these (a kit can never obtain K3) */
-  ownerClientIds: ["tealbrick-cli", "tbd"],
+  ownerClientIds: ["tealbrick-cli", "tbd", "tbm"],
   agentClientIds: ["tealbrick-cli", "tbd", "kit"],
   /** v0.1.58 (S1-0): scope `host` only for this client (the host agent on a server); it can never obtain K3 or agent connections */
   hostClientIds: ["tealbrick-host"],
@@ -599,6 +628,16 @@ export const CREDENTIAL_REGISTRY = [
     checks: ["kid = pinned host key thumbprint", "server not detached (except the final stop plan and its report)", "htm/htu/bd match", "exp − iat ≤ 60", "jti not replayed"],
     acceptedAt: ["Core host rows (TB-Assert): host.plans, host.report"],
     revocation: "servers.detach (unpairs the key) or a new pairing (S2: signed rotation)", revocationLatency: "Core immediate", pause: "n/a (pause is enforced by the bridge; plans and reports continue)",
+  },
+  {
+    id: "K14", name: "relayed person op (v0.1.64, C326)", form: "jwt", typ: TYP.personOp, prefix: null,
+    issuer: "portal", issuerKey: "K12 Portal signing key", holder: "bridge", holderDetail: "workspace bridge, in memory, only to forward it once to the target app; never returned to the K3 holder, never logged",
+    storage: ["verifier_jti_set"], maxLifetimeS: 60, oneTime: true,
+    audienceRule: "aud = tb:ins:<target>; sub = tb:per:<workspace owner>; op ∈ PERSON_OP_RELAY.allow for the target product; cli ∈ PERSON_OP_RELAY.clients",
+    verifier: "app SDK on POST /tb/v1/person-op (Portal key set from the slice trust set)",
+    checks: ["ws = own workspace", "aud = own instance", "op = an op of audience person in the own manifest (or a standard person op)", "bd = sha256 of the raw body", "exp − iat ≤ 60", "jti unused (tb_used_jti)", "slice personNbf ≤ iat"],
+    acceptedAt: ["app private network POST /tb/v1/person-op (header TB-Person-Op), forwarded only by the workspace bridge"],
+    revocation: "one-time; not minted for a revoked or idle-expired K3", revocationLatency: "n/a (≤ 60 s life)", pause: "not paused (owner access by design, like K11)",
   },
 ] as const satisfies readonly CredentialRegistryRow[];
 

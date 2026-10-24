@@ -554,3 +554,28 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## C328 (owner API: optional access allowlist; no type change)
 - With Core's `TB_ACCESS_ALLOWLIST` set (comma list of emails and `@domain` entries), a browser or owner-CLI request is accepted only for a Clerk user whose verified primary email is on the list (exact email, or exact domain), or who is an operator of the admin plane (`TB_ADMIN_OPERATORS`, any role). Any other caller gets 403 `access_restricted` with the message "This Portal is for the Tealbrick team." and no account is created. `owner_sessions.logout` stays open. Device-flow approval, server pairing and tickets are browser ops and pass the same check; the device exchange, bridge, host, public and webhook principals are not affected. Unset = off. `access_restricted` is an additive Core code (not yet in `ErrorCode`); the GUI shows the envelope message.
+
+## v0.1.64 additions (C326, C332, C332a: Teal Brick Mobile; 5 rows)
+
+### A. Owner client `tbm` and its push device
+- `device.start` accepts `DeviceStartOwnerInput.client_id: "tbm"` (Teal Brick Mobile, scope `owner` only; no agent or host scope in this version). Core stores `owner_sessions.client = "tbm"` (not `cli`); idle limit `LIFETIME_S.ownerTbdSessionIdle` (7 d), same slide and absolute life as `tbd` (§5.4, C289). The owner approval screen and the Sessions page label it "TBM". Limits = §5.4 plus the two v0.1.64 rows below (RT1 amended).
+- `push_devices.register` `PUT /owner-sessions/current/push-device` (`owner-cli`, `bodyLog: none`): one push device per owner session; a new call replaces the row. Refused `403 push_client_not_allowed` unless the session's stored client is in `PUSH.clients` (`tbm`). `appId` must be one of Core's configured app ids (`TB_PUSH_APP_IDS`), else `validation_failed`. The token is stored sealed, never returned, never logged; `OwnerSession.pushDevice` shows only `{platform, registeredAt}`.
+- `push_devices.unregister` `DELETE /owner-sessions/current/push-device`: removes it (idempotent: 200 when none).
+- The row is deleted with its session: `owner_sessions.logout`, `owner_sessions.revoke`, idle or absolute expiry (at the next sweep, ≤ 1 h), account disable.
+- Core sender (CORE changelog v0.1.64): kind `decisions` when the summed `Instance.pendingHolds` of a workspace goes UP in a bridge status report; one push per (workspace, kind) per `PUSH.minIntervalPerWorkspaceS`; to every push device of the workspace owner's live sessions. Payload = the fixed `PUSH.kinds` text + `{kind, ws}`; never a title, person, amount, app name or item id. APNs only in this version (FCM later, same rule). Sender failure (no config, provider error, timeout) never fails the status report; an APNs `410`/`BadDeviceToken` deletes that device row.
+
+### B. Person-op relay for native owner sessions (`person_ops.call`)
+- `POST /workspaces/{ws}/instances/{ins}/person-ops/{op}` (`owner-cli`, `bodyLog: none`, audit `person_op.relay`). Body `PersonOpCallInput.input` = the op input, passed through verbatim.
+- Refusals, in order: K3 client not in `PERSON_OP_RELAY.clients` (`tbd`, `tbm`; never `cli`) → `403 person_op_not_allowed {reason: "client"}`; workspace not the caller's / instance not in it → `404 not_found`; instance product + op not in `PERSON_OP_RELAY.allow` → `403 person_op_not_allowed {reason: "op"}`; input over `maxInputBytes` → `413 payload_too_large`; instance not running or bridge not reachable (last pull > 120 s) → `409 bridge_not_ready`.
+- Then Core serializes `input` once (UTF-8 JSON text), mints K14 (`typ tb-person-op+jwt`, iss `tb:portal`, sub the person, aud `tb:ins:<ins>`, `ws`, `op`, `bd` = sha256 of that text, `cli`, `pop`, 60 s, one-time), queues `{pop, ins, op, jws, body}` for the workspace's bridge (expires after `queueTtlS`), and waits up to `coreWaitS` for the bridge's result.
+- Answer: `200 PersonOpCallResult {status, body}` = the app's own HTTP status and JSON body (output or the app's CORE §8 envelope; the client reads `body.error.code` for app refusals such as `family_needs_portal`). No result in time → `504 person_op_timeout` (the op may have run once; the client reloads before it repeats a write). Bridge result `status: 0` → `502 upstream_timeout`.
+- Audit `person_op.relay` details: `{client, product, op, outcome: "ok" | "app_error" | "timeout" | "unreachable", appStatus}`. Never the input, output or K14.
+- This keeps C16 B4: the K3 holder never receives K14 or any K11; Core never calls into customer infrastructure (CREDENTIALS §1) — the bridge pulls.
+- Allow-list v1 (`PERSON_OP_RELAY.allow`): `inbox` → `items_list`, `item_get`, `item_decide`, `item_snooze`, `item_ack`. Any addition = spec patch + QA (C326).
+
+### C. Bridge rows
+- `bridge_api.person_ops` `GET /bridge/person-ops?wait=` (`bridge`, `json_slow`, rate `bridge_relay`): returns the queued, unexpired requests for this bridge's workspace at once, or an empty batch after `wait` s (≤ `pollWaitS`). Each request is handed out once (taken on read).
+- `bridge_api.person_op_result` `POST /bridge/person-ops/{pop}/result` (`bridge`): `{status, body}`; only for a `pop` handed to this bridge and not yet answered (else `404 not_found`); body ≤ `maxOutputBytes` (else Core records `status 0`).
+
+### D. `portal.info` (public)
+- `GET /portal/info` → `PortalInfo {service: "tealbrick-portal", api: "v1", spec, name, ownerClients}`. A native client asks it before sign-in to a custom Portal URL (https origin only) and refuses any other `service` value; it shows the host and `name` before it starts the device flow (C332a(3)). Read-only, no account data.

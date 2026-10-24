@@ -2,6 +2,15 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.64 (C326, C332, C332a: Teal Brick Mobile; additive)
+- Owner client `tbm` (scope owner only; stored client `tbm`; 7-day idle like `tbd`). `OWNER_SESSION_CLIENTS`, `DEVICE_FLOW` lists, `DeviceStartOwnerInput`.
+- Push devices: `push_devices.register` / `unregister` on the calling K3 (client in `PUSH.clients`); `OwnerSession.pushDevice`. **Core push sender:** one mechanism in Core for every push (C326); APNs in this version (env `TB_APNS_KEY` = the .p8 text, `TB_APNS_KEY_ID`, `TB_APNS_TEAM_ID`, `TB_PUSH_APP_IDS` = comma list of allowed app ids; any unset = sender off, register still works). Trigger `decisions` = a workspace's summed `pendingHolds` rises in a status report; ≤ 1 per (ws, kind) per 60 s; fixed text, `{kind, ws}` only — no content (v1 notify rule: notification failure never fails the caller).
+- Person-op relay: `person_ops.call` (K3 of `tbd`/`tbm`) → Core mints K14 and queues it → the bridge pulls `bridge_api.person_ops` and posts `bridge_api.person_op_result` → Core answers with the app's status + body. ONE allow-list `PERSON_OP_RELAY` (v1: Inbox `items_list`, `item_get`, `item_decide`, `item_snooze`, `item_ack`); audit `person_op.relay`. Portal still never calls into customer infrastructure; K3 still never holds K11/K14 (C16 B4). RT1 amended: K3 writes = `drafts.*`, logout, own push device, `person_ops.call`.
+- `PersonPrincipal.via` (app side) + family rule: money/destructive decisions refuse `family_needs_portal` for `via: "tbm"` (C332a(4)).
+- Bridge cap `person_ops`; rate class `bridge_relay` (240/min per bridge); credential kind K14 (`tb-person-op+jwt`).
+- `portal.info` (public): lets a native client check a custom Portal URL before sign-in (C332a(3)).
+- Numbering: written on top of 0.1.62 with 0.1.63 reserved by specs#42; whichever merges second takes the next number.
+
 ## Changelog v0.1.29 → v0.1.30 (C181: `package` release-index kind)
 - `ReleaseIndexKind` adds `package`: an npm library tarball that other repos depend on by its dist URL (products `relay`, `harness-claude`, `harness-eve`, released from the private CLI repo; the private bridge and TBD depend on `relay`). Same shape and rules as `cli`: only `artifact {url, sha256, integrity}`, `url` = `<dist base>/opt2-tealbrick-cli-<product>-v<version>/opt2-tealbrick-<product>-<version>.tgz` on the public dist host, `tag` = `<product>-v<version>`. Additive: Core, the installer and `self-update` skip it (L24).
 

@@ -292,8 +292,9 @@ export type ConfigPullResponse = { status: 200; body: CompactJws } | { status: 3
 export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" | "paused";
 /** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps).
  *  v0.1.57 (C274c/C274d): + `events` = the bridge implements BRIDGE §14 in full (ingest, per-agent log, delivery on /mcp).
- *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule). */
-export const BRIDGE_CAPS = ["owner_rows", "events"] as const;
+ *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule).
+ *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §15); Core queues relay requests only for it. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "person_ops"] as const;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;

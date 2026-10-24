@@ -211,8 +211,9 @@ test("routes: host rows take only the host class, never store or log bodies; ser
   assert.equal(detach.input, "ServerDetachInput");
   assert.equal(HOST_DETACH_DEFAULT, "leave_running");
   for (const r of servers.filter((x) => x.method === "GET")) assert.ok((r.auth as readonly string[]).includes("owner-cli"), r.opId);
-  // RT1 unchanged: the owner CLI calls only reads, drafts.* and its own logout
-  for (const r of ROUTES) if ((r.auth as readonly string[]).includes("owner-cli")) assert.ok(r.method === "GET" || r.opId.startsWith("drafts.") || r.opId === "owner_sessions.logout", r.opId);
+  // RT1: the owner CLI calls only reads, drafts.*, its own logout and (v0.1.64) its push device + the person-op relay
+  const k3Writes = ["owner_sessions.logout", "push_devices.register", "push_devices.unregister", "person_ops.call"];
+  for (const r of ROUTES) if ((r.auth as readonly string[]).includes("owner-cli")) assert.ok(r.method === "GET" || r.opId.startsWith("drafts.") || k3Writes.includes(r.opId), r.opId);
   assert.ok(AUDIT_ACTIONS.includes("server.pair") && AUDIT_ACTIONS.includes("server.detach"));
   assert.ok("host_poll" in RATE_CLASSES && "host_write" in RATE_CLASSES);
 });

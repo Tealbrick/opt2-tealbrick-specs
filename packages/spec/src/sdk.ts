@@ -39,6 +39,7 @@ import type {
   InstanceRef,
   KeySetStatementClaims,
   PersonId,
+  PersonOpClient,
   PersonTicketLaunchClaims,
   PortalRef,
   PortalRootChannel,
@@ -940,8 +941,10 @@ export interface PersonPrincipal {
   ws: WorkspaceId;
   instance: InstanceId;
   iss: PortalRef | BridgeRef | InstanceRef;
-  /** epoch ms; absolute 8 h */
+  /** epoch ms; absolute 8 h (v0.1.64: for a relayed op = K14 exp × 1000) */
   sessionExpiresAt: number;
+  /** v0.1.64 (C326): native owner-session client of a relayed person op (K14 `cli`, SDK-API §21); absent for browser sessions */
+  via?: PersonOpClient;
 }
 export declare const SESSION_COOKIE: "tb_session";
 export declare const CSRF_HEADER: "TB-CSRF";

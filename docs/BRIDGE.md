@@ -513,3 +513,9 @@ app `tb.*`, invalid payload → refused, nothing stored; same `(app instance, ke
 agent outside `eligible` → nothing; purge → stored rows of that agent and instance gone; purge without agent → every
 agent's rows for that instance gone; `"events"` in every StatusReport of a bridge that
 passes all of these, never otherwise.
+
+## 15. Person-op relay (v0.1.64; C326; PORTAL-API v0.1.64 B–C, SDK-API §21)
+- The bridge keeps ONE long-poll `GET /bridge/person-ops?wait=25` to Core (outbound only, like the config pull), with its bridge assertion. A bridge of this version declares `person_ops` in StatusReport `bridge.caps` (BRIDGE_CAPS). For a bridge that does not, Core queues nothing and answers `person_ops.call` at once with `409 bridge_not_ready {reason: "relay_unsupported"}`.
+- For each request: refuse (result `status 409`, body `{error: {code: "instance_unknown"}}`) when `ins` is not an instance of its current config; else `POST <app internalUrl>/tb/v1/person-op` with header `TB-Person-Op: <jws>`, `Content-Type: application/json`, body = `body` bytes unchanged, 10 s timeout; post the app's status + body (≤ 256 KiB, cut → status 0) to `/bridge/person-ops/{pop}/result`. App unreachable → status 0.
+- The bridge does not verify K14 (the app does) and never stores it; it never logs input, output or the JWS (meta only: pop, ins, op, status, ms). Pause does not stop the relay (owner access by design, like person launch).
+- No retries: one request = at most one forward. A lost result ends as `person_op_timeout` at Core.

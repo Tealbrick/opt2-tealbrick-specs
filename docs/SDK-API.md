@@ -558,3 +558,10 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
   emit carries the right `eligible` (owner row above the grant → `owner`; `apps_only`-style row is still listed, so the app
   must not emit there — MANIFEST §16.2); a row removal, narrowing or owner→bounded change sends a purge after the earlier
   events; `ctx.purgeEvents` sends an all-agent purge; a committed transaction followed by a throw still sends.
+
+## 21. Person op relayed from a native owner session (v0.1.64; C326; CREDENTIALS K14)
+- Private-network route `POST /tb/v1/person-op`, header `TB-Person-Op: <K14>`, JSON body. Only the workspace bridge sends it (BRIDGE §15).
+- Checks, in order: K14 V0 (`typ tb-person-op+jwt`, issuer in the slice trust set, `aud = tb:ins:<own id>`, `ws` = own, `exp − iat ≤ 60`, `exp`) → `jti` unused (`tb_used_jti`, kept until `exp`) → `iat ≥` slice `personNbf` → `bd` = sha256 of the raw body BEFORE parsing → `op` is an op of audience `person` in the own manifest (or a standard person op) → input schema → the same handler path as `/a/<product>/tb/v1/ops/:op` (idempotency, `authorize()` person branch). Failures: `401 person_op_invalid` (any token check), `404 op_not_found`, `400 validation_failed`.
+- Principal: `PersonPrincipal` with `via: "tbd" | "tbm"` (= K14 `cli`) and `sessionExpiresAt` = K14 `exp` × 1000. Browser sessions have no `via`.
+- Family rule (C332a(4)): an op that decides a held action (`tb.holds_decide`, or an app op that decides an item carrying a hold family) MUST refuse `403 family_needs_portal` when `principal.via` is set and the family is in `PERSON_OP_RELAY.refuseFamiliesFor[via]` (`tbm`: money, destructive). The SDK enforces it for `tb.holds_decide`; apps enforce it for their own decide ops (Inbox `item_decide` for items with a family, once items carry one, C277 A3).
+- No cookie, no CSRF on this route (it is not reachable from a browser: private network + one-time Portal-signed token bound to the body).
