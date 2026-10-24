@@ -561,3 +561,22 @@ test("v0.1.67 (C331 D1): licences.staff_comp is the one staff route; browser onl
   const input: import("../src/routes.ts").StaffCompInput = { product: "knowledge", days: 14, reason: "DEV demo" };
   assert.equal(input.days, STAFF_COMP_DEFAULT_DAYS);
 });
+
+test("v0.1.65 (C331 D5b/D8): summaryEmpty on a scope type; scope sources on the summary, the ack and the canvas edge", async () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const validate = ajv.compile(load("manifest.schema.json"));
+  const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
+  const withEmpty = (summaryEmpty: unknown) => ({ ...ex, scopes: ex.scopes.map((s: Record<string, unknown>) => ({ ...s, summaryEmpty })) });
+  assert.equal(validate(withEmpty("no notebook yet")), true, JSON.stringify(validate.errors));
+  assert.equal(validate(withEmpty("{count} empty")), false, "no variables (M-SC-5)");
+  assert.equal(validate(withEmpty("x".repeat(41))), false, "at most 40 chars");
+  assert.equal(validate(withEmpty("")), false);
+  const { SCOPE_SOURCES_MAX, SCOPE_SOURCE_LABEL_MAX } = await import("../src/bridge.ts");
+  assert.equal(SCOPE_SOURCES_MAX, 20);
+  assert.equal(SCOPE_SOURCE_LABEL_MAX, 60);
+  const item: import("../src/bridge.ts").ScopeSourceItem = { type: "account", id: "cna_01", label: "Acme LLC data", access: "read" };
+  const result: import("../src/bridge.ts").ScopeSummaryResult = { agent: "agt_01", label: "no account yet", sources: [] };
+  const row: import("../src/bridge.ts").StatusReport["scopeSummaries"][number] = { agt: "agt_01", ins: "ins_01", label: "1 read", sources: [item] };
+  const edge: Pick<import("../src/routes.ts").Edge, "scopeSummary" | "scopeSources"> = { scopeSummary: row.label, scopeSources: row.sources ?? null };
+  assert.deepEqual([result.sources, edge.scopeSources], [[], [item]]);
+});
