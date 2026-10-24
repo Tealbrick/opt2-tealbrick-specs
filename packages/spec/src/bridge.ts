@@ -41,7 +41,7 @@ import type {
   SemVer,
   SnakeId,
 } from "./manifest.ts";
-import type { DataPolicy, ModelRole } from "./models.ts";
+import type { DataPolicy, ModelRole, PolicyBasis } from "./models.ts";
 
 // ── Common ───────────────────────────────────────────────────────────────────
 /** Compact JWS string (`header.payload.signature`). */
@@ -815,6 +815,8 @@ export interface ModelRoleStatus {
   provider: string | null;
   model: string | null;
   dataPolicy: DataPolicy | null;
+  /** spec follow-up (QA-SPEC49-2): absent when unset; GUI shows `owner_attested` local as "local (owner-listed, not verified)" */
+  policyBasis?: PolicyBasis;
 }
 /** v0.1.63 (BRIDGE §15.4): `GET /tb/v1/model-roles/<role>` with `TB-Assert`; `Cache-Control: no-store`. */
 export interface ModelRoleFetchResponse {

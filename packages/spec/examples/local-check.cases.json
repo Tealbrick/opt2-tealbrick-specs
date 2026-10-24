@@ -1,0 +1,301 @@
+{
+  "description": "Spec follow-up (QA-SPEC49-1/-2/-6): BRIDGE §15.3 local check. kind base = a binding base URL → expect verified | owner_listed | not_local | refused (input hygiene, parse, scheme or transport); kind own_host = an Own hosts entry → accepted | accepted_warn_public | refused. `canonical` = the stored/served form (url.href) when it differs from the input or matters. The bridge, the SDK (modelFetch) and tb-exec test against every row (RM-19).",
+  "cases": [
+    {
+      "kind": "base",
+      "input": "http://localhost:11434/v1",
+      "expect": "verified",
+      "canonical": "http://localhost:11434/v1"
+    },
+    {
+      "kind": "base",
+      "input": "http://LOCALHOST.:11434/v1",
+      "expect": "verified",
+      "canonical": "http://localhost.:11434/v1"
+    },
+    {
+      "kind": "base",
+      "input": "http://ollama.railway.internal:11434/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.5:11434/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://172.20.1.2/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://192.168.1.9:8080/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://2130706433/v1",
+      "expect": "verified",
+      "canonical": "http://127.0.0.1/v1"
+    },
+    {
+      "kind": "base",
+      "input": "http://[::ffff:10.0.0.1]/v1",
+      "expect": "verified",
+      "canonical": "http://[::ffff:a00:1]/v1"
+    },
+    {
+      "kind": "base",
+      "input": "http://[::1]:11434/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://[fc00::1]/v1",
+      "expect": "verified"
+    },
+    {
+      "kind": "base",
+      "input": "http://[fd00:ec2::254]/",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "https://[fd00:ec2::254]/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://[::ffff:169.254.169.254]/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://169.254.169.254/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://100.100.100.200/",
+      "expect": "not_local",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example",
+        "https://100.100.100.200"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "https://192.0.0.192/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://168.63.129.16/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://0.1.2.3/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://metadata.google.internal/",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "http://100.64.0.1:11434/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "https://100.64.0.1:11434/v1",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "http://100.101.102.103:11434/v1",
+      "expect": "owner_listed",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "https://gpu.taild2144d.ts.net/v1",
+      "expect": "owner_listed",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "http://gpu.taild2144d.ts.net/v1",
+      "expect": "refused",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "https://other.ts.net/v1",
+      "expect": "not_local",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "https://ollama.home.example/v1",
+      "expect": "owner_listed",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "https://ollama.home.example:8443/v1",
+      "expect": "not_local",
+      "ownHosts": [
+        "https://gpu.taild2144d.ts.net",
+        "http://100.101.102.103:11434",
+        "https://ollama.home.example"
+      ]
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1\\@evil.example/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://user@10.0.0.1/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1 /v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1\t",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1?api-version=1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1/v1#x",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "ftp://10.0.0.1/",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "not a url",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "https://10.0.0.1.nip.io/v1",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://x.ts.net.example.com/v1",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "https://api.openai.com/v1",
+      "expect": "not_local"
+    },
+    {
+      "kind": "base",
+      "input": "http://api.openai.com/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://8.8.8.8/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "https://XN--BCHER-KVA.example/v1",
+      "expect": "not_local",
+      "canonical": "https://xn--bcher-kva.example/v1"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://gpu.taild2144d.ts.net",
+      "expect": "accepted"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://100.101.102.103:11434",
+      "expect": "accepted"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://gpu.taild2144d.ts.net",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://gpu.taild2144d.ts.net/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://100.100.100.200",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://metadata.google.internal",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://[::ffff:a9fe:a9fe]",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "http://8.8.8.8",
+      "expect": "refused"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://8.8.8.8",
+      "expect": "accepted_warn_public"
+    },
+    {
+      "kind": "own_host",
+      "input": "https://user@host.example",
+      "expect": "refused"
+    }
+  ]
+}

@@ -264,6 +264,9 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `RM-14b` [Core] (QA-SPEC42-10) ROLL BACK — ok → degraded `model_role_optional` when the BEFORE report has no row for that role (no cap / not reported) and the role is not new in the target manifest; degraded(X) (non-model) → degraded(model code). [SDK] an app with a fault and an unset optional role reports the fault code, not `model_role_optional`.
 - `RM-15` [Core + GUI] a target release that lowers a role's `minPolicy` shows the notice and waits for owner consent (`held` when scheduled); raising it needs none.
 - `RM-16` [Core] persona and `modelRoleRequirements` go only to a bridge with cap `model_roles`; a bridge without it gets neither and `KeyStatus.rolesSupported` is `false`; a bridge that declared it and then reports without it gets the next config without them (no latch).
-- `RM-18` [GUI + bridge] every `zdr` label reads "zero data retention (owner-attested)"; a gateway attestation names the host.
+- `RM-18` [GUI + bridge] every `zdr` label reads "zero data retention (owner-attested)" and owner-listed `local` reads "local (owner-listed, not verified)" (`policyBasis`); a gateway attestation (incl. an overridden base URL) names the host.
+- `RM-19` [bridge + SDK + tb-exec] every row of `packages/spec/examples/local-check.cases.json`: same class and canonical form in all three; the stored/served base URL is always the canonical form.
+- `RM-20` [SDK + tb-exec] connect-time guard: a `local` binding whose name resolves to a public address, to 169.254.169.254 or (verified) to 100.64/10 → `model_endpoint_refused`, nothing sent; a cross-origin redirect is not followed with the key; `tb-exec` leaves the role env empty.
+- `RM-21` [bridge] an Own hosts change bumps `keysRev` once; the page names the bindings that fall below policy before a removal is confirmed.
 - `RM-17` [SDK] `modelRole()` → `null` on a 404 without refuse code (bridge without the cap); a required role then gives `needs_keys`.
 - `RM-11` [Knowledge] `knowledge__ask` answers when `reasoning` resolves and is reachable by a granted agent; without it the tool says which role to set.

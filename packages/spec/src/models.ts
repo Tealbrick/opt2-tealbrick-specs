@@ -83,8 +83,25 @@ export const PERSONA_MAX_CHARS = 8000;
 /** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
 export const OWN_HOSTS_MAX = 32;
 
-/** Never local, even when the owner lists them (link-local / cloud metadata, unspecified). BRIDGE §15.3 step 4. */
-export const NEVER_LOCAL = ["169.254.0.0/16", "fe80::/10", "100.100.100.200/32", "0.0.0.0/32", "::/128"] as const;
+/** Never local, even when the owner lists them: link-local, cloud metadata (AWS IPv6, Alibaba, Oracle, Azure wireserver),
+ *  "this network", unspecified. BRIDGE §15.3 step 3. Pinned by test. */
+export const NEVER_LOCAL = [
+  "169.254.0.0/16",
+  "fe80::/10",
+  "fd00:ec2::254/128",
+  "100.100.100.200/32",
+  "192.0.0.192/32",
+  "168.63.129.16/32",
+  "0.0.0.0/8",
+  "::/128",
+] as const;
+/** Metadata host names that are never local, even when listed (BRIDGE §15.3 step 3). */
+export const NEVER_LOCAL_HOSTNAMES = ["metadata.google.internal", "metadata.goog", "metadata"] as const;
+
+/** Why a binding has its data policy (BRIDGE §15.3/§15.5): `verified` = the bridge checked it from the URL;
+ *  `owner_attested` = the owner said so (every `zdr`, and `local` through the Own hosts list). */
+export const POLICY_BASES = ["verified", "owner_attested"] as const;
+export type PolicyBasis = (typeof POLICY_BASES)[number];
 
 /** MCP resource URI under which the bridge serves the calling agent's persona (BRIDGE §15.6). */
 export const PERSONA_RESOURCE_URI = "tb://agent/persona" as const;
