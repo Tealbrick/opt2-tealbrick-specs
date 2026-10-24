@@ -119,6 +119,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | `receipt` | `true` → the SDK writes a receipt for every executed call (inputDigest + app-redacted summary, never raw bodies). |
 | `audience` | `agent` → reachable through the bridge (MCP, relay, app→app), becomes an MCP tool. `person` → only from the app UI in a person session (launch ticket); never an MCP tool, never hooked, never a companion target. |
 | `dynamic?` | Dynamic tool family (§5.3). |
+| `listing?` | Agent ops only. Absent or `default` = listed in tools/list. `workflow` (v0.1.43, M-OP-11) = listed and callable only when the grant's `wf` names it. `lazy` (v0.1.66, §5.5) = callable as `default`, served through the product's `tb_more_search` / `tb_more_call` pair instead of the list. |
 
 ### 5.2 Rules
 | Rule | Check |
@@ -133,6 +134,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-OP-8 | Non-dynamic `agent` ops declare `input` and `output`. Embedded schemas: no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType` → `io_schema_invalid`. |
 | M-OP-9 | `audience = person` ⇒ no `dynamic` → `person_dynamic`. |
 | M-OP-10 | `dynamic` ⇒ `crud = ["read"]`, `effect = read`, no `holdFamily`, `idempotency = supported`, `receipt = false`, `audience = agent`, no `input`/`output`; `crudCeiling = ["read"]` ⇒ `effectCeiling = read` → `dynamic_invalid`. |
+| M-OP-12 | (v0.1.66) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic` → `listing_invalid`. |
 
 ### 5.3 Dynamic operations (the engine-tool gap)
 Some apps expose tool sets that are not known at build time: an engine with ~100 native operations that depend on the chosen engine version, or a connector catalog with thousands of third-party tools. Listing each as a manifest operation is impossible; one generic "call anything" operation would hide each tool's CRUD class and effect. A dynamic operation closes the gap with one mechanism (CORE §13):
@@ -158,6 +160,14 @@ Some apps expose tool sets that are not known at build time: an engine with ~100
 | `tb.export` | person | read / read | app UI: export archive (§11) |
 
 Input/output shapes: SDK-API §6. The canvas scope summary is not a standard op: the bridge fetches it with the bridge op `POST /tb/v1/bridge/scope-summary` (≤ 80-char label per agent, no third-party identifiers) for its status report. `tb.hold_status` needs only a valid grant; agent edges need not include `read` (CORE I4); it returns only the caller's own holds and writes no receipt. Reserved: the `tb.` namespace (including the bridge-served read tool `<product>__tb_skills`, BRIDGE) and the `tb_` prefix for operation, hook, scope, step, setting, volume, unlock and artifact ids; `tb-` for service and skill ids; `TB_`/`RAILWAY_` env and key names; the `/tb/` path prefix inside the app (ui paths, public routes, helper paths). The schema enforces these patterns.
+
+### 5.5 Lazy listing (v0.1.66; C330(1), M4b)
+An app with many agent ops keeps the most used ones in tools/list ("hot") and marks the rest `listing: "lazy"`. The agent finds a lazy op with `<product>__tb_more_search` and calls it with `<product>__tb_more_call` or by its own name (BRIDGE §7.5).
+- Display only. Visibility, `gate()`, `authorize()`, hooks, holds, receipts, idempotency and events are exactly those of the same op with `listing` absent. An agent whose grants do not make the op visible cannot find or call it.
+- Static agent ops only (M-OP-12). A dynamic family is already one search away (§5.3).
+- Advisory size: ≤ 8 hot agent ops per product (with `tb_hold_status`, `tb_skills` and the pair, about ten tools). Not enforced.
+- Write the op `description` for search: the words an agent would use to look for it.
+- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.66; its release states `requires.bridge` (the first bridge with cap `lazy_tools`). An older bridge refuses the manifest (`schema_invalid`), it never lists the op as hot.
 
 ## 6. Scopes
 
