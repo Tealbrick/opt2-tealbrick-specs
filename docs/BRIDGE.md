@@ -535,7 +535,9 @@ Martin (C330(4)): "a role / model / key structure - in the bridge … Observer, 
 ### 15.2 Keys and models page (extends §9.3)
 - Same origin, ticket (`pur: keys`), session, CSRF and CSP rules as §9.3. Title "Keys and models".
 - Section "Provider keys": write-only values as today (set, replace, delete); each key shows "Serves: <role> (<apps>)…" from S11. Deleting a key that serves a binding asks first and leaves the binding unset.
+- `roles[]` ticket hints need a ticket verifier that knows the claim (`@opt2-tealbrick/manifest` with the K11 `roles` claim); a bridge declares `model_roles` only with such a verifier.
 - Section "Models": one row per role that `modelRoleRequirements[]` of the config declares (all instances), with: role, apps that use it, required/optional, min policy, current binding (provider, model, base URL, key, data policy) and an "Override for one app" action. Provider choices = `MODEL_PROVIDERS` rows whose `roles` contain the role. Ticket claim `roles[]` (CREDENTIALS K11, v0.1.63) pre-fills provider/model/policy for display only; nothing is stored without the owner's submit.
+- Base URL: `https:` required, except `http:` for a URL that passes §15.3 (own network), so a key never travels unencrypted over the internet.
 - Data policy choice: `local` only for a base URL that passes §15.3; `zdr` only for a provider with `zdrOffered: true` and only with the owner's tick "I confirm a zero-data-retention contract with this provider" (stores `zdrAttestedAt`); else `standard`.
 - Embeddings: changing provider, model or `dims` of a set binding warns "Apps must re-index their memory after this change; each app asks you first" before submit (MANIFEST §7.1).
 - Local first (C336 Q3): for a role with a `local` provider choice, local providers are listed first; when the entered base URL passes §15.3 the policy defaults to `local`.
@@ -553,16 +555,16 @@ Negative rows: RM-3. Any host that fails → the page refuses `local` (form erro
 
 ### 15.4 Resolve by apps — `GET /tb/v1/model-roles/<role>` (internal listener)
 `TB-Assert` (instance or service key), like §9.4. Checks in order:
-0. A bridge without cap `model_roles` has no such route (404 from the router); the SDK treats that as `null` (fail closed: a required role → `needs_keys`).
-1. `role` in `MODEL_ROLES`, and `modelRoleRequirements[]` has an entry for the caller's instance with that role and the caller (`app` or the service id) in `usedBy` → else `403 role_not_declared`.
+0. Paused caller or workspace → `403 paused` first (as §9.4). A bridge without cap `model_roles` has no such route (404 from the router); the SDK treats that as `null` (fail closed: a required role → `needs_keys`).
+1. `role` in `MODEL_ROLES`, and `modelRoleRequirements[]` has an entry for the caller's instance with that role and the caller (`app` or the service id) in `usedBy` → else `403 role_not_declared`; while the caller's instance is mid-update (manifest not loaded / candidate digest, §5.5) → retryable `503 app_unavailable` with `Retry-After` instead (same rule as key fetch, REQUESTS C69).
 2. A binding resolves (§15.1) → else `404 role_not_set`. An instance override is used even when it fails step 3 (no fall back to the workspace default: the owner set it on purpose).
 3. The binding meets the entry's `minPolicy` (§15.3) → else `403 role_policy_too_low` with `details {needed, have}`; the body has no field except `error` and `details.needed/have` (not even the provider).
 4. The bound key is set (when `keyNeeded`) → else `404 role_not_set`.
-Answer `ModelRoleFetchResponse {role, provider, model, baseUrl, key, dataPolicy, dims, keysRev}` (`baseUrl` = binding value or the provider default), `Cache-Control: no-store`. Paused caller or workspace → `403 paused`. Values are never logged.
+Answer `ModelRoleFetchResponse {role, provider, model, baseUrl, key, dataPolicy, dims, keysRev}` (`baseUrl` = binding value or the provider default), `Cache-Control: no-store`. Refusals use the usual error envelope (`code`, `message`, `requestId`) plus only `details.needed/have` for `role_policy_too_low`. Values are never logged.
 `tb-exec`: for a service with manifest `modelRoles[].env`, it resolves each declared role at start and sets the named env vars (`provider`, `model`, `baseUrl`, `key`, `dims`); an unset optional role sets nothing; it restarts the child when `keysRev` changes (as for keys).
 
 ### 15.5 Status
-`StatusReport.roles[] {role, ins, set, policyOk, provider, model, dataPolicy}` — one row per `modelRoleRequirements[]` entry, labels only: NEVER a base URL, key name or key value. Core shows them in `keys.status.roles` (PORTAL-API v0.1.63).
+`StatusReport.roles[] {role, ins, set, policyOk, provider, model, dataPolicy}` — one row per `modelRoleRequirements[]` entry (`set: false` and null labels when a binding exists but its key is missing), labels only: NEVER a base URL, key name or key value. Core shows them in `keys.status.roles` (PORTAL-API v0.1.63).
 
 ### 15.6 Agent persona
 - Config `agents[].persona` (markdown ≤ `PERSONA_MAX_CHARS` UTF-16 units) comes from the agent card (PORTAL-API v0.1.63). A longer persona in a config is dropped for that agent (never cut) and counted in `StatusReport.rejected` (`kind: "config", code: "persona_too_long"`).
