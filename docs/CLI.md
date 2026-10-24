@@ -125,6 +125,7 @@ Own-infrastructure bridge (PRD §3 rule 5): `tealbrick bridge enrol --code - [--
 | `TB_WORKSPACE` | default workspace for owner commands |
 | `TB_AGENT` | default agent item for agent commands |
 | `TB_CREDENTIAL_STORE` | `keychain` (default) or `file` (agent items only, headless) |
+| `TB_HOOKS` | `0` / `off` / `false` / `no` switches every Knowledge hook off (`tealbrick hook`, `knowledgeHooks`, Hermes adapter; HARNESS-HOOKS HH-7) |
 | `TB_DATA_DIR` | state directory of an own-infrastructure full bridge (`bridge enrol` / `bridge run`); same name as bridge and apps (N3) |
 No other variable is read; no token is ever taken from the environment.
 

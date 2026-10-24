@@ -10,14 +10,26 @@ packages). Implemented by `@opt2-tealbrick/harness-claude` (`runHook`, `knowledg
   carries no Rules text. Grants, Rules narrowing and holds apply at the bridge and the app, as for any tool call (C313.1).
 - **HH-2 Own credential, through the bridge.** A hook calls Knowledge tools as the agent (K4 relay or K5/K13), never the person
   item, never the app directly.
-- **HH-3 Fail-open.** Every hook returns within its budget (§3). On error, timeout, missing tool or a refused call it injects
-  nothing and lets the turn go on. `tealbrick hook` always exits 0 (Claude Code treats exit 2 as "block").
-- **HH-4 Scrub before send.** Text that leaves the machine (queries, saved items) has keys, tokens (`tb?_…`, `sk-…`, `ghp_…`,
-  `xox?-…`, `AKIA…`, JWTs, `Bearer …`), private-key blocks, e-mail addresses and Luhn-valid card numbers replaced by
-  `[redacted]`. No secret in argv, env or logs.
+- **HH-3 Fail-open, bounded process.** Every hook returns within its budget (§3). On error, timeout, missing tool or a refused
+  call it injects nothing and lets the turn go on. The budget bounds the whole `tealbrick hook` PROCESS: at budget + 300 ms it
+  writes the fail-open answer and exits, even when the token fetch or an MCP call hangs. `tealbrick hook` always exits 0, also
+  on a bad flag, an unknown harness or an unknown event (Claude Code treats exit 2 as "block"). The Claude Code command is
+  written as `tealbrick hook … || true`, so a CLI too old to know `hook` fails open as well.
+- **HH-4 Scrub before send.** Text that leaves the machine (queries, saved items) has these replaced by `[redacted]`: tokens
+  (`tb?_…`, `sk-…`, `sk_live_…`, `ghp_…`, `github_pat_…`, `glpat-…`, `npm_…`, `hf_…`, `whsec_…`, `xox?-…`, `AKIA…`/`ASIA…`,
+  `AIza…`, JWTs), `Bearer …` and `Basic …` credentials, the value of any secret-named field (`password`, `passwd`, `pwd`,
+  `secret`, `client_secret`, `aws_secret_access_key`, `*token`, `api_key`, `private_key`, … as `k: v`, `k=v` or JSON
+  `"k": "v"`), the password in `scheme://user:password@host`, private-key blocks (also without an END line), e-mail
+  addresses, Luhn-valid card numbers, and any other random-looking token (≥ 32 chars, letters + digits, entropy ≥ 4.2
+  bits/char; pure hex such as commit ids stays). No secret in argv, env or logs. The Hermes adapter starts the CLI with an
+  allow-listed env only (`PATH`, `HOME`, locale, `TMPDIR`, `XDG_CONFIG_HOME`, CA files, `TB_CREDENTIAL_STORE`, `TB_AGENT`,
+  `TB_PORTAL_URL`, `TB_HOOKS`): no model keys.
 - **HH-5 One slot owner.** A harness's context-engine slot (Hermes `context.engine`, OpenClaw `plugins.slots.contextEngine`)
   belongs to the harness or LCM. A Tealbrick pack never sets it and never takes an occupied memory-provider slot. When a context
   engine runs, the per-prompt recall (`prompt`) is skipped; context is added at session start and after compaction only.
+- **HH-7 Off switch.** `TB_HOOKS=0` (or `off`, `false`, `no`) in the harness environment switches every hook off:
+  no network call, nothing injected, exit 0 (Hermes answer `{"saved": 0, "skipped": "off"}`). It applies to `tealbrick hook`,
+  the Agent SDK `knowledgeHooks` and the Hermes adapter.
 - **HH-6 Idempotent saves.** Each single-item save carries `_meta["tealbrick/idempotencyKey"] = "tbh-" + sha256(area + "\n" +
   normalised text)[0..48]`, so a repeated save (compaction twice, Stop after PreCompact) makes one document.
 
@@ -39,11 +51,14 @@ Items (wave 1 rule until the promotion benchmark, WP-HARNESS-WAVE1 X8): lines st
 
 | Event | Budget | Context size |
 |---|---|---|
-| `session_start` | 1.5 s | 2,000 chars (owner may raise) |
+| `session_start` | 1.5 s | 2,000 chars (owner may raise with `--max-chars`) |
 | `prompt` | 0.8 s | 1,000 chars |
 | `pre_compact`, `stop`, `session_end` | 3 s | — |
 
-The budget includes relay start-up. Claude Code hook `timeout` (seconds) is set above it (5 / 4 / 8 / 8).
+The budget counts from the start of the hook run (after the CLI has loaded) and includes the relay connection; the process
+ends at budget + 300 ms (HH-3). Claude Code hook `timeout` (seconds) is set above load time + budget (5 / 4 / 8 / 8).
+Context size ceilings: **10,000 chars for Claude Code** (its hook output limit; a larger `--max-chars` is cut to it), 20,000
+for other harnesses (Knowledge's `maxChars` maximum); the floor is 200.
 
 ## 4. Tool resolution
 
@@ -56,7 +71,7 @@ Save = `knowledge__remember`. Names resolve at run time, so a Knowledge release 
 | `knowledge__context` | `{purpose: "session_start" \| "after_compact" \| "prompt", maxChars (200–20,000), query? (prompt only), area?}` | no entities, no query at session start (newest cited memories); inject `structuredContent.text`; `refs` are for `knowledge__get` |
 | `knowledge__recall` | `{query, limit, area?}` | `limit` 8 at session start, 5 per prompt |
 | `knowledge__remember` (today) | `{text, title?, tags, area?}` one call per item, `_meta` key per item (HH-6) | |
-| `knowledge__remember` (with `items`) | `{items: [{text, kind: "note" \| "digest", tags}] (≤ 50), source: {harness, session?}, area?}` | `_meta` key = `"tbb-" + sha256(sorted item keys + "\n" + area + "\n" + session)[0..48]`: a changed batch gets a new key; Knowledge dedupes per item |
+| `knowledge__remember` (with `items`) | `{items: [{text, kind: "note" \| "digest", tags}] (≤ 50), source: {harness, session}, area?}` (`session` is always sent; `"unknown"` when the harness gives none) | `_meta` key = `"tbb-" + sha256(sorted item keys + "\n" + area + "\n" + session)[0..48]`: a changed batch gets a new key; Knowledge dedupes per item |
 
 ## 5. Context block
 
@@ -67,4 +82,5 @@ Save = `knowledge__remember`. Names resolve at run time, so a Knowledge release 
 
 H-W1-HH-1 no policy (lint of the pack sources: no permission decision, no rule text) · HH-3 fail-open (bridge down → exit 0,
 empty stdout, ≤ budget + 200 ms) · HH-4 scrub (seeded key/token/e-mail/card never reaches the fake bridge) · HH-5 LCM on →
-no `prompt` call · HH-6 same item twice → same idempotency key.
+no `prompt` call · HH-6 same item twice → same idempotency key · HH-3b hung bridge → the real process exits 0 at budget + 300 ms
+· HH-3c bad flag / unknown harness → exit 0 · HH-7 `TB_HOOKS=0` → no call · Claude Code context ≤ 10,000 chars.
