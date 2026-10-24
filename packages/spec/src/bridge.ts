@@ -397,7 +397,9 @@ export interface HookCallInfo {
    *  config (never from input or a manifest name); a policy app matches "calls from product X" on it, since an instance id
    *  changes on reinstall. Absent for agents, and for a caller the bridge cannot map (then treat it as unverified). */
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId };
-  target: { instance: InstanceId; product: ProductId; op: SnakeId; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
+  /** v0.1.66 (C336 RQ-2): `tool` = the dynamic catalog entry name for a dynamic call (`crud`/`effect`/`holdFamily` are then
+   *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
+  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
   input?: JsonValue;
 }
 export interface HookRequestBase<P extends HookPhase> {

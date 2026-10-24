@@ -558,3 +558,11 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
   emit carries the right `eligible` (owner row above the grant → `owner`; `apps_only`-style row is still listed, so the app
   must not emit there — MANIFEST §16.2); a row removal, narrowing or owner→bounded change sends a purge after the earlier
   events; `ctx.purgeEvents` sends an all-agent purge; a committed transaction followed by a throw still sends.
+
+## v0.1.66 — dataset narrowing and secret outputs (C336 RQ-2, RQ-3)
+
+- **18.5 `rules.narrowing.deepDatasets` (C325, C330).** `RulesNarrowingV1` gains `deepDatasets?: {anyOf?, noneOf?}`: the datasets a data app (Knowledge deep knowledge, helix-foundry) may READ for this call. Names are the dataset names the data app lists to agents (for a database source `<schema>.<table>`; each ≤ 128 chars, ≤ 64 per list). `datasetsMatch(deepDatasets, names)` in @opt2-tealbrick/manifest (≥ 0.1.30) is THE comparison: trim + lower case; `anyOf` present (even empty) → every named dataset must be in it (`[]` passes nothing); `noneOf` → no named dataset in it. `v` stays `1` (additive): an app that serves datasets MUST read the key; an app without datasets ignores it.
+  1. A data read applies it per dataset BEFORE it runs: a query, preview, record, graph or ask call that names or would read a dataset outside the narrowing is refused `narrowing_unsupported` (409) when the app cannot restrict it, or answers as if the dataset did not exist (lists and overviews omit it; a direct read answers `not_found`).
+  2. Writes that change datasets or published definitions (analyst/curate levels) refuse any `deepDatasets` narrowing with `narrowing_unsupported` unless the op checks each dataset it touches.
+  3. Record `ctx.receipt.meta({narrowing: {v, ruleId}})` as for tags (§18 rule 3). Row limits (e.g. one region) are NOT part of this contract; a data app may offer them as named filtered datasets (C336 F11).
+- **`Operation.secretOutput` (S-8).** For an op with `secretOutput: true` (MANIFEST M-OP-11) the SDK runs `authorize()` as usual but stores no idempotency row, writes no receipt output or meta beyond `{secretOutput: true}`, never logs the output, and returns it only to the caller. Replay with the same idempotency key is a new execution.

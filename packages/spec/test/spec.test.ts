@@ -540,3 +540,19 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.ok(opts.subject.id);
   assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 });
+
+test("v0.1.66 (C336 RQ-2, RQ-3): dataset narrowing, hook target tool, secretOutput op flag", async () => {
+  const n: import("../src/sdk.ts").RulesNarrowingV1 = { v: 1, ruleId: "rul_x", reason: "sales may read orders only", deepDatasets: { anyOf: ["public.orders"] } };
+  assert.deepEqual(n.deepDatasets?.anyOf, ["public.orders"]);
+  const target: import("../src/bridge.ts").HookCallInfo["target"] = { instance: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, product: "knowledge" as never, op: "deep" as never, tool: "deep_query", crud: ["read"], effect: "read" };
+  assert.equal(target.tool, "deep_query");
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const validate = ajv.getSchema(load("manifest.schema.json").$id);
+  assert.ok(validate);
+  const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
+  const agentOp = ex.operations.find((o: { audience: string }) => o.audience === "agent");
+  const others = ex.operations.filter((o: unknown) => o !== agentOp);
+  assert.equal(validate({ ...ex, operations: [...others, { ...agentOp, secretOutput: true }] }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ ...ex, operations: [...others, { ...agentOp, secretOutput: false }] }), false);
+});

@@ -737,6 +737,13 @@ export interface RulesNarrowingV1 {
     /** drop results with any of these tags */
     noneOf?: string[];
   };
+  /** v0.1.66 (C336 RQ-2, SDK-API §18.5): datasets a data app (Knowledge deep knowledge) may read for this call. Dataset names
+   *  as the data app lists them (`<schema>.<table>` or the app's dataset name; each ≤ 128 chars, ≤ 64 per list); compared
+   *  with `datasetsMatch` (@opt2-tealbrick/manifest) after trim + lower case. `anyOf` PRESENT but EMPTY = nothing passes. */
+  deepDatasets?: {
+    anyOf?: string[];
+    noneOf?: string[];
+  };
 }
 
 /** Person only (tb.holds_decide). */

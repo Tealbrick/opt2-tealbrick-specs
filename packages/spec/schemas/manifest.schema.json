@@ -274,6 +274,7 @@
         "receipt": { "type": "boolean" },
         "audience": { "enum": ["agent", "person"] },
         "listing": { "enum": ["default", "workflow"], "description": "v0.1.43 (LR-1): agent ops only; workflow = listed and callable only when the grant wf names the op." },
+        "secretOutput": { "const": true, "description": "v0.1.66 (C336 RQ-3, S-8): the output carries a secret; never stored, logged, replayed or given to after hooks. Requires idempotency none (M-OP-11)." },
         "dynamic": { "$ref": "#/$defs/dynamic" }
       }
     },

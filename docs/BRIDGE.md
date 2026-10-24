@@ -513,3 +513,8 @@ app `tb.*`, invalid payload → refused, nothing stored; same `(app instance, ke
 agent outside `eligible` → nothing; purge → stored rows of that agent and instance gone; purge without agent → every
 agent's rows for that instance gone; `"events"` in every StatusReport of a bridge that
 passes all of these, never otherwise.
+
+## v0.1.66 — hook target tool, secret outputs (C336 RQ-2, RQ-3)
+
+- **Hook target `tool` (§8.2).** For a dynamic call (`tools/call` of a dynamic entry, `<op>_call`, or `dynamic_call` on the relay) the bridge sets `HookCallInfo.target.tool` = the catalog entry name, and `crud` / `effect` / `holdFamily` = that entry's resolution. Absent for static ops and dynamic search. A policy app (Rules) may match on it; the bridge never interprets it.
+- **`secretOutput` ops (MANIFEST M-OP-11).** The bridge forwards the result to the caller only: it calls no `after` hook for the op, writes no body to any log or status field, and never caches it (the idempotency store keeps no row). The relay and MCP paths behave the same.
