@@ -489,10 +489,10 @@
           "$ref": "#/$defs/agentMode"
         },
         "persona": {
-          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6). C353 / QA-SPEC49-23: PERSONA_PATTERN — TAB, LF, the PERSONA_MARKERS characters, or anything not Cc/Cf/Cs/Default_Ignorable/U+2028/U+2029; no two variation selectors in a row. Unicode-mode regex.",
+          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6). C353 / QA-SPEC49-23: PERSONA_PATTERN — TAB, LF, the PERSONA_MARKERS characters, or anything not Cc/Cf/Cs/Default_Ignorable/U+2028/U+2029; no two variation selectors in a row. Unicode-mode regex. C356: no variation selector directly after a marker; Arabic number signs U+0600–0605 and U+06DD are markers.",
           "type": "string",
           "maxLength": 8000,
-          "pattern": "^(?![\\s\\S]*[\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]{2})(?:[\\t\\n]|[\\u00AD\\u034F\\u061C\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$"
+          "pattern": "^(?![\\s\\S]*[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}][\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}])(?:[\\t\\n]|[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$"
         }
       }
     },
@@ -883,9 +883,9 @@
     },
     "portalKeySet": {
       "type": "string",
-      "maxLength": 8192,
+      "maxLength": 4096,
       "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
-      "description": "v0.1.11 (C62/C63): the CURRENT key-set statement, compact JWS `typ: tb-keyset+jws` signed by a Portal Root Key (claims `{iss: tb:portal-root, aud: tb:portal-keys, seq, iat, keys[{jwk, status}]}`, types/credentials.ts KeySetStatementClaims). Verifiers derive the trusted Portal key set ONLY from the newest valid statement (CREDENTIALS §9.5). Optional in v0.1.11 (transition until Core emits it); required in v0.2."
+      "description": "v0.1.11 (C62/C63): the CURRENT key-set statement, compact JWS `typ: tb-keyset+jws` signed by a Portal Root Key (claims `{iss: tb:portal-root, aud: tb:portal-keys, seq, iat, keys[{jwk, status}]}`, types/credentials.ts KeySetStatementClaims). Verifiers derive the trusted Portal key set ONLY from the newest valid statement (CREDENTIALS §9.5). Optional in v0.1.11 (transition until Core emits it); required in v0.2. C356 / QA-SPEC49-27: ≤ 4,096 chars (a statement of ≤ 8 Ed25519 keys is ≈ 2.4k) so the slice reserve holds."
     },
     "pause": {
       "type": "object",
@@ -967,6 +967,12 @@
           "$ref": "#/$defs/ed25519Jwk"
         }
       }
+    },
+    "httpsOrigin": {
+      "type": "string",
+      "maxLength": 267,
+      "pattern": "^https://[^\\s/?#@]+$",
+      "description": "C356 / QA-SPEC49-27: an https origin (scheme + host + optional port, no path), ≤ 267 chars. Used for slice URLs so the slice reserve holds at the schema limits."
     }
   }
 }

@@ -86,13 +86,14 @@ export const PERSONA_MAX_CHARS = 8000;
 export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
 /** Persona text (C353, QA-SPEC49-23): one rule by Unicode property, so no range can be forgotten. A persona is accepted when
  *  every character is TAB, LF, a PERSONA_MARKERS character (allowed, shown as a marker), or NOT in \p{Cc}, \p{Cf}, \p{Cs}
- *  (lone surrogates), \p{Default_Ignorable_Code_Point}, U+2028 or U+2029 — and no two variation selectors stand in a row
- *  (no script needs that; runs could carry a hidden message). So bidi controls, tag characters, Hangul fillers (U+115F,
+ *  (lone surrogates), \p{Default_Ignorable_Code_Point}, U+2028 or U+2029 — and no variation selector directly follows a
+ *  marker character (C356 / QA-SPEC49-29: covers VS VS and VS ZWJ VS payloads; 🏳️‍🌈 and ❤️‍🔥 pass because their VS follows
+ *  the base character). So bidi controls, tag characters, Hangul fillers (U+115F,
  *  U+1160, U+3164, U+FFA0), BOM, invisible operators etc. are refused, and every allowed invisible character is a marker.
  *  Unicode-mode regex (`u` flag) of the runtime (Node 24 / current browsers); Core's verdict wins. Clients turn CRLF into LF.
  *  Core also checks isWellFormed(). */
 export const PERSONA_PATTERN =
-  "^(?![\\s\\S]*[\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]{2})(?:[\\t\\n]|[\\u00AD\\u034F\\u061C\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$" as const;
+  "^(?![\\s\\S]*[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}][\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}])(?:[\\t\\n]|[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$" as const;
 
 /** C353: allowed invisible characters that scripts need (Persian, Hebrew, Arabic, Sinhala, Mongolian, Japanese IVS, emoji
  *  ZWJ sequences). The drafts review and the persona editor show each one as a visible labelled marker (e.g. `⟨ZWJ⟩`) next
@@ -100,7 +101,9 @@ export const PERSONA_PATTERN =
 export const PERSONA_MARKERS: readonly { from: number; to: number; label: string }[] = [
   { from: 0x00ad, to: 0x00ad, label: "SHY" },
   { from: 0x034f, to: 0x034f, label: "CGJ" },
+  { from: 0x0600, to: 0x0605, label: "ANS" },
   { from: 0x061c, to: 0x061c, label: "ALM" },
+  { from: 0x06dd, to: 0x06dd, label: "ANS" },
   { from: 0x180b, to: 0x180d, label: "FVS" },
   { from: 0x180e, to: 0x180e, label: "MVS" },
   { from: 0x180f, to: 0x180f, label: "FVS" },
