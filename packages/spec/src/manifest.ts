@@ -262,7 +262,7 @@ export interface Operation {
   audience: OperationAudience;
   dynamic?: DynamicSpec;
   /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on.
-   *  v0.1.66: `lazy` needs a validator that pins spec ≥ 0.1.66 (MANIFEST §5.5, M-OP-12). */
+   *  v0.1.66: `lazy` needs a validator that pins spec ≥ 0.1.66 (MANIFEST §5.5, M-OP-13). */
   listing?: OperationListing;
 }
 
