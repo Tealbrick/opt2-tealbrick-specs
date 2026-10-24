@@ -86,9 +86,12 @@ export const PERSONA_MAX_CHARS = 8000;
 export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
 /** Persona text: no control characters except TAB and LF (C0, DEL and C1 refused; clients turn CRLF into LF before sending),
  *  no line/paragraph separators (U+2028/2029), no bidi embedding/override/isolate controls (U+202A–202E, U+2066–2069), no
- *  BOM (U+FEFF), no lone surrogates (in a unicode-mode regex `\ud800-\udfff` matches only unpaired halves; Core also checks
+ *  BOM (U+FEFF), no invisible or format characters (QA-SPEC49-16: soft hyphen U+00AD, CGJ U+034F, ALM U+061C, MVS U+180E,
+ *  zero-width U+200B–200D incl. ZWJ, LRM/RLM U+200E/200F, U+2060–2064, variation selectors U+FE00–FE0E and
+ *  U+E0100–E01EF, interlinear U+FFF9–FFFB, tag characters U+E0000–E007F; U+FE0F stays allowed, ZWJ emoji sequences fall
+ *  back to separate emoji), no lone surrogates (in a unicode-mode regex `\ud800-\udfff` matches only unpaired halves; Core also checks
  *  `String.prototype.isWellFormed`). The review shows the persona in full, so nothing may hide or reorder text. */
-export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069\\ufeff\\ud800-\\udfff]*$" as const;
+export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u00ad\\u034f\\u061c\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u2069\\ufe00-\\ufe0e\\ufeff\\ufff9-\\ufffb\\ud800-\\udfff\\u{e0000}-\\u{e007f}\\u{e0100}-\\u{e01ef}]*$" as const;
 
 /** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
 export const OWN_HOSTS_MAX = 32;

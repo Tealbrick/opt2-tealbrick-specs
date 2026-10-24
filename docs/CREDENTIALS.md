@@ -83,8 +83,8 @@ All also carry `iat`, `exp`, `jti`. K1 is Clerk's format and is never in `tb:` f
 | `bridge` | slice | `{id, keys: [jwk]}` — keys the app accepts for call proofs |
 | `connections` | config | `[{con, agt, method: "key" \| "pairing", gen, publicKey? (key method), status: "active" \| "revoked"}]` |
 | `instanceKeys` | config | `[{ins, svc?, jwk}]` — keys the bridge accepts for instance assertions |
-| `pause` | config, slice | `{workspace: boolean, agents: agt_[], instances: ins_[]}` (connections are revoked, not paused) |
-| `revoked` | config, slice | `{jtis: [{jti, exp}]}` — grants / pairing codes withdrawn before `exp`; entries drop after `exp` |
+| `pause` | config, slice | `{workspace: boolean, agents: agt_[], instances: ins_[]}` (connections are revoked, not paused). Spec follow-up (QA-SPEC49-15): a SLICE carries only `workspace`, its own edge agents (the slice's `agents[]`) and its own instance — never the whole lists |
+| `revoked` | config, slice | `{jtis: [{jti, exp}]}` (unique) — grants / pairing codes withdrawn before `exp`; entries drop after `exp`. Spec follow-up (QA-SPEC49-15): a SLICE carries only jtis of grants that target or originate at its instance (its agent grants and companion grants); pairing-code jtis and other apps' grant jtis are bridge-only |
 | `personNbf` | slice | epoch seconds; app UI sessions created before it are invalid (§12) |
 | `standalone` | config, slice | absent, or `{issuer: "tb:brg:<id>", kid, ownerKeys: [jwk]}` (§17) |
 | grants | config (agent grants), slice (companion grants held by that app) | K10 compact strings |

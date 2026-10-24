@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX } from "../src/bridge.ts";
+import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX } from "../src/bridge.ts";
 import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
@@ -277,6 +277,7 @@ test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed c
     assert.ok(b64(s) <= 1_000_100, `${JSON.stringify(unit)}: ${b64(s)}`);
   }
   assert.ok(CONFIG_CORE_MAX_BYTES + 1_000_000 <= 4 * 1024 * 1024, "1 MB headroom to the bridge limit");
+  assert.ok(CONFIG_CORE_MAX_BYTES < CONFIG_KILLPATH_MAX_BYTES && CONFIG_KILLPATH_MAX_BYTES < 4 * 1024 * 1024);
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   const schema = load("workspace-config.schema.json");
   const agent = ajv.compile({ $defs: schema.$defs, $ref: "#/$defs/agentEntry" });
@@ -285,6 +286,14 @@ test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed c
   for (const bad of ["\u0001", "a\u007fb", "\u0085", "\r\n", "\u0000", "a\u2028b", "\u2029", "\u202e", "\u2067x", "\ufeff", "x\ud800", "\udc00y"])
     assert.equal(agent({ ...base, persona: bad }), false, JSON.stringify(bad));
   for (const good of ["😀 emoji pairs pass", "字", "tab\there"]) assert.equal(agent({ ...base, persona: good }), true, good);
+  // QA-SPEC49-16/-17: invisible / format characters and the range edges are refused; their neighbours pass
+  const refused = ["\u0080", "\u009f", "\u00ad", "\u034f", "\u061c", "\u180e", "\u200b", "\u200c", "\u200d", "\u200e", "\u200f",
+    "\u202a", "\u202b", "\u202d", "\u2060", "\u2064", "\u2066", "\u2068", "\u2069", "\ufe00", "\ufe0e", "\ufff9", "\ufffb",
+    "\udbff", "\udfff", "\u{e0000}", "\u{e0041}", "\u{e007f}", "\u{e0100}", "\u{e01ef}", "👨\u200d👩"];
+  for (const bad of refused) assert.equal(agent({ ...base, persona: `a${bad}b` }), false, JSON.stringify(bad));
+  const neighbours = ["\u2027", "\u2030", "\u2065", "\u206a", "\u00a0", "\u00a1", "\u00ac", "\u00ae", "\u2070",
+    "\ufe0f", "❤\ufe0f", "\ufe10", "\ufff8", "\ufffc", "\u{e0080}", "\u{e01f0}", "\u{1f600}"];
+  for (const ok of neighbours) assert.equal(agent({ ...base, persona: `a${ok}b` }), true, JSON.stringify(ok));
   assert.equal(PAIRING_CODES_OPEN_MAX, 100);
   assert.equal(schema.$defs.agentEntry.properties.persona.pattern, PERSONA_PATTERN);
 });

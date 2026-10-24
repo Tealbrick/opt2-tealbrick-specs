@@ -489,10 +489,10 @@
           "$ref": "#/$defs/agentMode"
         },
         "persona": {
-          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6). Spec follow-up (QA-SPEC49-11): no control characters except TAB and LF, no U+2028/2029, bidi controls, BOM or lone surrogates (PERSONA_PATTERN).",
+          "description": "v0.1.63 (C320, C312a): the agent card persona (markdown); the bridge gives it to the agent first (BRIDGE §15.6). Spec follow-up (QA-SPEC49-11): no control characters except TAB and LF, no U+2028/2029, bidi controls, BOM, invisible/format characters (tag, zero-width incl. ZWJ, LRM/RLM, soft hyphen, variation selectors except U+FE0F) or lone surrogates (PERSONA_PATTERN).",
           "type": "string",
           "maxLength": 8000,
-          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069\\ufeff\\ud800-\\udfff]*$"
+          "pattern": "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u00ad\\u034f\\u061c\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u2069\\ufe00-\\ufe0e\\ufeff\\ufff9-\\ufffb\\ud800-\\udfff\\u{e0000}-\\u{e007f}\\u{e0100}-\\u{e01ef}]*$"
         }
       }
     },
@@ -916,6 +916,7 @@
         "jtis": {
           "type": "array",
           "maxItems": 20000,
+          "uniqueItems": true,
           "items": {
             "type": "object",
             "additionalProperties": false,

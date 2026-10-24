@@ -327,6 +327,11 @@ export const CONFIG_CORE_MAX_BYTES = 3_000_000;
  *  in `revoked.jtis` until `exp`). Core refuses a new code at this count, so cancellations cannot grow the config past the
  *  kill-path budget. */
 export const PAIRING_CODES_OPEN_MAX = 100;
+/** Spec follow-up (QA-SPEC49-15, C349): before it signs an owner change, Core also builds the WORST-CASE kill-path config of
+ *  the result — workspace + every agent + every instance paused, every connection revoked, PAIRING_CODES_OPEN_MAX cancelled
+ *  codes, with every app slice re-minted — and refuses the change (`config_too_large`) when that JWS is larger than this.
+ *  Margin to the bridge's 4 MiB (4,194,304) limit. */
+export const CONFIG_KILLPATH_MAX_BYTES = 4_000_000;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
