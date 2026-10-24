@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -286,14 +286,28 @@ test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed c
   for (const bad of ["\u0001", "a\u007fb", "\u0085", "\r\n", "\u0000", "a\u2028b", "\u2029", "\u202e", "\u2067x", "\ufeff", "x\ud800", "\udc00y"])
     assert.equal(agent({ ...base, persona: bad }), false, JSON.stringify(bad));
   for (const good of ["😀 emoji pairs pass", "字", "tab\there"]) assert.equal(agent({ ...base, persona: good }), true, good);
-  // QA-SPEC49-16/-17: invisible / format characters and the range edges are refused; their neighbours pass
-  const refused = ["\u0080", "\u009f", "\u00ad", "\u034f", "\u061c", "\u180e", "\u200b", "\u200c", "\u200d", "\u200e", "\u200f",
-    "\u202a", "\u202b", "\u202d", "\u2060", "\u2064", "\u2066", "\u2068", "\u2069", "\ufe00", "\ufe0e", "\ufff9", "\ufffb",
-    "\udbff", "\udfff", "\u{e0000}", "\u{e0041}", "\u{e007f}", "\u{e0100}", "\u{e01ef}", "👨\u200d👩"];
+  // C353 (QA-SPEC49-16/-17/-21): refuse only hide/reorder characters with no language need; script characters pass
+  const refused = ["\u0001", "\u001f", "\u0080", "\u009f", "\u115f", "\u1160", "\u3164", "\u2028", "\u2029", "\u202a", "\u202e",
+    "\u2060", "\u2064", "\u2066", "\u2069", "\u206a", "\u206f", "\ufeff", "\ufff9", "\ufffb", "\udbff", "\udfff",
+    "\u{e0000}", "\u{e0041}", "\u{e007f}"];
   for (const bad of refused) assert.equal(agent({ ...base, persona: `a${bad}b` }), false, JSON.stringify(bad));
-  const neighbours = ["\u2027", "\u2030", "\u2065", "\u206a", "\u00a0", "\u00a1", "\u00ac", "\u00ae", "\u2070",
-    "\ufe0f", "❤\ufe0f", "\ufe10", "\ufff8", "\ufffc", "\u{e0080}", "\u{e01f0}", "\u{1f600}"];
-  for (const ok of neighbours) assert.equal(agent({ ...base, persona: `a${ok}b` }), true, JSON.stringify(ok));
+  const allowed = ["\u00ad", "\u034f", "\u061c", "\u180e", "\u200a", "\u200b", "\u200c", "\u200d", "\u200e", "\u200f",
+    "\u2027", "\u202f", "\u205f", "\u2065", "\u2070", "\u115e", "\u1161", "\u3163", "\u3165", "\ufdff", "\ufe00", "\ufe0f",
+    "\ufff8", "\ufffc", "\u{e0080}", "\u{e0100}", "\u{e01ef}", "👨\u200d👩\u200d👧", "\u0628\u200c\u0627", "\u{1f600}"];
+  for (const ok of allowed) assert.equal(agent({ ...base, persona: `a${ok}b` }), true, JSON.stringify(ok));
   assert.equal(PAIRING_CODES_OPEN_MAX, 100);
   assert.equal(schema.$defs.agentEntry.properties.persona.pattern, PERSONA_PATTERN);
+});
+
+test("C353: persona markers are exactly the allowed invisible script characters; the slice limit matches the schema", () => {
+  const re = new RegExp(PERSONA_PATTERN, "u");
+  for (const m of PERSONA_MARKERS) {
+    assert.ok(m.from <= m.to && /^[A-Z]{2,4}$/.test(m.label), JSON.stringify(m));
+    for (const cp of [m.from, m.to]) assert.ok(re.test(`a${String.fromCodePoint(cp)}b`), `marker U+${cp.toString(16)} must be allowed`);
+  }
+  assert.deepEqual(
+    PERSONA_MARKERS.map((m) => m.label),
+    ["SHY", "CGJ", "ALM", "MVS", "ZWSP", "ZWNJ", "ZWJ", "LRM", "RLM", "VS", "VS"],
+  );
+  assert.equal(load("workspace-config.schema.json").$defs.compactJws.maxLength, SLICE_JWS_MAX_CHARS);
 });

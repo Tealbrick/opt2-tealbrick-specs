@@ -333,6 +333,10 @@ export const PAIRING_CODES_OPEN_MAX = 100;
  *  codes, with every app slice re-minted — and refuses the change (`config_too_large`) when that JWS is larger than this.
  *  Margin to the bridge's 4 MiB (4,194,304) limit. */
 export const CONFIG_KILLPATH_MAX_BYTES = 4_000_000;
+/** C353 (QA-SPEC49-18): the per-slice limit (schema `compactJws` maxLength). Core's worst-case kill-path check (above) also
+ *  requires EVERY re-minted slice to stay at or under it; slices add no bytes on pause (`agents[].status`), so the check is
+ *  about the slice's normal content (edge-agent directory, companion grants). */
+export const SLICE_JWS_MAX_CHARS = 65_536;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;

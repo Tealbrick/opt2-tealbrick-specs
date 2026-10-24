@@ -84,14 +84,29 @@ export const PERSONA_MAX_CHARS = 8000;
  *  surrogates forbidden (PERSONA_PATTERN, well-formed UTF-16), one unit costs at most 3 bytes in JSON, so 250,000 units are
  *  ≤ 1 MB after base64url — well inside CONFIG_CORE_MAX_BYTES. Core refuses a create/update past it (`validation_failed`). */
 export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
-/** Persona text: no control characters except TAB and LF (C0, DEL and C1 refused; clients turn CRLF into LF before sending),
- *  no line/paragraph separators (U+2028/2029), no bidi embedding/override/isolate controls (U+202A–202E, U+2066–2069), no
- *  BOM (U+FEFF), no invisible or format characters (QA-SPEC49-16: soft hyphen U+00AD, CGJ U+034F, ALM U+061C, MVS U+180E,
- *  zero-width U+200B–200D incl. ZWJ, LRM/RLM U+200E/200F, U+2060–2064, variation selectors U+FE00–FE0E and
- *  U+E0100–E01EF, interlinear U+FFF9–FFFB, tag characters U+E0000–E007F; U+FE0F stays allowed, ZWJ emoji sequences fall
- *  back to separate emoji), no lone surrogates (in a unicode-mode regex `\ud800-\udfff` matches only unpaired halves; Core also checks
- *  `String.prototype.isWellFormed`). The review shows the persona in full, so nothing may hide or reorder text. */
-export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u00ad\\u034f\\u061c\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u2069\\ufe00-\\ufe0e\\ufeff\\ufff9-\\ufffb\\ud800-\\udfff\\u{e0000}-\\u{e007f}\\u{e0100}-\\u{e01ef}]*$" as const;
+/** Persona text (C353): REFUSE only characters that hide or reorder text and that no script needs — C0 controls except TAB
+ *  and LF, DEL and C1, Hangul fillers U+115F/U+1160/U+3164, U+2028/2029, bidi embeddings/overrides U+202A–202E and isolates
+ *  U+2066–2069, invisible operators U+2060–2064, deprecated format U+206A–206F, BOM U+FEFF, interlinear annotation
+ *  U+FFF9–FFFB, tag characters U+E0000–E007F, lone surrogates (unicode-mode regex; Core also checks isWellFormed()). Clients
+ *  turn CRLF into LF. Characters real scripts need stay ALLOWED and are SHOWN as markers (PERSONA_MARKERS). */
+export const PERSONA_PATTERN = "^[^\\u0000-\\u0008\\u000b-\\u001f\\u007f-\\u009f\\u115f\\u1160\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\u3164\\ufeff\\ufff9-\\ufffb\\ud800-\\udfff\\u{e0000}-\\u{e007f}]*$" as const;
+
+/** C353: allowed invisible characters that scripts need (Persian, Hebrew, Arabic, Sinhala, Mongolian, Japanese IVS, emoji
+ *  ZWJ sequences). The drafts review and the persona editor show each one as a visible labelled marker (e.g. `⟨ZWJ⟩`) next
+ *  to the text, so nothing is hidden from the owner. `[from, to]` inclusive code points. */
+export const PERSONA_MARKERS: readonly { from: number; to: number; label: string }[] = [
+  { from: 0x00ad, to: 0x00ad, label: "SHY" },
+  { from: 0x034f, to: 0x034f, label: "CGJ" },
+  { from: 0x061c, to: 0x061c, label: "ALM" },
+  { from: 0x180e, to: 0x180e, label: "MVS" },
+  { from: 0x200b, to: 0x200b, label: "ZWSP" },
+  { from: 0x200c, to: 0x200c, label: "ZWNJ" },
+  { from: 0x200d, to: 0x200d, label: "ZWJ" },
+  { from: 0x200e, to: 0x200e, label: "LRM" },
+  { from: 0x200f, to: 0x200f, label: "RLM" },
+  { from: 0xfe00, to: 0xfe0f, label: "VS" },
+  { from: 0xe0100, to: 0xe01ef, label: "VS" },
+];
 
 /** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
 export const OWN_HOSTS_MAX = 32;
