@@ -41,7 +41,7 @@ signature only proves that Core made a plan. The box enforces a closed local pol
    (409 conflict, `details.reason = infrastructure_set`; S1 never replaces — moving a workspace is a later migration feature),
    a paused or standalone workspace, a key already pinned for a live server (409 conflict).
 6. The agent polls `device.token` (RFC 8628). Result `DeviceHostTokenResult {scope: "host", server_id, workspace_id, key_thumbprint}`
-   — no token; the box checks `key_thumbprint` equals its own key and from now on signs host assertions. v0.1.62: the answer also carries `channel` (`"stable" | "dev"`, the chosen workspace's channel); the box uses it for every release-index check (it replaces a channel given at install time). Core refuses a channel change of a workspace that has a paired server (409 conflict, `details.reason = server_channel_locked`); to change it, detach and pair again.
+   — no token; the box checks `key_thumbprint` equals its own key and from now on signs host assertions. v0.1.62: the answer also carries `channel` (`"stable" | "dev"`, the chosen workspace's channel); the box uses it for every release-index check. Installed without an explicit channel, the box takes it; installed with an explicit channel that differs, the box refuses the pairing (detach and pair again). Core refuses a channel change of a workspace that has a paired server (409 conflict, `details.reason = server_channel_locked`); to change it, detach and pair again.
 - The device code is single-use and lives 10 min (K2); it is redeemed before the box can fetch any plan.
 
 ## 3. Server object

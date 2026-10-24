@@ -186,8 +186,9 @@ export interface DeviceHostTokenResult {
   workspace_id: WorkspaceId;
   /** thumbprint of the key Core pinned (the box checks it equals its own) */
   key_thumbprint: string;
-  /** v0.1.62: the release channel of the chosen workspace. The box uses it for every release-index check from now on
-   *  (it replaces any channel given at install time). Core refuses a channel change of a workspace with a paired server. */
+  /** v0.1.62: the release channel of the chosen workspace. The box uses it for every release-index check from now on.
+   *  Installed without an explicit channel: the box takes this one. Installed with an explicit channel that differs: the
+   *  box refuses the pairing (detach and pair again). Core refuses a channel change of a workspace with a paired server. */
   channel: "stable" | "dev";
 }
 /** The host part of a `DeviceRequest` (device.lookup) — what the approval page shows. */
@@ -378,7 +379,7 @@ export const HOST_SECRET_VALUE_PATTERNS = [
  * actions run before the first engine call (a refused plan changes nothing). Ids are stable; HOST_CONFORMANCE refers to them.
  */
 export const HOST_POLICY = {
-  pairing: "Pairing (device flow, scope host, HOST.md \u00a72): the agent generates its key on the box and sends only the public key and the facts; the owner sees the user code and the approval URL, never the device code; polling honours authorization_pending and slow_down; the token answer is accepted only when key_thumbprint equals THIS box's key; the box then takes its release channel from the token answer's `channel` (the workspace's channel), replacing any channel given at install time; access_denied, expiry or another pinned key end the flow with an error and no pairing state is kept.",
+  pairing: "Pairing (device flow, scope host, HOST.md \u00a72): the agent generates its key on the box and sends only the public key and the facts; the owner sees the user code and the approval URL, never the device code; polling honours authorization_pending and slow_down; the token answer is accepted only when key_thumbprint equals THIS box's key; the box then takes its release channel from the token answer's `channel` (the workspace's channel) when no channel was given explicitly at install time, and refuses the pairing when an explicitly given channel differs (detach and pair again); access_denied, expiry or another pinned key end the flow with an error and no pairing state is kept.",
   verifySignature: "Plan JWS verifies under a key listed in the `portalKeySet` statement (active or pending), and that statement verifies under a root pinned in the agent build (dev or prod channel, chosen at build time); the key-set seq never goes back (bad_signature).",
   bindServer: "`server` and `aud`/`sub` equal this box; `workspace` equals the paired workspace (wrong_server).",
   monotonicSeq: "The box keeps lastSeq = the highest seq it DECIDED (applied, or refused after the signature and server binding verified), persisted across restarts, and polls with after = lastSeq. A verified plan with seq \u2264 lastSeq is refused (replayed); one with seq > lastSeq + seqMaxJump is refused without moving lastSeq (seq_out_of_range) and reported; a plan whose signature fails never moves lastSeq. Core serves only plans the box has not decided yet, so a reported refusal never blocks later plans.",
@@ -530,6 +531,6 @@ export const HOST_CONFORMANCE = [
     given: "Plans with the bridge (publicDomain, publicHosts) and an app; then on a real box the bridge's two public hosts.",
     expect: "Only the bridge gets a public route (its two policy-checked hosts on its port); each host is verified once and serves TLS; an already active host is left alone; a failed verify fails the deploy; no app is reachable from outside." },
   { id: "H-19", title: "pairing takes the workspace channel", rule: "pairing", target: "agent-unit",
-    given: "A box installed with channel stable pairs into a workspace whose token answer carries channel dev (and the reverse); then a plan for a release of the other channel.",
-    expect: "After pairing the box's configured channel equals the token answer's channel; the release-index check uses it (a release of the other channel is refused not_in_index); a token answer without a valid channel ends the flow with an error." },
+    given: "A box installed WITHOUT an explicit channel pairs into a workspace whose token answer carries channel dev (and one with stable); a box installed with an explicit channel stable pairs into a dev workspace; then a plan for a release of the other channel.",
+    expect: "Without an explicit channel the box's channel equals the token answer's channel and the release-index check uses it (a release of the other channel is refused not_in_index); an explicit channel that differs ends the pairing with an error (detach and pair again); a token answer without a valid channel ends the flow with an error." },
 ] as const satisfies readonly HostConformanceRow[];
