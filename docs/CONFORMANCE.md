@@ -269,3 +269,7 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `RM-16` [Core] persona and `modelRoleRequirements` go only to a bridge with cap `model_roles`; a bridge without it gets neither and `KeyStatus.rolesSupported` is `false`.
 - `RM-17` [SDK] `modelRole()` → `null` on a 404 without refuse code (bridge without the cap); a required role then gives `needs_keys`.
 - `RM-11` [Knowledge] `knowledge__ask` answers when `reasoning` resolves and is reachable by a granted agent; without it the tool says which role to set.
+
+## v0.1.69 — new sign-in banner (QA-SPEC43-6)
+- Core: C-NS-1 a new `tbm` session appears in `account.me.newSignIns` (osn, client, machineLabel, createdAt; no IP); C-NS-2 after `owner_sessions.ack_new_sign_ins` it is gone, a later new session appears again; C-NS-3 a revoked session leaves the list; C-NS-4 a K3 calling `owner_sessions.ack_new_sign_ins` → refused (browser row); C-NS-5 `cli` / `tbd` sessions never appear.
+- Core: C-PO-13 a row not taken within `queueTtlS` → 502 `upstream_timeout` {reason: not_delivered}, and the app never receives it.
