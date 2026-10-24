@@ -237,7 +237,16 @@ export interface AccountMe {
   mfa?: AccountMfa;
   /** v0.1.37 (C184 §2.3): present while an operator suspended or banned this account (the Portal shows the notice) */
   restriction?: AccountRestriction;
+  /** v0.1.69 (QA-SPEC43-6): live sign-ins of NEW_SIGN_IN.clients created after the person's last acknowledgement (newest
+   *  first, ≤ NEW_SIGN_IN.max, ≤ NEW_SIGN_IN.windowDays old). The Portal shows a banner "New sign-in: TBM on <machineLabel>,
+   *  <time> — Not me? Revoke" until the person revokes (owner_sessions.revoke) or acknowledges (owner_sessions.ack_new_sign_ins).
+   *  Absent or empty = no banner. Omitted by Core before 0.1.69. */
+  newSignIns?: NewSignIn[];
 }
+/** v0.1.69 (QA-SPEC43-6): one sign-in the owner has not seen yet. No IP or location (Core keeps none). */
+export interface NewSignIn { osn: OwnerSessionId; client: OwnerSessionClient; machineLabel: string; createdAt: IsoTime }
+/** v0.1.69 (QA-SPEC43-6): the Portal-side notice of new native sign-ins (also for an owner with no TBM device to push to). */
+export const NEW_SIGN_IN = { clients: ["tbm"], max: 5, windowDays: 30 } as const satisfies { clients: readonly OwnerSessionClient[]; max: number; windowDays: number };
 export interface AccountRestriction { kind: "suspend" | "ban"; customerText: string | null; since: IsoTime; endsAt: IsoTime | null }
 export interface SetCurrentWorkspaceInput { ws: WorkspaceId }
 /** v0.1.32 (C196 ENG-1): a legal document the account accepts, at one version. Core keeps the ONE list (its config constant). */
@@ -1630,6 +1639,8 @@ export const ROUTES = [
   // owner native sessions (K3)
   { opId: "owner_sessions.list", method: "GET", path: "/owner-sessions", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "OwnerSessionList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "owner_sessions.revoke", method: "DELETE", path: "/owner-sessions/{osn}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "OwnerSessionRef", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.revoke", draftable: false, confirm: false, idempotent: false, registry: "credential" },
+  /** v0.1.69 (QA-SPEC43-6): the browser acknowledges every listed new sign-in ("It was me"); browser only, so a K3 can never silence the notice. */
+  { opId: "owner_sessions.ack_new_sign_ins", method: "POST", path: "/owner-sessions/new-sign-ins/ack", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "owner_sessions.logout", method: "POST", path: "/owner-sessions/logout", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.revoke", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   /** v0.1.64 (C332): the calling owner session's push device (client in PUSH.clients); revoke / logout / expiry deletes it. */
   { opId: "push_devices.register", method: "PUT", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PushDeviceRegisterInput", output: "PushDevice", rate: "write", bodyLog: "none", audit: "push_device.register", draftable: false, confirm: false, idempotent: false, registry: "credential" },

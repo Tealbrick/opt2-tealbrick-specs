@@ -2,6 +2,12 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.69 (QA-SPEC43-6, -7, -4; additive)
+- `AccountMe.newSignIns` + `NEW_SIGN_IN` + browser row `owner_sessions.ack_new_sign_ins`: a Portal banner for every new `tbm` sign-in with Revoke / It was me (QA-SPEC43-6).
+- CREDENTIALS §3: K14 leeway exception written into the common token rule; S-PO-7 / S-PO-9 sharpened (QA-SPEC43-7).
+- Relay: untaken rows → 502 `not_delivered`; the bridge cuts oversize answers itself (findings from the Core and bridge builds).
+- Tests pin the relay result shapes, push texts, the allow-list snapshot and the required idempotency key (QA-SPEC43-4).
+
 ## Changelog → v0.1.64 (C326, C332, C332a: Teal Brick Mobile; additive)
 - Owner client `tbm` (scope owner only; stored client `tbm`; 7-day idle like `tbd`). `OWNER_SESSION_CLIENTS`, `DEVICE_FLOW` lists, `DeviceStartOwnerInput`.
 - Push devices: `push_devices.register` / `unregister` on the calling K3 (client in `PUSH.clients`); `OwnerSession.pushDevice`. **Core push sender:** one mechanism in Core for every push (C326); APNs in this version (env `TB_APNS_KEY` = the .p8 text, `TB_APNS_KEY_ID`, `TB_APNS_TEAM_ID`, `TB_PUSH_APP_IDS` = comma list of allowed app ids; any unset = sender off, register still works). Trigger `decisions` = a workspace's summed `pendingHolds` rises in a status report; ≤ 1 per (ws, kind) per 60 s; fixed text, `{kind, ws}` only — no content (v1 notify rule: notification failure never fails the caller).

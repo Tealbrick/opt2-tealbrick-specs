@@ -130,3 +130,32 @@ test("portal.info: public, read-only, no audit", () => {
   assert.equal(r.rate, "public_strict");
   assert.equal(r.audit, null);
 });
+
+// v0.1.69 (QA-SPEC43-4, -6): pin the shapes and constants a reviewer must see change.
+type ExactKeys<T, K extends PropertyKey> = [keyof T] extends [K] ? ([K] extends [keyof T] ? true : false) : false;
+const callResultKeys: ExactKeys<import("../src/routes.ts").PersonOpCallResult, "status" | "body"> = true;
+const bridgeResultKeys: ExactKeys<import("../src/routes.ts").BridgePersonOpResultInput, "pop" | "status" | "body"> = true;
+const newSignInKeys: ExactKeys<import("../src/routes.ts").NewSignIn, "osn" | "client" | "machineLabel" | "createdAt"> = true;
+type IdkRequired = undefined extends import("../src/routes.ts").PersonOpCallInput["idempotencyKey"] ? false : true;
+const idkRequired: IdkRequired = true;
+void [callResultKeys, bridgeResultKeys, newSignInKeys, idkRequired];
+
+test("v0.1.69: push texts, allow-list and new-sign-in constants are exact (QA-SPEC43-4)", async () => {
+  assert.deepEqual({ ...PUSH.kinds }, {
+    decisions: "A decision is waiting",
+    session_added: "New TBM sign-in on your account. Not you? Open TBM.",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(PERSON_OP_RELAY.allow)), [
+    { product: "inbox", read: ["items_list", "item_get"], write: ["item_decide", "item_snooze", "item_ack"] },
+  ]);
+  const { NEW_SIGN_IN } = await import("../src/routes.ts");
+  assert.deepEqual([...NEW_SIGN_IN.clients], ["tbm"]);
+  assert.ok(NEW_SIGN_IN.max > 0 && NEW_SIGN_IN.windowDays > 0);
+});
+
+test("v0.1.69: only the browser acknowledges new sign-ins (a K3 can never silence the notice)", () => {
+  const r = row("owner_sessions.ack_new_sign_ins");
+  assert.deepEqual([...r.auth], ["browser"]);
+  assert.equal(r.method, "POST");
+  assert.equal(r.input, "Empty");
+});
