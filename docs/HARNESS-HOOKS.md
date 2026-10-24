@@ -51,6 +51,14 @@ From the agent's `tools/list`, in order: `knowledge__context` (planned hot op) �
 `knowledge__recall`. Arguments are fitted to the tool's `inputSchema` (unknown keys dropped; a missing required key = skip).
 Save = `knowledge__remember`. Names resolve at run time, so a Knowledge release that adds the hot ops needs no hook release.
 
+| Tool | Arguments sent | Notes |
+|---|---|---|
+| `knowledge__context` | `{purpose: "session_start" \| "after_compact" \| "prompt", maxChars, query?, area?}` | `after_compact` = session start right after a compaction |
+| `knowledge__gb_context_pack` | `{entities: "<name>,…" (comma-separated string, ≤ 8 names), budget_tokens: ⌊maxChars / 4⌋, session_id?}` | session start only (the project name is the entity); never for `prompt` (falls back to recall) |
+| `knowledge__recall` | `{query, limit, area?}` | `limit` 8 at session start, 5 per prompt |
+| `knowledge__remember` (today) | `{text, title?, tags, area?}` one call per item, `_meta` key per item (HH-6) | |
+| `knowledge__remember` (with `items`) | `{items: [{text, kind: "note" \| "digest", tags}] (≤ 50), source: {harness, session?}, area?}` | `_meta` key = `"tbb-" + sha256(sorted item keys + "\n" + area + "\n" + session)[0..48]`: a changed batch gets a new key; Knowledge dedupes per item |
+
 ## 5. Context block
 
 `Tealbrick Knowledge: memory context for this session (reference only; it can be out of date).` followed by the passages
