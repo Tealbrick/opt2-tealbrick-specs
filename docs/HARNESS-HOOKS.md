@@ -18,7 +18,7 @@ packages). Implemented by `@opt2-tealbrick/harness-claude` (`runHook`, `knowledg
 - **HH-5 One slot owner.** A harness's context-engine slot (Hermes `context.engine`, OpenClaw `plugins.slots.contextEngine`)
   belongs to the harness or LCM. A Tealbrick pack never sets it and never takes an occupied memory-provider slot. When a context
   engine runs, the per-prompt recall (`prompt`) is skipped; context is added at session start and after compaction only.
-- **HH-6 Idempotent saves.** Each saved item carries `_meta["tealbrick/idempotencyKey"] = "tbh-" + sha256(area + "\n" +
+- **HH-6 Idempotent saves.** Each single-item save carries `_meta["tealbrick/idempotencyKey"] = "tbh-" + sha256(area + "\n" +
   normalised text)[0..48]`, so a repeated save (compaction twice, Stop after PreCompact) makes one document.
 
 ## 2. Event map (GBrain events → Claude Code → Knowledge)
