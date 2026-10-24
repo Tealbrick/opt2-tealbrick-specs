@@ -196,6 +196,24 @@ Settings are non-secret values chosen at deploy (and later, if `mutable`). Core 
 | M-ST-6 | A field referenced by any `services[].when` has `mutable: false` (changing it would add or remove containers) → `setting_must_be_immutable`. |
 | M-ST-7 | Every field is referenced by at least one `env[].setting`, or by a `when` (fields, steps, keys, services, skills) or a skill `{{settings.<key>}}` → `setting_unused`. |
 
+### 7.1 Model roles (v0.1.63; C322(3), C330(4))
+
+`settings.modelRoles[] {role, required, minPolicy = "standard", usedBy[], env?, help?, when?}`: model roles the app or its services use. The workspace bridge resolves each from the owner's role registry (BRIDGE §15) and never serves a binding below `minPolicy`. Roles and policies: `MODEL_ROLES`, `DATA_POLICIES` (`packages/spec/src/models.ts`). "Chat" = `reasoning`.
+- `required: true` → while the role is unset or below policy the app reports readiness `needs_keys` with `attention {code: "model_role_missing", reason}` naming the role(s) (the owner action is the same page). `required: false` → the app runs without it and MAY report `attention {code: "model_role_optional"}` (readiness `degraded`; the GUI opens the app) — e.g. Knowledge without `embeddings` = keyword recall. Codes: `MODEL_ROLE_ATTENTION`.
+- Applying a binding: `env` (below) for services started by `tb-exec`; the env names are the service's own and need not be upstream env vars — a service boot script may map them to engine config (e.g. `gbrain config set models.tier.utility …`). API-configured engines (Open Notebook model registration, Foundry `PUT /provider`) are configured by the app from SDK `modelRole(role)` (`usedBy` `app`); a role may list both `app` and services.
+- `embeddings` is special: an engine's index is built with one model and size. The app stores the model + `dims` it built with; when the resolved binding differs, it keeps using the stored one, reports `attention {code: "embeddings_changed"}` and re-embeds only after the owner approves (its own repair flow). With no `embeddings` binding at the engine's first start, the app initialises it without embeddings (e.g. GBrain `--no-embedding`) and adds them later the same way. Therefore an `embeddings` role's `env` names are the app's OWN names (e.g. `KN_EMBEDDINGS_MODEL`), read only by its boot script at the engine's first start, never the engine's run-time model variables: `tb-exec` restarts the service on every `keysRev` change, and an engine that reads its model from env at run time would embed queries with a new model against the old index. Keys likewise go to the provider's upstream env name chosen by the boot script per provider id.
+- `minPolicy`: an app that reads sensitive data (Observer) declares `zdr` or `local` on every role.
+- `env`: env names `tb-exec` fills for a SERVICE from the resolved binding (`provider`, `model`, `baseUrl`, `key`, `dims`). The app itself reads roles with SDK `modelRole(role)`.
+- Keys a role uses are NOT declared again in `keys[]`; `keys[]` stays for non-model secrets and legacy apps.
+
+| Rule | Check |
+|---|---|
+| M-MR-1 | `role` in `MODEL_ROLES`; one entry per role per manifest → `model_role_invalid`. |
+| M-MR-2 | `minPolicy` in `DATA_POLICIES` → `model_role_invalid`. |
+| M-MR-3 | `usedBy` items are `app` or declared service ids → `model_role_invalid`. |
+| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service → `model_role_invalid`. |
+| M-MR-5 | `when` as for keys (M-ST-3) → `condition_invalid`. |
+
 ## 8. Hooks
 
 A hook subscribes one of this app's handlers to the bridge chain (CORE §8). The handler is addressed by hook id: `POST <internalUrl>/tb/v1/hooks/<hookId>`; a hook is not an operation and never an MCP tool.
