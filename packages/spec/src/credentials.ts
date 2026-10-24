@@ -2,6 +2,7 @@
 // v0.1, Lead · Specs, 2026-10-11. Vocabulary (CRUD, effects, hold families, modes, hook phases) comes from ./manifest.ts.
 
 import type { AgentMode, CrudAction, HoldFamily, HookHoldFamily, HookPhase, ProductId } from "./manifest.ts";
+import type { DataPolicy, ModelRole } from "./models.ts";
 
 // ── Identifiers (CORE §1) ────────────────────────────────────────────────────
 /** 26-char Crockford base32 ULID, upper case. */
@@ -289,6 +290,8 @@ export interface PersonTicketKeysClaims extends BaseClaims<PortalOrStandaloneIss
   pur: "keys";
   /** requirement names to focus (display only) */
   req?: string[];
+  /** v0.1.63 (BRIDGE §15.2): role bindings the key page pre-fills (display only, never applied without the owner's submit) */
+  roles?: { role: ModelRole; provider?: string; model?: string; dataPolicy?: DataPolicy }[];
 }
 export type PersonTicketClaims = PersonTicketLaunchClaims | PersonTicketKeysClaims;
 
