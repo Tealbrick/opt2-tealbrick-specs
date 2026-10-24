@@ -204,8 +204,9 @@ function neverLocal(h: ReturnType<typeof hostOf>): boolean {
   return false;
 }
 const PRIVATE4 = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"];
-function verifiedLocal(h: ReturnType<typeof hostOf>): boolean {
-  if (h.host === "localhost" || h.host.endsWith(".railway.internal")) return true;
+function verifiedLocal(h: ReturnType<typeof hostOf>, origin: string, ownInfra: string[]): boolean {
+  // exact suffix after a dot: "railway.internal", "xrailway.internal" and "a.railway.internal.evil.com" are NOT local
+  if (h.host === "localhost" || h.host.endsWith(".railway.internal") || ownInfra.includes(origin)) return true;
   if (h.ip4) return PRIVATE4.some((c) => inV4(h.ip4 as string, c));
   if (h.ip6) return h.ip6 === "::1" || (hex1(h.ip6) & 0xfe00) === 0xfc00;
   return false;
@@ -227,14 +228,14 @@ function classifyOwnHost(input: string): string {
   const h = hostOf(u);
   if (neverLocal(h)) return "refused";
   if (u.protocol === "http:" && !ownNetIpLiteral(h)) return "refused";
-  return h.ip4 && !ownNetIpLiteral(h) ? "accepted_warn_public" : "accepted";
+  return (h.ip4 !== null || h.ip6 !== null) && !ownNetIpLiteral(h) ? "accepted_warn_public" : "accepted";
 }
-function classifyBase(input: string, ownHosts: string[]): string {
+function classifyBase(input: string, ownHosts: string[], ownInfra: string[]): string {
   const u = parse(input);
   if (!u) return "refused";
   const h = hostOf(u);
   const owned = ownHosts.filter((o) => classifyOwnHost(o).startsWith("accepted")).map((o) => new URL(o).origin);
-  const cls = neverLocal(h) ? "not_local" : verifiedLocal(h) ? "verified" : owned.includes(u.origin) ? "owner_listed" : "not_local";
+  const cls = neverLocal(h) ? "not_local" : verifiedLocal(h, u.origin, ownInfra) ? "verified" : owned.includes(u.origin) ? "owner_listed" : "not_local";
   if (u.protocol === "http:" && !(cls === "verified" || (cls === "owner_listed" && ownNetIpLiteral(h)))) return "refused";
   return cls;
 }
@@ -250,12 +251,17 @@ test("spec follow-up: NEVER_LOCAL and NEVER_LOCAL_HOSTNAMES are pinned exactly",
 
 test("spec follow-up: every local-check fixture row matches the BRIDGE §15.3 reference classifier", () => {
   const fx = JSON.parse(readFileSync(new URL("../examples/local-check.cases.json", import.meta.url), "utf8"));
-  assert.ok(fx.cases.length >= 40);
+  assert.ok(fx.cases.length >= 100);
   for (const c of fx.cases) {
-    const got = c.kind === "own_host" ? classifyOwnHost(c.input) : classifyBase(c.input, c.ownHosts ?? []);
+    const got = c.kind === "own_host" ? classifyOwnHost(c.input) : classifyBase(c.input, c.ownHosts ?? [], c.ownInfra ?? []);
     assert.equal(got, c.expect, `${c.kind} ${JSON.stringify(c.input)}`);
     if (c.canonical) assert.equal(new URL(c.input).href, c.canonical, c.input);
   }
   // the parser-differential string from QA-SPEC49-1 is in the fixture and refused
   assert.ok(fx.cases.some((c: { input: string; expect: string }) => c.input === "http://10.0.0.1\\@evil.example/v1" && c.expect === "refused"));
+});
+
+test("spec follow-up (QA-SPEC49-7): the SDK model error codes are pinned", async () => {
+  const { SDK_MODEL_ERROR_CODES } = await import("../src/sdk.ts");
+  assert.deepEqual([...SDK_MODEL_ERROR_CODES], ["role_undeclared", "model_endpoint_refused"]);
 });

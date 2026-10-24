@@ -331,6 +331,10 @@ export type SdkAuditAction = (typeof SDK_AUDIT_ACTIONS)[number];
 // §B  @opt2-tealbrick/miniapp-sdk — server
 // ════════════════════════════════════════════════════════════════════════════
 
+/** v0.1.63 + spec follow-up #49: `TbError.code` values the model-role helpers throw (SDK-API "modelFetch"). */
+export const SDK_MODEL_ERROR_CODES = ["role_undeclared", "model_endpoint_refused"] as const;
+export type SdkModelErrorCode = (typeof SDK_MODEL_ERROR_CODES)[number];
+
 export declare class TbError extends Error {
   constructor(code: string, message: string, httpStatus?: number);
   readonly code: string;
