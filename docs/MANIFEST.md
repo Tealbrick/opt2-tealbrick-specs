@@ -240,7 +240,7 @@ Hooks match only `agent`-audience manifest operations reached through the bridge
 
 - `companions[] {product, operations, crud, purpose}`: app→app needs. For each entry Core mints the ONE grant (K10) with `sub = tb:ins:<this>`, `aud = tb:ins:<target>`, `crud = crud`, `mode = bound`, `wf = operations` (CORE I8), once both apps are deployed in the workspace (licence rule per CORE §6). `purpose` is shown on the canvas.
 - `unlocks[] {id, title, requires, provides {operations?, skills?}}`: features of THIS app that exist only when the companion product `requires` is deployed in the same workspace. The bridge hides the listed operations from MCP lists and Core leaves the listed skills out of the bundle until then. Unlocks are never licence features: the licence gates only Portal management in Core (deploy, grants, launch, updates); an app behaves the same licensed, unlicensed or self-hosted. No manifest field expresses "licence-only features".
-- `needsAgentDirectory` (default false): the instance slice lists all workspace agents, not only those with an edge (CORE §13).
+- `needsAgentDirectory` (default false): the instance slice lists all workspace agents, not only those with an edge (CORE §13). QA-SPEC49-26: an agent WITHOUT an edge to the app carries `edge: false` in that slice (absent = has an edge), so the app can tell a directory entry from a caller.
 
 | Rule | Check |
 |---|---|

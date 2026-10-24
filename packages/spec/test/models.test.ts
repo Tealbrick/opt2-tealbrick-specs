@@ -324,3 +324,14 @@ test("C353: persona markers are exactly the allowed invisible script characters;
     assert.equal(re.test(`a${ch}b`), isMarker(cp), `U+${cp.toString(16)}: allowed must equal marker`);
   }
 });
+
+test("QA-SPEC49-26: a directory slice may mark an agent without an edge as edge: false (only false)", () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of ["workspace-config.schema.json", "instance-slice.schema.json"]) ajv.addSchema(load(f));
+  const slice = load("instance-slice.schema.json");
+  const item = ajv.compile({ $id: "https://spec.opt2.tealbrick.com/t-edge.json", ...slice.properties.agents.items });
+  const a = { id: "agt_01JA0000000000000000000001", name: "Scout", mode: "free", status: "active" };
+  assert.equal(item(a), true, JSON.stringify(item.errors));
+  assert.equal(item({ ...a, edge: false }), true, JSON.stringify(item.errors));
+  assert.equal(item({ ...a, edge: true }), false);
+});

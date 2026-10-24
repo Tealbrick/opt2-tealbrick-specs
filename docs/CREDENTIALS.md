@@ -221,6 +221,7 @@ Enforcement points: **B** = bridge (`gate()` step 1 on config `pause`; connectio
 | Rotate Portal key | §9.2 (planned) / §9.4 (compromise) | tokens signed by the old key once it is removed | planned: none stop early; compromise ≤ 60 s |
 | Delete / replace a workspace default key | bridge key store write bumps `keysRev` (delivered with the slice pull, BRIDGE / SDK-API) | the app SDK drops cached values and refetches; `tb-exec` restarts the engine services so they get the new value | ≤ 60 s (bridge-local; works offline from Portal) |
 | Cancel unused pairing code | `jti` → `revoked.jtis` | that code | ≤ 60 s (or its 10 min `exp`) |
+| Delete an edge (agent → app; QA-SPEC49-26) | Core removes the agent's grant to that app from the config (no jti: the bridge holds grants only from the config); in a `needsAgentDirectory` slice the agent stays listed with `edge: false`, otherwise it leaves the slice | new calls of that agent to that app (bridge has no grant); its scheduled ops on that app (SDK fire time → `agent_removed`) | bridge ≤ 60 s; scheduled ops ≤ 60 s after the slice arrives / ≤ 12 h offline |
 | Revoke a TBM session (v0.1.64) | Core deletes the K3 digest and its push device row; no new K14 is minted for it | new relayed person ops and pushes for that session; K14 already queued lives ≤ 10 s | immediate at Core |
 
 ## 15. Key custody (option B, CORE §10, C2)

@@ -2,6 +2,9 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.70 (QA-SPEC49-26: scheduled ops after an edge delete; number taken at merge time, C340)
+- Slice `agents[].edge?: false` in `needsAgentDirectory` slices for agents without an edge; SDK scheduled ops refuse such an agent with `agent_removed` at fire time; CREDENTIALS §14 gains the edge-delete row; RM-24.
+
 ## Changelog → v0.1.68 (model-role follow-up after specs#42 QA; number taken at merge time, C340)
 - BRIDGE §15: resolve order (paused first, retryable 503 mid-update), https-only base URL outside the own network, roles ticket claim needs the manifest verifier; `local` = listed hosts only for tailnet names/IPs (owner "Own hosts" list, `NEVER_LOCAL` incl. 100.100.100.200), Node's bracketed hex IPv4-mapped form; `zdr` shown as owner-attested, gateway attestation names the host and a model change re-asks (`ModelProvider.gateway`). PORTAL-API: cap recomputed per report (no latch), gate residuals QA-SPEC42-10, persona limit in UTF-16 units. SDK-API: one attention slot, faults outrank model codes. RM-14b, RM-16 (no latch), RM-18.
 - QA-SPEC49: input hygiene + canonical base URL only (parser differential), Own hosts https for names + "owner-listed, not verified" (`policyBasis`), connect-time guard in SDK `modelFetch` / `tb-exec`, Own hosts changes bump `keysRev`, effective gateway incl. overridden base URLs, `NEVER_LOCAL` + `NEVER_LOCAL_HOSTNAMES` pinned (AWS IPv6, Oracle, Azure, 0/8), fixture `examples/local-check.cases.json` + reference classifier test. RM-19..RM-21.
