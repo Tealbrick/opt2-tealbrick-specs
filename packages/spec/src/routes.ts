@@ -7,7 +7,7 @@
 //
 // Shared vocabulary and ids are imported, never re-declared (CORE §0).
 
-import type { CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, StatusReport } from "./bridge.ts";
+import type { CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, ScopeSourceItem, StatusReport } from "./bridge.ts";
 import type {
   AgentId, BridgeId, ConnectionId, DeviceClientId, DeviceRequestId, DeviceScope, Ed25519PublicJwk,
   FreeCaps, InstanceId, OwnerSessionClient, PersonId, WorkspaceId,
@@ -762,6 +762,10 @@ export interface Edge {
   scopeType: string | null;
   /** Display only (≤ 80 chars), reported by the app via the bridge ack. */
   scopeSummary: string | null;
+  /** v0.1.65 (C331 D8): agent→app edges: the scope instances the agent may use (Connect accounts, Knowledge areas) from the bridge
+   *  ack's `scopeSummaries[].sources`; null = not reported (older SDK or bridge, app not running); [] = none assigned. Display
+   *  only: the canvas draws them as source nodes; access is decided by the SDK on every call. */
+  scopeSources: ScopeSourceItem[] | null;
   enabled: boolean;
   origin: "owner" | "manifest";
   /** v0.1.14 (A2A-11): `blocked` = an app→app edge whose companion declaration fails M-CP-2 against the target's current release */

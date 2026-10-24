@@ -344,8 +344,10 @@ export interface StatusReport {
   }[];
   /** presence booleans only — never values */
   keys: { name: string; ins: InstanceId; set: boolean }[];
-  /** display-only, ≤ 80 chars, no third-party identifiers */
-  scopeSummaries: { agt: AgentId; ins: InstanceId; label: string }[];
+  /** display-only, ≤ 80 chars, no third-party identifiers. v0.1.65 (C331 D8): `sources` = the app's ScopeSummaryResult.sources,
+   *  forwarded as given (≤ SCOPE_SOURCES_MAX, each label ≤ SCOPE_SOURCE_LABEL_MAX; a malformed item is dropped, never repaired);
+   *  absent when the app's SDK does not report them. */
+  scopeSummaries: { agt: AgentId; ins: InstanceId; label: string; sources?: ScopeSourceItem[] }[];
   connectionsCreated: { con: ConnectionId; agt: AgentId; method: "pairing"; clientName: string; createdAt: IsoTime; pairingJti: Ulid }[];
   connectionsRevoked: { con: ConnectionId; reason: "refresh_reuse" | "client_revoke" }[];
   claims: ClaimRecord[];
@@ -451,7 +453,21 @@ export interface BridgeOpBodies {
 }
 /** v0.1.50 (C283 A1): `admittedOps` = this agent's STATIC ops with a scopeType whose crud an owner-set primary row admits
  *  (possibly above grant.crud); the bridge lists those tools too. Display only (the SDK authorizes each call). */
-export interface ScopeSummaryResult { agent: AgentId; label: string; admittedOps?: string[] }
+export interface ScopeSummaryResult {
+  agent: AgentId;
+  label: string;
+  admittedOps?: string[];
+  /** v0.1.65 (C331 D8): the scope instances this agent is assigned (display only, ≤ SCOPE_SOURCES_MAX). Absent = the SDK does not
+   *  report sources; [] = the agent has no assignment. */
+  sources?: ScopeSourceItem[];
+}
+/** v0.1.65 (C331 D8): one scope instance an agent may use, as the app's owner UI names it (a Connect account, a Knowledge area).
+ *  `label` = the scope instance label (≤ 60, no control characters); apps never use a third-party identifier (an email address,
+ *  a phone number, a handle) as an instance label they create (the owner may type one). `access` = an access level id of that
+ *  scope type. Display only: Core shows it on the canvas; the SDK authorizes every call. */
+export interface ScopeSourceItem { type: SnakeId; id: string; label: string; access: SnakeId }
+export const SCOPE_SOURCES_MAX = 20;
+export const SCOPE_SOURCE_LABEL_MAX = 60;
 
 // ── MCP surface (BRIDGE §7) ──────────────────────────────────────────────────
 export const TOOL_NAME_RULE = {
