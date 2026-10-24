@@ -80,6 +80,10 @@ export const MODEL_ROLE_HINTS_MAX = 8;
  *  code units (JavaScript `.length`, as BRIDGE §14 `summary`); JSON Schema `maxLength` (code points) is only an outer bound. */
 export const PERSONA_MAX_CHARS = 8000;
 
+/** Total persona text per workspace (UTF-16 units over all agents): keeps the signed config under the bridge's 4 MB
+ *  limit (BRIDGE §1.2 S2). Core refuses an agents.create/update that would pass it (`validation_failed`). */
+export const PERSONA_WORKSPACE_MAX_CHARS = 1_000_000;
+
 /** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
 export const OWN_HOSTS_MAX = 32;
 

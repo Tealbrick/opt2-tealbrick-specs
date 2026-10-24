@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { BRIDGE_CAPS, type ModelRoleStatus } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -174,6 +174,9 @@ test("spec follow-up (QA-SPEC42-11, local check): gateways and never-local range
   for (const cidr of NEVER_LOCAL) assert.match(cidr, /^[0-9a-f.:]+\/\d{1,3}$/, cidr);
   assert.ok(NEVER_LOCAL.includes("100.100.100.200/32"), "cloud metadata inside CGNAT");
   assert.ok(OWN_HOSTS_MAX > 0 && OWN_HOSTS_MAX <= 64);
+  // 1 MB of persona text (UTF-16 units, up to 2 MB as UTF-8 JSON worst case for BMP text) stays under the 4 MB config limit
+  assert.equal(PERSONA_WORKSPACE_MAX_CHARS, 1_000_000);
+  assert.ok(PERSONA_WORKSPACE_MAX_CHARS * 3 < 4 * 1024 * 1024);
 });
 
 // ── Spec follow-up (QA-SPEC49-1/-2/-6): a reference classifier for BRIDGE §15.3, run against the shared fixture ──
