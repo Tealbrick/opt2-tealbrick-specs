@@ -223,7 +223,7 @@ function parse(input: string): URL | null {
 }
 function classifyOwnHost(input: string): string {
   const u = parse(input);
-  if (!u || u.pathname !== "/") return "refused";
+  if (u?.pathname !== "/") return "refused";
   const h = hostOf(u);
   if (neverLocal(h)) return "refused";
   if (u.protocol === "http:" && !ownNetIpLiteral(h)) return "refused";
