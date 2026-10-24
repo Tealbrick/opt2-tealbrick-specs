@@ -261,6 +261,11 @@ export interface Operation {
   dynamic?: DynamicSpec;
   /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on. */
   listing?: OperationListing;
+  /** v0.1.68 (C336 RQ-3, S-8; MANIFEST M-OP-12): the output carries a secret (e.g. a short-lived credential). App callers
+   *  only (agent callers refused, `secret_output_app_only`), not schedulable, no idempotency row, receipt with input digest +
+   *  summary only, never logged or given to an `after` hook; errors carry a code and a fixed message. Needs a bridge with the
+   *  `secret_output` cap. */
+  secretOutput?: true;
 }
 
 /** One entry of a dynamic operation's catalog (bridge op `POST /tb/v1/bridge/catalog`, search results). */

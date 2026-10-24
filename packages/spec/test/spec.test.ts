@@ -517,7 +517,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.deepEqual([...EVENT_AUDIENCES], ["target", "granted"]);
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles"]);
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "hook_tool", "secret_output"]); // v0.1.68 adds hook_tool, secret_output
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {
@@ -539,4 +539,33 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   const opts: import("../src/sdk.ts").EmitOptions = { subject: e.subject, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], instanceId: "prj_1", summary: e.summary };
   assert.ok(opts.subject.id);
   assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
+});
+
+test("v0.1.68 (C336 RQ-2, RQ-3; QA specs#47): narrowing v2, hook_tool / secret_output caps, M-OP-12 in the schema", async () => {
+  const v2: import("../src/sdk.ts").RulesNarrowingV2 = { v: 2, ruleId: "rul_x", reason: "sales may read orders only", memoryTags: { anyOf: ["sales"] }, deepDatasets: { anyOf: ["public.orders"], noneOf: [] } };
+  const any: import("../src/sdk.ts").RulesNarrowing = v2;
+  assert.equal(any.v, 2);
+  // @ts-expect-error a v1 narrowing has no deepDatasets (a reader without v2 must never see the key under v: 1)
+  const v1: import("../src/sdk.ts").RulesNarrowingV1 = { v: 1, ruleId: "rul_x", reason: "r", deepDatasets: { anyOf: [] } };
+  assert.ok(v1);
+  const b = await import("../src/bridge.ts");
+  for (const cap of ["hook_tool", "secret_output"]) assert.ok((b.BRIDGE_CAPS as readonly string[]).includes(cap), cap);
+  const target: import("../src/bridge.ts").HookCallInfo["target"] = { instance: "ins_01M53BAEQSGKVVY4PRM2VE6FBF" as never, product: "knowledge" as never, op: "deep" as never, tool: "deep_query", crud: ["read"], effect: "read" };
+  assert.equal(target.tool, "deep_query");
+  const lease: import("../src/manifest.ts").Operation = { id: "data_lease", title: "Lease", description: "d", crud: ["read"], effect: "read", idempotency: "none", receipt: true, audience: "agent", secretOutput: true };
+  // @ts-expect-error secretOutput is `true` or absent, never false
+  const wrong: import("../src/manifest.ts").Operation = { ...lease, secretOutput: false };
+  assert.ok(wrong);
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const validate = ajv.getSchema(load("manifest.schema.json").$id);
+  assert.ok(validate);
+  const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
+  const firstAgent = ex.operations.find((x: { audience: string }) => x.audience === "agent") as { id: string };
+  const others = ex.operations.filter((o: { id: string }) => o.id !== firstAgent.id);
+  const withOp = (op: unknown) => ({ ...ex, operations: [...others, op] });
+  assert.equal(validate(withOp(lease)), true, JSON.stringify(validate.errors));
+  for (const bad of [{ ...lease, secretOutput: false }, { ...lease, idempotency: "required" }, { ...lease, receipt: false }, { ...lease, audience: "person" }, { ...lease, dynamic: { mode: "search", crudCeiling: ["read"], effectCeiling: "read" } }]) {
+    assert.equal(validate(withOp(bad)), false, JSON.stringify(bad));
+  }
 });
