@@ -61,7 +61,7 @@ One envelope everywhere (CORE §8): `{ "error": { "code": "<snake_case>", "messa
 | 400 | `bad_request`, `validation_failed`, `idempotency_key_required`, `draft_invalid`, `draft_op_not_draftable`, `draft_ref_invalid`, `draft_ref_money`, `recipe_not_portable`, `policy_invalid`, `authorization_pending`, `slow_down`, `access_denied`, `expired_token` (RFC 8628 codes, carried as `error.code`) |
 | 401 | `unauthenticated`, `bridge_key_revoked`, `enrolment_code_invalid`, `stripe_signature_invalid`, `clerk_signature_invalid` (v0.1.4) |
 | 402 | `licence_required` |
-| 403 | `forbidden` (wrong auth class for the row), `account_disabled` (v0.1.4, C49), `mfa_required` (v0.1.32, C196) |
+| 403 | `forbidden` (wrong auth class for the row), `account_disabled` (v0.1.4, C49), `mfa_required` (v0.1.32, C196), `access_restricted` (C328, Core additive) |
 | 404 | `not_found` |
 | 405 | `method_not_allowed` (known path, wrong method; v0.1.4, C46) |
 | 409 | `conflict`, `revision_conflict`, `idempotency_conflict`, `licence_already_assigned`, `licence_not_active`, `workspace_paused`, `workspace_standalone`, `workspace_not_empty`, `bridge_not_ready`, `destination_in_use`, `deploy_in_progress`, `instance_exists`, `draft_state`, `terms_not_accepted` (v0.1.32, C196) |
@@ -548,3 +548,9 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## v0.1.62 additions (pairing channel)
 - `DeviceHostTokenResult.channel` (`"stable" | "dev"`): the chosen workspace's release channel; the host agent uses it from pairing on. `workspaces.update {channel}` on a workspace with a paired (not detached) server answers 409 conflict, `details.reason = server_channel_locked` (detach and pair again to change it). Conformance row H-19.
+
+## C323 (owner API: the dev channel is staff only; no type change)
+- `workspaces.update {channel: "dev"}` changes a workspace to `dev` only when the caller's Clerk user is an operator of the admin plane (`TB_ADMIN_OPERATORS`, any role). Any other caller gets 403 `forbidden`, `details.reason = channel_staff_only`, and nothing in the call is applied. With the admin plane off, nobody passes. A change to `stable` stays open to the owner (`server_channel_locked` still applies). `workspaces.create` has no channel field: a new workspace is always `stable`. Customer GUIs show no channel choice.
+
+## C328 (owner API: optional access allowlist; no type change)
+- With Core's `TB_ACCESS_ALLOWLIST` set (comma list of emails and `@domain` entries), a browser or owner-CLI request is accepted only for a Clerk user whose verified primary email is on the list (exact email, or exact domain), or who is an operator of the admin plane (`TB_ADMIN_OPERATORS`, any role). Any other caller gets 403 `access_restricted` with the message "This Portal is for the Tealbrick team." and no account is created. `owner_sessions.logout` stays open. Device-flow approval, server pairing and tickets are browser ops and pass the same check; the device exchange, bridge, host, public and webhook principals are not affected. Unset = off. `access_restricted` is an additive Core code (not yet in `ErrorCode`); the GUI shows the envelope message.
