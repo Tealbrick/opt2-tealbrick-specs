@@ -71,6 +71,13 @@ IDs are stable; the report lists every ID with pass/fail and the asserted value.
 - B16 limits: dynamic tool beyond the manifest ceiling → `dynamic_ceiling_exceeded`; hook re-entry → `hook_reentry`; companion call depth > limit → `call_depth_exceeded`; app with slice older than its validity → `slice_stale`.
 - B17 skills: `<product>__tb_skills` read tool is listed for every agent with any grant on that app (S10); skill text is served as rendered by `renderSkill()` (no bridge-side filtering).
 - B18 `pendingHolds` count reaches the status report (count only, no hold content) (S2).
+- B19 (v0.1.66, BRIDGE §7.5; gated by the reported cap `lazy_tools`, never by version) lazy tools. Fixture: one app with hot op H and lazy ops L1 (read), L2 (create, `idempotency: required`, receipt) and L3 (`destructive`, held family).
+  - `B19.lazy_hidden`: tools/list has H and `<product>__tb_more_search` + `<product>__tb_more_call`, not L1..L3; an app with no lazy op has no pair.
+  - `B19.lazy_search`: `query` "*" returns exactly the visible lazy ops with `tool`, `inputSchema`, `effect` and `total`; a word of L1's description ranks L1 first; the app receives no call for a search.
+  - `B19.lazy_grant`: an agent whose grant lacks `create` gets L2 in no search answer; `tb_more_call` and the direct name of L2 → `unknown_tool`; a Bound grant without L1 in `wf` → L1 not found; the app sees nothing.
+  - `B19.lazy_call_same_route`: L2 through `tb_more_call` = L2 called directly: the app receives an op proof with `op` = L2 and `in` = digest(`arguments`), the hook envelope names L2, one receipt; the same `arguments` again through the other path in the same session and window → the app deduplicates (one execution, derived key equal); L3 through `tb_more_call` → `held` with `checkWith` `<product>__tb_hold_status`; invalid `arguments` → `input_invalid`.
+  - `B19.lazy_unknown`: `tb_more_call` with an unknown op, another product's op, a standard op (`tb.hold_status`), a dynamic entry or `tb_more_search` → `unknown_tool`.
+  - `B19.lazy_hot_and_direct`: H through `tb_more_call` → allowed (same result as direct); L1 by its own name → allowed.
 
 ### 4.5 App + SDK (A)
 - A1 claim via the bridge with the enrolment code; instance key generated; no claim route other than the SDK's.

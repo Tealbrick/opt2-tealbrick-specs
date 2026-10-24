@@ -273,7 +273,7 @@
         "idempotency": { "enum": ["required", "supported", "none"] },
         "receipt": { "type": "boolean" },
         "audience": { "enum": ["agent", "person"] },
-        "listing": { "enum": ["default", "workflow"], "description": "v0.1.43 (LR-1): agent ops only; workflow = listed and callable only when the grant wf names the op." },
+        "listing": { "enum": ["default", "workflow", "lazy"], "description": "v0.1.43 (LR-1): agent ops only; workflow = listed and callable only when the grant wf names the op. v0.1.66 (C330(1)): lazy = static agent op left out of tools/list and served through <product>__tb_more_search / <product>__tb_more_call (BRIDGE 7.5)." },
         "dynamic": { "$ref": "#/$defs/dynamic" }
       }
     },
