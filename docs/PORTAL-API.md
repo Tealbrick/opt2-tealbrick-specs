@@ -548,3 +548,6 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## v0.1.62 additions (pairing channel)
 - `DeviceHostTokenResult.channel` (`"stable" | "dev"`): the chosen workspace's release channel; the host agent uses it from pairing on. `workspaces.update {channel}` on a workspace with a paired (not detached) server answers 409 conflict, `details.reason = server_channel_locked` (detach and pair again to change it). Conformance row H-19.
+
+## C323 (owner API: the dev channel is staff only; no type change)
+- `workspaces.update {channel: "dev"}` changes a workspace to `dev` only when the caller's Clerk user is an operator of the admin plane (`TB_ADMIN_OPERATORS`, any role). Any other caller gets 403 `forbidden`, `details.reason = channel_staff_only`, and nothing in the call is applied. With the admin plane off, nobody passes. A change to `stable` stays open to the owner (`server_channel_locked` still applies). `workspaces.create` has no channel field: a new workspace is always `stable`. Customer GUIs show no channel choice.
