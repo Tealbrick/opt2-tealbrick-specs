@@ -32,6 +32,9 @@ export interface ModelProvider {
   zdrOffered: boolean;
   /** speaks the OpenAI HTTP API (chat/embeddings) at `baseUrl` */
   openaiCompatible: boolean;
+  /** routes to other upstream providers (OpenRouter, LiteLLM, a custom address): a `zdr` attestation names the host and
+   *  covers every upstream; a model change clears it (BRIDGE §15.3, QA-SPEC42-11) */
+  gateway: boolean;
   /** absent = the owner must enter a base URL */
   defaultBaseUrl?: string;
 }
@@ -41,20 +44,20 @@ export interface ModelProvider {
  * v1 Knowledge "Models" step (`_v1/knowledge/tealbrick.app.json`); UNVERIFIED by test call.
  */
 export const MODEL_PROVIDERS: readonly ModelProvider[] = [
-  { id: "openai", label: "OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, defaultBaseUrl: "https://api.openai.com/v1" },
-  { id: "anthropic", label: "Anthropic", roles: ["reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: false, defaultBaseUrl: "https://api.anthropic.com" },
-  { id: "google", label: "Google Gemini", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, defaultBaseUrl: "https://generativelanguage.googleapis.com" },
-  { id: "voyage", label: "Voyage AI", roles: ["embeddings", "rerank"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, defaultBaseUrl: "https://api.voyageai.com/v1" },
-  { id: "openrouter", label: "OpenRouter", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, defaultBaseUrl: "https://openrouter.ai/api/v1" },
-  { id: "deepseek", label: "DeepSeek", roles: ["reasoning", "utility", "dreaming", "summarize"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, defaultBaseUrl: "https://api.deepseek.com/v1" },
-  { id: "together", label: "Together AI", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, defaultBaseUrl: "https://api.together.xyz/v1" },
-  { id: "mistral", label: "Mistral AI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, defaultBaseUrl: "https://api.mistral.ai/v1" },
-  { id: "azure-openai", label: "Azure OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
-  { id: "ollama", label: "Ollama (own server)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "llama-server", label: "llama.cpp server (own server)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "lm-studio", label: "LM Studio (own machine)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
-  { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
+  { id: "openai", label: "OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.openai.com/v1" },
+  { id: "anthropic", label: "Anthropic", roles: ["reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: false, gateway: false, defaultBaseUrl: "https://api.anthropic.com" },
+  { id: "google", label: "Google Gemini", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, gateway: false, defaultBaseUrl: "https://generativelanguage.googleapis.com" },
+  { id: "voyage", label: "Voyage AI", roles: ["embeddings", "rerank"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, gateway: false, defaultBaseUrl: "https://api.voyageai.com/v1" },
+  { id: "openrouter", label: "OpenRouter", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: true, defaultBaseUrl: "https://openrouter.ai/api/v1" },
+  { id: "deepseek", label: "DeepSeek", roles: ["reasoning", "utility", "dreaming", "summarize"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.deepseek.com/v1" },
+  { id: "together", label: "Together AI", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.together.xyz/v1" },
+  { id: "mistral", label: "Mistral AI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.mistral.ai/v1" },
+  { id: "azure-openai", label: "Azure OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: false },
+  { id: "ollama", label: "Ollama (own server)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true, gateway: false },
+  { id: "llama-server", label: "llama.cpp server (own server)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true, gateway: false },
+  { id: "lm-studio", label: "LM Studio (own machine)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true, gateway: false },
+  { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: true },
+  { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: true },
 ];
 
 /**
@@ -76,6 +79,12 @@ export const MODEL_ROLE_HINTS_MAX = 8;
 /** Agent card persona (PORTAL-API v0.1.63): markdown, the system-prompt fragment the owner edits. The limit counts UTF-16
  *  code units (JavaScript `.length`, as BRIDGE §14 `summary`); JSON Schema `maxLength` (code points) is only an outer bound. */
 export const PERSONA_MAX_CHARS = 8000;
+
+/** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
+export const OWN_HOSTS_MAX = 32;
+
+/** Never local, even when the owner lists them (link-local / cloud metadata, unspecified). BRIDGE §15.3 step 4. */
+export const NEVER_LOCAL = ["169.254.0.0/16", "fe80::/10", "100.100.100.200/32", "0.0.0.0/32", "::/128"] as const;
 
 /** MCP resource URI under which the bridge serves the calling agent's persona (BRIDGE §15.6). */
 export const PERSONA_RESOURCE_URI = "tb://agent/persona" as const;

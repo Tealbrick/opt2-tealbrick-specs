@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { BRIDGE_CAPS, type ModelRoleStatus } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, PERSONA_MAX_CHARS, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, OWN_HOSTS_MAX, PERSONA_MAX_CHARS, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -160,4 +160,15 @@ test("v0.1.63: invalid modelRoles fixtures name a rule and a code (manifest pack
     rules.add(c.rule);
   }
   assert.deepEqual([...rules].sort(), ["M-MR-1", "M-MR-2", "M-MR-3", "M-MR-4", "M-MR-5"]);
+});
+
+test("spec follow-up (QA-SPEC42-11, local check): gateways and never-local ranges", () => {
+  assert.deepEqual(
+    MODEL_PROVIDERS.filter((p) => p.gateway).map((p) => p.id),
+    ["openrouter", "litellm", "openai-compatible"],
+  );
+  for (const p of MODEL_PROVIDERS.filter((p) => p.gateway)) assert.ok(p.zdrOffered && p.openaiCompatible && !p.local, p.id);
+  for (const cidr of NEVER_LOCAL) assert.match(cidr, /^[0-9a-f.:]+\/\d{1,3}$/, cidr);
+  assert.ok(NEVER_LOCAL.includes("100.100.100.200/32"), "cloud metadata inside CGNAT");
+  assert.ok(OWN_HOSTS_MAX > 0 && OWN_HOSTS_MAX <= 64);
 });
