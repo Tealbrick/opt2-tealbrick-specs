@@ -314,7 +314,8 @@
             }
           }
         },
-        "summaryTemplate": { "type": "string", "minLength": 1, "maxLength": 80 }
+        "summaryTemplate": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "summaryEmpty": { "type": "string", "minLength": 1, "maxLength": 40, "pattern": "^[^{}]*$" }
       }
     },
     "settingField": {
