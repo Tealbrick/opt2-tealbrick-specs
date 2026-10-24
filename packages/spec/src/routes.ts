@@ -140,6 +140,8 @@ export const AUDIT_ACTIONS = [
   "bridge.enrolment_code_issue", "bridge.enrol",
   "ticket.launch", "ticket.keys",
   "licence.assign", "licence.unassign", "licence.move", "licence.create", "licence.revoke",
+  /** v0.1.67 (C331 D1): a staff member gave their own account a free (promo) licence on a non-live Core */
+  "licence.staff_comp",
   "order.create", "order.paid", "order.failed",
   "skills.override_put", "skills.override_delete",
   "owner_session.create", "owner_session.revoke",
@@ -1080,6 +1082,21 @@ export type LicenceList = Page<Licence>;
 export interface LicenceRef { lic: LicenceId }
 export interface LicenceTargetInput { lic: LicenceId; ws: WorkspaceId }
 export interface LicenceChange { licence: Licence; configRevisions: { ws: WorkspaceId; revision: number }[] }
+/**
+ * v0.1.67 (C331 D1, C342): a free licence (comp, kind promo) for the CALLER'S OWN account, for demo and recipe flows on DEV.
+ * Core MUST refuse with 403 `forbidden` unless ALL hold, checked in this order, nothing written on a refusal: (1) the caller
+ * resolves as an operator in TB_ADMIN_OPERATORS with role `support` or `owner` (a `readonly` operator or a customer →
+ * `details.reason` `staff_only`); (2) Core is non-live: TB_ENVIRONMENT_LABEL is exactly `dev` (missing, unknown or `live` →
+ * `live_environment`, fail closed), the Stripe key is not live and TB_STRIPE_ALLOW_LIVE is unset (else `live_environment`);
+ * (3) TB_STAFF_COMPS=1 (else `staff_comps_off`). `drafts.validate` MUST run the same three guards for a `licences.staff_comp`
+ * step and report a refusal as that step's issue. `days` 1..STAFF_COMP_MAX_DAYS (default STAFF_COMP_DEFAULT_DAYS); `reason`
+ * 3..300; `assignTo` MUST be one of the caller's workspaces (another account's → 404 `not_found`). Same rules as the admin
+ * `licences.comp_issue` otherwise (no paid licence for that product and major, at most COMP_MAX_ACTIVE_PER_PRODUCT active
+ * comps). No payment, no Stripe call.
+ */
+export interface StaffCompInput { product: ProductId; days?: number; reason: string; assignTo?: WorkspaceId }
+export const STAFF_COMP_MAX_DAYS = 30;
+export const STAFF_COMP_DEFAULT_DAYS = 14;
 /** v0.1.34 (C200, legal v1.1 Terms 1.2, 1.3, 9A.3; replaces the 0.1.33 union, which nothing used). The three checkout boxes,
  *  all unticked at first: `termsAccepted` = the acceptance box again at checkout (must be true); `business` = the optional
  *  "I am buying for my trade, business or profession." (a VAT/tax ID given at Stripe also makes the buyer a business);
@@ -1458,7 +1475,7 @@ export interface SchemaMap {
   BridgeStatus: BridgeStatus; KeyStatus: KeyStatus; KeyTicketInput: KeyTicketInput; LaunchTicketInput: LaunchTicketInput;
   TicketResult: TicketResult;
   Licence: Licence; LicenceListInput: LicenceListInput; LicenceList: LicenceList; LicenceRef: LicenceRef;
-  LicenceTargetInput: LicenceTargetInput; LicenceChange: LicenceChange; CheckoutInput: CheckoutInput; Checkout: Checkout; BillingPortalInput: BillingPortalInput; BillingPortalSession: BillingPortalSession;
+  StaffCompInput: StaffCompInput; LicenceTargetInput: LicenceTargetInput; LicenceChange: LicenceChange; CheckoutInput: CheckoutInput; Checkout: Checkout; BillingPortalInput: BillingPortalInput; BillingPortalSession: BillingPortalSession;
   OrderRef: OrderRef; Order: Order; UnpaidCount: UnpaidCount; StripeEvent: StripeEvent; WebhookAck: WebhookAck; PortalSigningKeys: PortalSigningKeys; ClerkEvent: ClerkEvent;
   SkillsInput: SkillsInput; SkillBundle: SkillBundle; SkillOverrideInput: SkillOverrideInput; SkillKeyRef: SkillKeyRef;
   SkillFile: SkillFile; ZipFile: ZipFile; DesktopDownload: DesktopDownload;
@@ -1610,6 +1627,8 @@ export const ROUTES = [
   { opId: "licences.list", method: "GET", path: "/licences", auth: BO, exposure: "gateway", transport: "json", query: ["cursor", "limit", "product", "assigned"], input: "LicenceListInput", output: "LicenceList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
   { opId: "licences.assign", method: "POST", path: "/licences/{lic}/assign", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "LicenceTargetInput", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.assign", draftable: true, confirm: true, idempotent: false, registry: "entitlement" },
   { opId: "licences.unassign", method: "POST", path: "/licences/{lic}/unassign", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "LicenceRef", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.unassign", draftable: true, confirm: true, idempotent: false, registry: "entitlement" },
+  /** v0.1.67 (C331 D1): staff only, non-live Core only; draftable so a CLI or recipe can prepare it (the person applies in the browser) */
+  { opId: "licences.staff_comp", method: "POST", path: "/me/staff-comps", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "StaffCompInput", output: "LicenceChange", rate: "sensitive", bodyLog: "meta", audit: "licence.staff_comp", draftable: true, confirm: true, idempotent: true, registry: "entitlement" },
   { opId: "licences.move", method: "POST", path: "/licences/{lic}/move", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "LicenceTargetInput", output: "LicenceChange", rate: "write", bodyLog: "meta", audit: "licence.move", draftable: true, confirm: true, idempotent: false, registry: "entitlement" },
   { opId: "licences.unpaid", method: "GET", path: "/workspaces/{ws}/unpaid", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "WorkspaceRef", output: "UnpaidCount", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
   { opId: "checkout.create", method: "POST", path: "/checkout", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "CheckoutInput", output: "Checkout", rate: "sensitive", bodyLog: "meta", audit: "order.create", draftable: true, confirm: true, idempotent: true, registry: "entitlement" },

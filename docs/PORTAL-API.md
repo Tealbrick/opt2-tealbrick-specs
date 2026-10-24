@@ -205,6 +205,7 @@ Auth: B = browser, O = owner native session, pub = public, dev = device, brg = b
 | `licences.assign` | POST `/licences/{lic}/assign` | B | DC | entitlement |
 | `licences.unassign` | POST `/licences/{lic}/unassign` | B | DC | entitlement |
 | `licences.move` | POST `/licences/{lic}/move` | B | DC | entitlement |
+| `licences.staff_comp` | POST `/me/staff-comps` | B | DCI | entitlement |
 | `licences.unpaid` | GET `/workspaces/{ws}/unpaid` | B,O | - | entitlement |
 | `checkout.create` | POST `/checkout` | B | DCI | entitlement |
 | `checkout.get` | GET `/orders/{ord}` | B | - | entitlement |
@@ -291,7 +292,7 @@ v0.1.53 (C289): the owner `DeviceToken.expires_in` is the idle limit of the sess
 | Tool execution / forwarding (MCP `tools/call`, hosted MCP endpoint, "execute" of any connector) | Portal never sees a tool call; agents reach apps through the bridge |
 | Connector, channel or broker ops (third-party connector link/execute, MCP OAuth client, bot tokens, channel links, account connections) | Outside connectivity is an app's job (the connectivity miniapp), reached through the bridge |
 | Relay / local-exec / frames / hosted call queues | No tool traffic through Portal. Exception v0.1.64 (C326): the person-op relay for allow-listed person ops of native owner sessions (v0.1.64 B); never agent or tool traffic |
-| Fleet, teams, memberships, daemons, peers, admin/staff routes, invites, SSO, password login | No organisation plane, no self-hosted identity |
+| Fleet, teams, memberships, daemons, peers, admin/staff routes, invites, SSO, password login | No organisation plane, no self-hosted identity. One named exception (v0.1.67, C331 D1): `licences.staff_comp`, a free licence for the staff member's OWN account on a non-live Core only (§ v0.1.67). |
 | Rooms / sessions index / chat previews / chat tokens | Desktop is not a second control plane |
 | App data (partitions, areas, connected accounts, consents of apps, receipts, holds, approvals "waiting" view) | Apps own their data, holds and receipts. v0.1.64: the relay passes allow-listed person-op answers through without storing them (sealed in flight, wiped at the end) |
 | Any op that accepts, returns or reveals an app key value (env reveal, apply-env, key upload) | Option B: keys live in the bridge key store |
@@ -554,6 +555,12 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## C328 (owner API: optional access allowlist; no type change)
 - With Core's `TB_ACCESS_ALLOWLIST` set (comma list of emails and `@domain` entries), a browser or owner-CLI request is accepted only for a Clerk user whose verified primary email is on the list (exact email, or exact domain), or who is an operator of the admin plane (`TB_ADMIN_OPERATORS`, any role). Any other caller gets 403 `access_restricted` with the message "This Portal is for the Tealbrick team." and no account is created. `owner_sessions.logout` stays open. Device-flow approval, server pairing and tickets are browser ops and pass the same check; the device exchange, bridge, host, public and webhook principals are not affected. Unset = off. `access_restricted` is an additive Core code (not yet in `ErrorCode`); the GUI shows the envelope message.
+
+## v0.1.67 additions (C331 D1: staff free licence on a non-live Core)
+- `licences.staff_comp` (POST `/me/staff-comps`, browser, draftable + confirm, idempotent, audit `licence.staff_comp`): `StaffCompInput {product, days?, reason, assignTo?}` → `LicenceChange`. A free licence (comp, kind `promo`, campaign `staff`) for the caller's own account, at the product's current major, ending after `days` (1–30, default 14). Demo and recipe flows on DEV need it because every app is paid; it replaces nothing in the admin plane (`licences.comp_issue` stays the support tool).
+- Guards (C342). Core MUST refuse with 403 `forbidden` unless ALL hold, checked in this order, nothing written on a refusal: (1) the caller's Clerk user resolves as an operator in `TB_ADMIN_OPERATORS` with role `support` or `owner` → else `details.reason = staff_only` (a `readonly` operator too); (2) Core is not live: `TB_ENVIRONMENT_LABEL` is exactly `dev` (missing, unknown or `live` fails closed), the Stripe key is not live and `TB_STRIPE_ALLOW_LIVE` is unset → else `details.reason = live_environment`; (3) `TB_STAFF_COMPS=1` on this Core (default off) → else `details.reason = staff_comps_off`. A Clerk failure fails closed (502 `provider_unavailable`). Rate class `sensitive`. `drafts.validate` MUST run the same guards for a `licences.staff_comp` step and report a refusal as that step's issue (code `forbidden`), so a CLI learns it before the person applies.
+- Then the admin comp rules: the account holds no active paid licence for that product and major (409 `conflict` `paid_licence_exists`), at most `COMP_MAX_ACTIVE_PER_PRODUCT` active comps per product (409 `comp_limit`); `assignTo` MUST be one of the caller's workspaces (another account's → 404 `not_found`) with a free slot. The comp row records the issuing Clerk user and operator role; the admin GUI lists it with the other comps and can revoke it.
+- The owner CLI (K3) never calls it directly (CREDENTIALS §188): a draft step `licences.staff_comp` is applied in the browser with the one draft confirmation.
 
 ## v0.1.64 additions (C326, C332, C332a: Teal Brick Mobile; 6 rows)
 
