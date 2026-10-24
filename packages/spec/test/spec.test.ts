@@ -517,7 +517,8 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.deepEqual([...EVENT_AUDIENCES], ["target", "granted"]);
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events"]);
+  // v0.1.63 adds model_roles (BRIDGE §15); v0.1.64 (C326) adds person_ops (BRIDGE §16)
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops"]);
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {
@@ -544,7 +545,15 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
 test("v0.1.67 (C331 D1): licences.staff_comp is the one staff route; browser only, draftable, idempotent, audited", async () => {
   const row = ROUTES.find((r) => r.opId === "licences.staff_comp");
   assert.ok(row);
-  assert.deepEqual([row.method, row.path, [...row.auth], row.draftable, row.confirm, row.idempotent, row.audit], ["POST", "/me/staff-comps", ["browser"], true, true, true, "licence.staff_comp"]);
+  // C342: every field pinned (QA mutants on rate, bodyLog, output, registry, exposure)
+  assert.deepEqual(
+    { ...row, auth: [...row.auth], query: [...row.query] },
+    {
+      opId: "licences.staff_comp", method: "POST", path: "/me/staff-comps", auth: ["browser"], exposure: "gateway", transport: "json", query: [],
+      input: "StaffCompInput", output: "LicenceChange", rate: "sensitive", bodyLog: "meta", audit: "licence.staff_comp", draftable: true, confirm: true,
+      idempotent: true, registry: "entitlement",
+    },
+  );
   assert.deepEqual(ROUTES.filter((r) => /staff/u.test(r.opId) || /staff/u.test(r.path)).map((r) => r.opId), ["licences.staff_comp"], "PORTAL-API §6: no other staff route");
   assert.ok((AUDIT_ACTIONS as readonly string[]).includes("licence.staff_comp"));
   const { STAFF_COMP_MAX_DAYS, STAFF_COMP_DEFAULT_DAYS } = await import("../src/routes.ts");
