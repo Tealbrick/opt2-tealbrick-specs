@@ -80,7 +80,7 @@
       "input": "https://100.100.100.200/",
       "expect": "not_local",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example",
         "https://100.100.100.200"
@@ -121,27 +121,27 @@
       "input": "http://100.101.102.103:11434/v1",
       "expect": "owner_listed",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example"
       ]
     },
     {
       "kind": "base",
-      "input": "https://gpu.taild2144d.ts.net/v1",
+      "input": "https://gpu.tail0000ex.ts.net/v1",
       "expect": "owner_listed",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example"
       ]
     },
     {
       "kind": "base",
-      "input": "http://gpu.taild2144d.ts.net/v1",
+      "input": "http://gpu.tail0000ex.ts.net/v1",
       "expect": "refused",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example"
       ]
@@ -151,7 +151,7 @@
       "input": "https://other.ts.net/v1",
       "expect": "not_local",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example"
       ]
@@ -161,7 +161,7 @@
       "input": "https://ollama.home.example/v1",
       "expect": "owner_listed",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example"
       ]
@@ -171,7 +171,7 @@
       "input": "https://ollama.home.example:8443/v1",
       "expect": "not_local",
       "ownHosts": [
-        "https://gpu.taild2144d.ts.net",
+        "https://gpu.tail0000ex.ts.net",
         "http://100.101.102.103:11434",
         "https://ollama.home.example"
       ]
@@ -249,7 +249,7 @@
     },
     {
       "kind": "own_host",
-      "input": "https://gpu.taild2144d.ts.net",
+      "input": "https://gpu.tail0000ex.ts.net",
       "expect": "accepted"
     },
     {
@@ -259,12 +259,12 @@
     },
     {
       "kind": "own_host",
-      "input": "http://gpu.taild2144d.ts.net",
+      "input": "http://gpu.tail0000ex.ts.net",
       "expect": "refused"
     },
     {
       "kind": "own_host",
-      "input": "https://gpu.taild2144d.ts.net/v1",
+      "input": "https://gpu.tail0000ex.ts.net/v1",
       "expect": "refused"
     },
     {
