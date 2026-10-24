@@ -124,7 +124,8 @@ export interface WorkspaceConfig extends Omit<ConfigClaims, "iss">, ConfigCreden
   hooks: HookEntry[];
   skills: SkillsBundle;
   keyRequirements: KeyRequirementEntry[];
-  /** v0.1.63 (C330(4)): manifest `settings.modelRoles[]` per instance, `when` resolved by Core. Absent (older Core) = none. */
+  /** v0.1.63 (C330(4)): manifest `settings.modelRoles[]` per instance, `when` resolved by Core. Absent (older Core, or a bridge
+   *  without cap `model_roles`, to which Core never sends it) = none. */
   modelRoleRequirements?: ModelRoleRequirementEntry[];
   enrolCodes: EnrolCodeEntry[];
 }
@@ -167,7 +168,8 @@ export interface AgentEntry {
   agt: AgentId;
   name: string;
   mode: AgentMode;
-  /** v0.1.63 (C320, C312a): the card's persona (markdown, ≤ PERSONA_MAX_CHARS); absent = none. BRIDGE §15.6. */
+  /** v0.1.63 (C320, C312a): the card's persona (markdown, ≤ PERSONA_MAX_CHARS UTF-16 units); absent = none. Sent only to a
+   *  bridge with cap `model_roles` (an older bridge's config schema refuses unknown agent fields). BRIDGE §15.6. */
   persona?: string;
 }
 export interface HookEntry {
@@ -312,7 +314,10 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps).
  *  v0.1.57 (C274c/C274d): + `events` = the bridge implements BRIDGE §14 in full (ingest, per-agent log, delivery on /mcp).
  *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule). */
-export const BRIDGE_CAPS = ["owner_rows", "events"] as const;
+/** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
+ *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
+ *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles"] as const;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
@@ -374,7 +379,8 @@ export interface StatusReport {
   /** v0.1.24 (C116): kind `config` + code `standalone_without_grants` = the final standalone document carries no agent grants (applied, fail closed).
    *  v0.1.25 (C117): kind `config` + code `hook_not_listed` (+ `ins` of the hook app) = a matching declared hook missing from config.hooks (call refused).
    *  v0.1.14 (L3): `bridge_op` = a failed catalog / resolve / mark / scope_summary call to an app (code = the app's refusal or transport error).
-   *  v0.1.17 (L3, C104): `manifest` = an app manifest the bridge refused (code = the refusal, e.g. `manifest_mismatch`, a validator code, `bridge_too_old`) */
+   *  v0.1.17 (L3, C104): `manifest` = an app manifest the bridge refused (code = the refusal, e.g. `manifest_mismatch`, a validator code, `bridge_too_old`)
+   *  v0.1.63: kind `config` + code `persona_too_long` = an agent persona over PERSONA_MAX_CHARS, dropped for that agent (BRIDGE §15.6) */
   rejected: {
     kind: "config" | "grant" | "slice" | "assertion" | "ticket" | "pairing" | "claim" | "bridge_op" | "manifest";
     code: BridgeErrorCode | string;
@@ -799,7 +805,8 @@ export interface AppStatusResponse {
   sliceRevision: number;
   keysRev: number;
 }
-/** v0.1.63 (BRIDGE §15.5): presence + labels of one declared role; `provider`/`model`/`dataPolicy` null when unset. */
+/** v0.1.63 (BRIDGE §15.5): presence + labels of one declared role; `provider`/`model`/`dataPolicy` null when unset. Labels
+ *  only — exactly these keys (schema `model-role-status.schema.json#/$defs/modelRoleStatus`). */
 export interface ModelRoleStatus {
   role: ModelRole;
   ins: InstanceId;

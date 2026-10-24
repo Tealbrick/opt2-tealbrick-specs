@@ -27,7 +27,8 @@ export interface ModelProvider {
   keyNeeded: boolean;
   /** runs on the owner's machine or network: binding defaults to `local` and needs a base URL */
   local: boolean;
-  /** the provider offers a zero-data-retention contract the owner can attest */
+  /** the owner may attest a zero-data-retention contract for it (C336 Q3: owner-attested; gateways and custom addresses
+   *  included, because the owner, not Tealbrick, holds the upstream contract) */
   zdrOffered: boolean;
   /** speaks the OpenAI HTTP API (chat/embeddings) at `baseUrl` */
   openaiCompatible: boolean;
@@ -52,8 +53,8 @@ export const MODEL_PROVIDERS: readonly ModelProvider[] = [
   { id: "ollama", label: "Ollama (own server)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
   { id: "llama-server", label: "llama.cpp server (own server)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
   { id: "lm-studio", label: "LM Studio (own machine)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true },
-  { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true },
+  { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
+  { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
 ];
 
 /**
@@ -64,7 +65,16 @@ export const MODEL_PROVIDERS: readonly ModelProvider[] = [
  */
 export const MODEL_ROLE_ATTENTION = ["model_role_missing", "model_role_optional", "embeddings_changed"] as const;
 
-/** Agent card persona (PORTAL-API §4.7): markdown, the system-prompt fragment the owner edits. */
+/** `provider` everywhere (bindings, status rows, hints, K11 claim) is a `MODEL_PROVIDERS` id of this form. */
+export const PROVIDER_ID_PATTERN = "^[a-z][a-z0-9-]{1,31}$" as const;
+/** `model` labels (bindings, status rows, hints): 1..128 chars, no whitespace, control characters or `//`, so a pasted key
+ *  sentence or a URL with spaces cannot pass as a label; the bridge page refuses anything else (BRIDGE §15.2). */
+export const MODEL_ID_PATTERN = "^(?!.*//)[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$" as const;
+/** Max role hints in `tickets.keys` input and the K11 `roles` claim. */
+export const MODEL_ROLE_HINTS_MAX = 8;
+
+/** Agent card persona (PORTAL-API v0.1.63): markdown, the system-prompt fragment the owner edits. The limit counts UTF-16
+ *  code units (JavaScript `.length`, as BRIDGE §14 `summary`); JSON Schema `maxLength` (code points) is only an outer bound. */
 export const PERSONA_MAX_CHARS = 8000;
 
 /** MCP resource URI under which the bridge serves the calling agent's persona (BRIDGE §15.6). */

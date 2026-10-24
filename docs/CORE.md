@@ -2,6 +2,9 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog v0.1.62 → v0.1.63 (C320, C322(2), C322(3), C330(4): model roles + persona)
+- New `models.ts` (roles, data policies, provider catalog, label patterns, attention codes, persona limit) and `model-role-status.schema.json` (labels-only shapes that reach Portal). Manifest `settings.modelRoles` (MANIFEST §7.1). Bridge §15 role registry (S11), cap `model_roles`, `GET /tb/v1/model-roles/<role>`, persona in MCP instructions. AgentCard.persona, KeyStatus.roles/rolesSupported, catalog modelRoles, keys-ticket role hints, update-gate extension and lowered-policy consent (PORTAL-API v0.1.63). SDK `modelRole()`. Conformance RM-1..RM-17.
+
 ## Changelog v0.1.29 → v0.1.30 (C181: `package` release-index kind)
 - `ReleaseIndexKind` adds `package`: an npm library tarball that other repos depend on by its dist URL (products `relay`, `harness-claude`, `harness-eve`, released from the private CLI repo; the private bridge and TBD depend on `relay`). Same shape and rules as `cli`: only `artifact {url, sha256, integrity}`, `url` = `<dist base>/opt2-tealbrick-cli-<product>-v<version>/opt2-tealbrick-<product>-<version>.tgz` on the public dist host, `tag` = `<product>-v<version>`. Additive: Core, the installer and `self-update` skip it (L24).
 

@@ -368,8 +368,9 @@ export interface AgentCard {
   name: string;
   purpose: string;
   /** v0.1.63 (C320, C312a): markdown ≤ PERSONA_MAX_CHARS (8,000), "" = none. The owner's system-prompt fragment; the
-   *  signed config carries it (`agents[].persona`) and the bridge gives it to the agent first (BRIDGE §15.6). */
-  persona: string;
+   *  signed config carries it (`agents[].persona`) and the bridge gives it to the agent first (BRIDGE §15.6). Optional on the
+   *  wire: an older Core omits it; clients treat absent as "". */
+  persona?: string;
   harnessOptionId: string;
   /** Display only (N8); Portal never calls agents. */
   endpointLabel: string | null;
@@ -620,7 +621,7 @@ export interface CatalogEntry {
   deploySteps: DeployStep[];
   keyRequirements: KeyRequirement[];
   /** v0.1.63 (C322(3)): manifest `settings.modelRoles[]` (`when` unresolved; the setup screen lists them before deploy) */
-  modelRoles: CatalogModelRole[];
+  modelRoles?: CatalogModelRole[];
   scopeTypes: { type: string; label: string; labelPlural: string }[];
   /** the configure screen only (manifest `ui.configurePath`) */
   hasConfigureUi: boolean;
@@ -987,11 +988,37 @@ export interface KeyStatus {
   items: { name: string; label: string; required: boolean; source: KeySource; set: boolean | null; usedBy: ProductId[] }[];
   /** v0.1.63 (C330(4)): one row per declared role per instance, from the latest bridge report (labels only; null = the
    *  bridge has not reported roles yet). The "Keys and models" step of the setup screen reads this. */
-  roles: { role: ModelRole; product: ProductId; ins: InstanceId; required: boolean; minPolicy: DataPolicy; set: boolean | null; policyOk: boolean | null; provider: string | null; model: string | null; dataPolicy: DataPolicy | null }[];
+  roles?: KeyStatusRole[];
+  /** v0.1.63 (QA-SPEC42-1): `true` = the workspace bridge declares cap `model_roles`; `false` = it does not (roles cannot be
+   *  set until the bridge is updated; `roles[].set` is then null); `null` = no bridge report yet. Absent = older Core. */
+  rolesSupported?: boolean | null;
+}
+/** v0.1.63: one declared role of one instance in `keys.status`. Labels only — exactly these keys (schema
+ *  `model-role-status.schema.json#/$defs/keyStatusRole`); never a base URL, key name or key value. */
+export interface KeyStatusRole {
+  role: ModelRole;
+  product: ProductId;
+  ins: InstanceId;
+  required: boolean;
+  minPolicy: DataPolicy;
+  set: boolean | null;
+  policyOk: boolean | null;
+  /** MODEL_PROVIDERS id (PROVIDER_ID_PATTERN) */
+  provider: string | null;
+  /** MODEL_ID_PATTERN */
+  model: string | null;
+  dataPolicy: DataPolicy | null;
 }
 /** v0.1.63: suggested binding the key page pre-fills (from a recipe or the setup screen); never a key value. */
-export interface ModelRoleHint { role: ModelRole; provider?: string; model?: string; dataPolicy?: DataPolicy }
-export interface KeyTicketInput { ws: WorkspaceId; names?: string[]; returnTo?: string; /** v0.1.63, ≤ 8 */ roles?: ModelRoleHint[] }
+export interface ModelRoleHint {
+  role: ModelRole;
+  /** MODEL_PROVIDERS id */
+  provider?: string;
+  /** MODEL_ID_PATTERN */
+  model?: string;
+  dataPolicy?: DataPolicy;
+}
+export interface KeyTicketInput { ws: WorkspaceId; names?: string[]; returnTo?: string; /** v0.1.63, ≤ MODEL_ROLE_HINTS_MAX (8) */ roles?: ModelRoleHint[] }
 /** v0.1.13 (C86): `path` = app-relative, starts with `/`, ≤ 512 chars; refused `path_invalid` (400) when it has a scheme,
  *  a host, `//`, `\\`, a `..` segment (also after percent-decoding) or control characters. The bridge serves it under
  *  `/a/<product>` of the TARGET app only. */

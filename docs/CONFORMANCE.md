@@ -255,9 +255,13 @@ Machine-readable: `HOST_CONFORMANCE` in `packages/spec/src/host.ts` (id, title, 
 Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets.
 - `RM-1` [manifest package] `settings.modelRoles` validates; M-MR-1..5 each refuse their bad case with their code.
 - `RM-2`..`RM-7`, `RM-12` [bridge] as BRIDGE §15.7.
+- `RM-2`..`RM-7` detail and negative cases: BRIDGE §15.7 (9 policy pairs, paused, service caller, override no fall-back, stored zdr re-check, URL negatives, persona 8,000/8,001, key delete).
 - `RM-8` [Core] persona > 8,000 chars → `validation_failed`; the GUI renders it escaped.
 - `RM-9` [Knowledge + GUI] Knowledge without `embeddings` reports `degraded` + attention (not `needs_keys`) and the GUI opens it with the attention banner.
-- `RM-10` [GUI] setup screen readable at 10+ agents (roles table once; per-agent rows collapsed).
-- `RM-13` [Core + bridge + GUI] no key value and no base URL reaches Portal: StatusReport body, Core logs, Core DB rows, GUI network traffic (BRIDGE §15.7).
-- `RM-14` [Core] update gate: needs_keys → degraded `model_role_optional` passes; ok → needs_keys `model_role_missing` rolls back.
+- `RM-10` [GUI] with 12 agents and 5 declared roles the setup screen renders exactly ONE roles table (5 rows) and 12 agent rows, all collapsed by default (0 expanded), each with a one-line summary; a unit test asserts these counts.
+- `RM-13` [Core + bridge + GUI] no key value, key name or base URL reaches Portal: canary values from BRIDGE §15.7 → zero hits in StatusReport bodies, Core logs, Core DB dump, GUI network traffic; plus a Core unit test that ingests a role row with injected `baseUrl`/`key`/`keyName` and proves it is dropped.
+- `RM-14` [Core] update gate (PORTAL-API v0.1.63): PASS — needs_keys → degraded `model_role_optional` with that optional role unset before and after; ok → degraded `model_role_optional` for a role NEW in the target manifest and unset; degraded(`embeddings_changed`) → same; ok → degraded `embeddings_changed` with changed embeddings labels. ROLL BACK — ok → degraded `model_role_optional` with every role `set && policyOk` before and after (app self-report); degraded(X) → degraded(`model_role_optional`) with roles configured; degraded(X) → degraded(X + `model_role_optional`); FAILED_BOOT code + model code (fails first); ok → degraded `embeddings_changed` with unchanged labels; ok → needs_keys `model_role_missing`; any model code from a bridge without cap `model_roles`.
+- `RM-15` [Core + GUI] a target release that lowers a role's `minPolicy` shows the notice and waits for owner consent (`held` when scheduled); raising it needs none.
+- `RM-16` [Core] persona and `modelRoleRequirements` go only to a bridge with cap `model_roles`; a bridge without it gets neither and `KeyStatus.rolesSupported` is `false`.
+- `RM-17` [SDK] `modelRole()` → `null` on a 404 without refuse code (bridge without the cap); a required role then gives `needs_keys`.
 - `RM-11` [Knowledge] `knowledge__ask` answers when `reasoning` resolves and is reachable by a granted agent; without it the tool says which role to set.
