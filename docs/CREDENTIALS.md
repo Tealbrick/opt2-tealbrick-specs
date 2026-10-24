@@ -41,7 +41,7 @@ A connection belongs to exactly one agent; an agent has 0..n connections; a sess
 | agent refresh token (K5) | `tbr_` | bridge |
 | OAuth authorization code (K5 issuance step) | `tbac_` | bridge |
 
-## 4. Credential registry (14 kinds; v0.1.58 adds K13 host key; v0.1.64 adds K14 relayed person op)
+## 4. Credential registry (15 kinds = K1–K14 + K2b; v0.1.58 adds K13 host key; v0.1.64 adds K14 relayed person op)
 Max lifetime is enforced by every verifier (`exp − iat`). "Digest" = SHA-256 at the issuer; "sealed" = AES-256-GCM under a KEK (§9).
 | # | Kind / `typ` | Issuer key → holder | Storage | Lifetime (max) | Audience rule | Verifier (key) | Revocation (mechanism → speed) | Pause |
 |---|---|---|---|---|---|---|---|---|
@@ -153,7 +153,7 @@ Generated where they are used (bridge first start; instance/service first start;
 | owner CLI / native session (K3) | create drafts, read workspace (no apply, no codes, no tickets) | revoke in Portal (or `tealbrick logout`) | immediate |
 
 ### 9.5 Portal Root Keys and key-set statements (v0.1.11, C62/C63, BSD-08)
-**Root keys are trust anchors, not credential kinds** (the 13 kinds of §4 are unchanged). Two Ed25519 keys, `root-a` (primary) and `root-b` (backup), generated and held OFFLINE, never in Core, Railway, CI or any repo. They sign ONLY key-set statements.
+**Root keys are trust anchors, not credential kinds** (the kinds of §4 are unchanged by root keys). Two Ed25519 keys, `root-a` (primary) and `root-b` (backup), generated and held OFFLINE, never in Core, Railway, CI or any repo. They sign ONLY key-set statements.
 - **Pinning**: the root PUBLIC JWKs are release data, `PORTAL_ROOT_KEYS = { dev, prod }` in `types/credentials.ts`, embedded in every bridge and SDK build. Dev-channel builds pin `dev` (the pair Platform generated locally, kept in `~/.config/opt2-tealbrick/`, mode 0600; public copy `opt2-tealbrick-platform/registry/portal-root-keys.dev.json`); stable builds pin ONLY `prod` (empty until the cutover ceremony). The channel is a build constant, never an env value (Portal sets env at deploy). A root change = new spec + bridge/SDK release; there is no in-band root rotation.
 - **Key-set statement (KSS)**: compact JWS, header exactly `{alg: "EdDSA", typ: "tb-keyset+jws", kid}` with `kid` = RFC 7638 thumbprint of the signing root; claims (closed set, `KeySetStatementClaims`) `{iss: "tb:portal-root", aud: "tb:portal-keys", seq, iat, keys: [{jwk, status: pending|active|retired}]}`; `seq` integer ≥ 1; `keys` 1–8 entries, distinct thumbprints, exactly one `active`, each `jwk` an Ed25519 public JWK (a `kid` member, if present, equals its thumbprint); ≤ `MAX_JWS_BYTES`. No `exp`/`sub`/`jti`: a statement is superseded only by a higher `seq`. Published as the signed file `opt2-tealbrick-platform/registry/portal-keyset.jws`; Core reads it at start and carries it verbatim as `portalKeySet` in the enrolment response, every config and every slice (no new Core route).
 - **Verifier rule** (bridge and SDK, ONE implementation: `@opt2-tealbrick/manifest` `verifyKeySetStatement` / `trustedPortalKeys`): accept a KSS only if (1) it is signed by a pinned root, (2) the claims are exactly the closed set with well-formed keys, (3) `seq` > pinned `seq`, or `seq` = pinned `seq` and the JWS is byte-identical (anything else → `keyset_rollback`). The trusted Portal key set is the `keys` of the newest accepted KSS: a config or slice is accepted only if signed by an `active` or `pending` key of it; grants, tickets and pairing codes verify with any key it lists (incl. `retired`, §9.2). The KSS is evaluated BEFORE the document signature (it is self-authenticating), so the document carrying it is verified with the new set. The pinned KSS (`{seq, kss}`) is persisted with the document it came with: the bridge's sealed S1 (BSD-03), the app store. Refusal codes `KEYSET_REFUSAL`: `keyset_invalid` (JWS, unknown root, signature, claims, keys), `keyset_rollback`, `keyset_missing`; a refused KSS drops the whole document (last good kept).
@@ -208,6 +208,7 @@ Enforcement points: **B** = bridge (`gate()` step 1 on config `pause`; connectio
 | Person ticket `launch` | not paused by design (accepted, C16 S13): owner must reach the app to inspect and decide holds | n/a | n/a | not paused (owner configures a paused app) |
 | Held action released by the owner in the app | A refuses to execute while paused (approval kept; executes after unpause or expires) | A refuses for that agent's holds | n/a (holds are agent-bound) | A refuses |
 | Person ticket `keys` | not paused (accepted, C16 S13; key page stays up, C9) | n/a | n/a | n/a |
+| K14 relayed person op (v0.1.64) | not paused (owner access by design, like `launch`); a held action released this way still waits for unpause (row above) | n/a (person, not agent) | n/a | B forwards; A refuses ops of a paused instance as for `launch` |
 
 ## 14. Revocation matrix
 | Action | Mechanism | What stops | How fast (online / offline from Portal) |
@@ -220,6 +221,7 @@ Enforcement points: **B** = bridge (`gate()` step 1 on config `pause`; connectio
 | Rotate Portal key | §9.2 (planned) / §9.4 (compromise) | tokens signed by the old key once it is removed | planned: none stop early; compromise ≤ 60 s |
 | Delete / replace a workspace default key | bridge key store write bumps `keysRev` (delivered with the slice pull, BRIDGE / SDK-API) | the app SDK drops cached values and refetches; `tb-exec` restarts the engine services so they get the new value | ≤ 60 s (bridge-local; works offline from Portal) |
 | Cancel unused pairing code | `jti` → `revoked.jtis` | that code | ≤ 60 s (or its 10 min `exp`) |
+| Revoke a TBM session (v0.1.64) | Core deletes the K3 digest and its push device row; no new K14 is minted for it | new relayed person ops and pushes for that session; K14 already queued lives ≤ 20 s | immediate at Core |
 
 ## 15. Key custody (option B, CORE §10, C2)
 - Account-default keys live only in the bridge key store (sealed with `TB_KEK`), entered on the bridge key page opened with a K11 `keys` ticket. An app fetches `GET <bridge internal>/tb/v1/keys/<name>` with an instance assertion and receives only names its manifest declares with `source: account_default`. App-own keys (`source: app_own`) are entered in the app UI and stored in the app; when both exist the app-own key wins.
@@ -236,7 +238,7 @@ None of these is ever sent to a bridge, app, agent or browser.
 1. Before handover the owner runs `tealbrick standalone owner-key`: the CLI generates an Ed25519 owner key in the OS keychain and prints its public JWK; the owner pastes it into the "Leave Portal" step (K1 + confirmation).
 2. Core publishes a final config and final slices (signed by K12) with `standalone = {issuer: "tb:brg:<id>", kid: <K7 thumbprint>, ownerKeys: [<owner jwk>]}` and with `portalKeys` emptied.
 3. The final config is frozen: the bridge keeps it as state S9 "self-issued config + owner keys" (BRIDGE §1.2). The C9 12 h fail-closed rule does not apply to it, because the bridge is now its issuer. The bridge re-mints, from the frozen config and signed with K7, the same grants (`iss = tb:brg:<id>`, 12 h, at half-life) and the slices. Apps accept them because a Portal-signed slice named that issuer and `kid`; they trust no Portal key any more, so a later Portal compromise cannot reach them.
-4. Owner administration: the bridge `/admin/v1/*` surface exists only in standalone mode and has exactly 4 ops — `pause` / `resume` (one agent or the workspace), `revoke-connection`, `ticket` (K11 `launch` or `keys`, signed by K7). CLI: `tealbrick admin pause|resume|revoke-connection|ticket`. These ops change only the pause and connection status inside the frozen config. Each request carries an owner assertion (`typ = tb-owner-assert+jwt`, signed by a key in `ownerKeys`, `iss = sub = tb:per:<id>`, `aud = tb:brg:<id>`, `htm`, `htu`, `bd?`, ≤ 60 s, replay set); it is never accepted on MCP, OAuth or app endpoints. The owner key belongs to the K12 row (the issuer role moves to the bridge; the owner key is its admin proof); it is not a 14th kind.
+4. Owner administration: the bridge `/admin/v1/*` surface exists only in standalone mode and has exactly 4 ops — `pause` / `resume` (one agent or the workspace), `revoke-connection`, `ticket` (K11 `launch` or `keys`, signed by K7). CLI: `tealbrick admin pause|resume|revoke-connection|ticket`. These ops change only the pause and connection status inside the frozen config. Each request carries an owner assertion (`typ = tb-owner-assert+jwt`, signed by a key in `ownerKeys`, `iss = sub = tb:per:<id>`, `aud = tb:brg:<id>`, `htm`, `htu`, `bd?`, ≤ 60 s, replay set); it is never accepted on MCP, OAuth or app endpoints. The owner key belongs to the K12 row (the issuer role moves to the bridge; the owner key is its admin proof); it is not a separate kind.
 5. Not in standalone (next wave): new agents, connections (no K2, no K2b), edges, apps or policy changes.
 
 ## 18. Hard rules (each is a conformance case; ids from CONFORMANCE.md)
@@ -255,7 +257,7 @@ None of these is ever sent to a bridge, app, agent or browser.
 ## 19. v1 failure classes and how opt2 prevents them
 | v1 failure (REG §3, BND §5, PKG §5) | opt2 prevention |
 |---|---|
-| ~40 credential kinds; 6 formats for "agent may call app" (two opaque grant tokens, attachments, leases, a JWT grant) | 13 kinds (§4); one grant K10 for agent→app and app→app; closed `typ` list |
+| ~40 credential kinds; 6 formats for "agent may call app" (two opaque grant tokens, attachments, leases, a JWT grant) | 15 kinds (§4, K1–K14 + K2b); one grant K10 for agent→app and app→app; closed `typ` list |
 | 3 audience formats; `aud` warn-only | one `tb:<kind>:<id>` format; R-aud reject |
 | plaintext org identity signing key in the DB | K12 sealed (§9.1), private half destroyed on retirement |
 | deployment secrets / instance tokens written into app env, sealed copies in Core | instance and bridge generate key pairs; Portal stores public keys; R-enrol-only-secret |
@@ -272,7 +274,7 @@ None of these is ever sent to a bridge, app, agent or browser.
 |---|---|
 | Exactly five caller types | §1 |
 | Every kind has a registry row (issuer key, verifier, lifetime, audience, revocation) | §4, `types/credentials.ts` `CREDENTIAL_REGISTRY` |
-| Kind count stated and short; no purpose served by two kinds | §4 (13 kinds, purpose list; K2 vs K2b disjoint) |
+| Kind count stated and short; no purpose served by two kinds | §4 (15 kinds, purpose list; K2 vs K2b disjoint) |
 | One agent→app and app→app grant: short-lived, signed, aud = instance, CRUD + scope + mode | §11, CORE §6 |
 | Grants verified locally; no introspection; key rotation | §11, §9.2 |
 | Revocation per kind (agent, key, person, device, pause): what stops, how fast | §4, §14 (incl. default-key replace) |
@@ -327,6 +329,7 @@ A companion grant (K10, `sub` = the calling instance) carries `prd` = that insta
 
 ## v0.1.64 additions (C326, C332)
 - **K3 client `tbm`** (Teal Brick Mobile): device flow `client_id: "tbm"`, scope `owner` only; stored client `tbm`; idle limit `LIFETIME_S.ownerTbdSessionIdle` (7 d). Same person limits as `cli`/`tbd` (§12: reads + drafts + logout), plus two rows: its own push device (`push_devices.*`) and `person_ops.call` (read ops for `tbd` and `tbm`; write ops for `tbm` only). K3 still never obtains any K11, code or token.
-- **Why `tbd` gets no write ops** (review B1): a TBD K3 lives under the owner's OS user, where the owner's own agents also run (§12: the OS user is the boundary). A write-capable TBD K3 would let an agent approve its own Inbox items. The phone runs no agent (TBM is not a harness; the later phone node executes only typed capabilities, never agent code).
+- **Why `tbd` is not a relay client in v0.1.64** (review B1 and its re-review): a TBD K3 lives under the owner's OS user, where the owner's own agents also run (§12: the OS user is the boundary). A write-capable TBD K3 would let an agent approve its own Inbox items; a read-capable one would let it read every other agent's asks. `PersonOpClient` keeps `tbd` for a later design (e.g. user presence per call); `PERSON_OP_RELAY.clients` is `tbm` only. The phone runs no agent (TBM is not a harness; the later phone node executes only typed capabilities, never agent code).
+- **Residual risk (accepted, C332a(4))**: a phished `tbm` device code is a decision credential for Inbox items without money or delete. Limits: the approval screen says so, money/delete and structured holds never pass the relay, every relayed write is audited, the owner revokes the session in Sessions. Follow-up (not v0.1.64): tell the owner about every new `tbm` session (push to the other sessions / email).
 - **K14 relayed person op** (`TYP.personOp = tb-person-op+jwt`), registry row K14: minted by Core with K12 (iss `tb:portal` only) for one allow-listed `person_ops.call`; claims `ws, op, bd, idk, cli, pop` (+ base claims; `sub` = the person, `aud` = `tb:ins:<target>`); 20 s; one-time (`tb_used_jti`). Holder = the workspace bridge (relay only; it never verifies or stores it); Core keeps it sealed until the row ends; verifier = the target app SDK (SDK-API §21). Never returned to the K3 holder. Purpose: "native owner person op through the relay = K14".
 - §1 invariant unchanged: Portal never calls into customer infrastructure; the bridge pulls the relay queue.

@@ -35,7 +35,7 @@ IDs are stable; the report lists every ID with pass/fail and the asserted value.
 - M5 no product literal: Core, bridge, SDK source trees contain no product id from any example/real manifest (grep list built from manifests).
 
 ### 4.2 Credentials (C) — one case per kind, plus negatives
-- C1 every kind K1–K12 + K2b: positive path verified with the documented verifier and checks in the documented order.
+- C1 every kind K1–K14 + K2b (v0.1.58 K13, v0.1.64 K14): positive path verified with the documented verifier and checks in the documented order.
 - C2 `aud` mandatory: missing, array, or foreign `aud` → refused (grant, agent session, pairing code, person ticket, call proof, assertions).
 - C3 `typ` confusion: each token presented where another kind is expected → refused (e.g. person ticket as grant, grant as agent session).
 - C4 **F4-1 class**: a person credential (Clerk session or owner CLI session) presented at the bridge MCP endpoint, the relay, an app op route, or any agent path → refused; and no agent-facing response, config, slice or instruction set ever contains a person credential (scan of all fake-captured payloads).
@@ -253,4 +253,4 @@ Machine-readable: `HOST_CONFORMANCE` in `packages/spec/src/host.ts` (id, title, 
 
 ## v0.1.64 — person-op relay and TBM rows (C326, C332; package version set at release)
 - Core: C-PO-1 `cli` K3 → 403 {reason: client}; C-PO-2 `tbd` write op → 403 {reason: op}; C-PO-3 op outside the allow-list → 403; C-PO-4 bridge without cap → 409 relay_unsupported; C-PO-5 row not taken in `queueTtlS` is never handed out; C-PO-6 two concurrent polls never get the same pop; C-PO-7 result for a pop of another bridge → 404; C-PO-8 status -1 → 502, 0 → 504; C-PO-9 audit row without input/output; C-PO-10 K14 claims exact and `bd` = hex over the forwarded bytes; C-PO-11 sealed at rest, wiped at end; C-PU-1 push register refused for `cli`/`tbd`; C-PU-2 push row deleted on logout/revoke; C-PU-3 one push per ws per 60 s, payload exactly `{aps, kind, ws}`; C-PU-4 sender failure never fails the status report.
-- Bridge: R-PO-1..6 (BRIDGE §15). SDK: S-PO-1..11 (SDK-API §21).
+- Bridge: R-PO-1..6 (BRIDGE §15). SDK: S-PO-1..12 (SDK-API §21). Inbox: I-PO-1 `item_decide` on an item that is not open, or with a stale `version` → 409, one effect.

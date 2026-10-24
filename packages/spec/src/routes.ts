@@ -1170,7 +1170,8 @@ export type PushKind = keyof typeof PUSH.kinds;
  *   key and the family is listed OR UNKNOWN (fail closed). Core does not see families; the app enforces it.
  */
 export const PERSON_OP_RELAY = {
-  clients: ["tbd", "tbm"],
+  /** v0.1.64: `tbm` only. `tbd` (same OS user as the owner's agents) waits for its own design — CREDENTIALS v0.1.64. */
+  clients: ["tbm"],
   writeClients: ["tbm"],
   allow: [
     { product: "inbox", read: ["items_list", "item_get"], write: ["item_decide", "item_snooze", "item_ack"] },

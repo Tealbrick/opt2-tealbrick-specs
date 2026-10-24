@@ -44,6 +44,7 @@ test("person-op relay: K3 only, clients tbd/tbm (never cli), one allow-list, bod
   assert.equal(call.draftable, false);
   assert.equal(call.confirm, false);
   assert.ok(!(PERSON_OP_RELAY.clients as readonly string[]).includes("cli"));
+  assert.deepEqual([...PERSON_OP_RELAY.clients], ["tbm"], "tbd waits for its own design (review B1)");
   for (const c of PERSON_OP_RELAY.clients) assert.ok((OWNER_SESSION_CLIENTS as readonly string[]).includes(c));
   assert.equal(call.rate, "person_op");
   assert.ok("person_op" in RATE_CLASSES);
