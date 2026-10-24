@@ -257,7 +257,8 @@ export interface InstanceSlice extends SliceClaims {
   /** companion grants this app presents as `TB-Grant` (K10 compact JWS) */
   grants: CompactJws[];
   /** v0.1.18 (C106a): `scopeRequest` = the channel the owner chose at adopt for an edge with scopeType "channel" (Connect tethers it) */
-  agents: { id: AgentId; name: string; mode: AgentMode; status: "active" | "paused"; scopeRequest?: ScopeRequest }[];
+  /** QA-SPEC49-26: `edge: false` only in a needsAgentDirectory slice, on an agent without an edge to this app (absent = edge). */
+  agents: { id: AgentId; name: string; mode: AgentMode; status: "active" | "paused"; edge?: false; scopeRequest?: ScopeRequest }[];
   standalone?: StandaloneState;
   /** v0.1.13 (C86): the Portal GUI origin (`https://…`, no path); apps build owner links (`/w/<ws>/open?product=&path=`) */
   portalUrl?: string;
