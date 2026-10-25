@@ -136,7 +136,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-OP-8 | Non-dynamic `agent` ops declare `input` and `output`. Embedded schemas: no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType` → `io_schema_invalid`. |
 | M-OP-9 | `audience = person` ⇒ no `dynamic` → `person_dynamic`. |
 | M-OP-10 | `dynamic` ⇒ `crud = ["read"]`, `effect = read`, no `holdFamily`, `idempotency = supported`, `receipt = false`, `audience = agent`, no `input`/`output`; `crudCeiling = ["read"]` ⇒ `effectCeiling = read` → `dynamic_invalid`. |
-| M-OP-13 | (v0.1.73) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic`; a manifest with any lazy op states `requires.bridge` ≥ `LAZY_LISTING_MIN_BRIDGE` (@opt2-tealbrick/manifest: the first bridge with cap `lazy_tools`) → `listing_invalid`. |
+| M-OP-13 | (v0.1.73) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic` → `listing_invalid`. A manifest with any lazy op needs a workspace bridge that DECLARES the `lazy_tools` cap (C354: capability gating, never a version): Core refuses the deploy onto a bridge without it (409 `bridge_cap_missing`, `details.cap: "lazy_tools"`) and such a bridge refuses the registration (BRIDGE §7.5). No `requires.bridge` value is derived from it. |
 
 ### 5.3 Dynamic operations (the engine-tool gap)
 Some apps expose tool sets that are not known at build time: an engine with ~100 native operations that depend on the chosen engine version, or a connector catalog with thousands of third-party tools. Listing each as a manifest operation is impossible; one generic "call anything" operation would hide each tool's CRUD class and effect. A dynamic operation closes the gap with one mechanism (CORE §13):
@@ -169,7 +169,7 @@ An app with many agent ops keeps the most used ones in tools/list ("hot") and ma
 - Static agent ops only (M-OP-13). A dynamic family is already one search away (§5.3).
 - Advisory size: ≤ 8 hot agent ops per product (with `tb_hold_status`, `tb_skills` and the pair, about ten tools). Not enforced.
 - Write the op `description` for search: the words an agent would use to look for it.
-- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.73 and MUST state `requires.bridge` ≥ the first bridge with cap `lazy_tools` (M-OP-13; `requiredBridgeVersion` feature `lazy_listing`). An older bridge has no fallback: it refuses the manifest (`schema_invalid`) and the app loses ALL its tools, so Core refuses the deploy onto a bridge without the cap (409 `bridge_cap_missing`, BRIDGE §7.5).
+- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.73 and a workspace bridge that declares `lazy_tools` (M-OP-13). A bridge without the cap has no fallback, so it refuses the registration and Core refuses the deploy (409 `bridge_cap_missing`); the gate is the capability, never a bridge version.
 
 ## 6. Scopes
 

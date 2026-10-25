@@ -109,6 +109,8 @@ IDs are stable; the report lists every ID with pass/fail and the asserted value.
 - R11 onboarding order (B1): after `workspaces.set_infrastructure` the bridge is enrolled and an agent can be authorised (device flow and pairing) before any app is deployed; licence-last (R4): deployed unpaid app → `entitled:false`, no grants, no launch ticket; after the Stripe test webhook → next config revision carries grants.
 - R12 pairing approval (S3): Core refuses `pairing.approve` when the bridge's workspace does not belong to the principal; approval view returns the redirect host and the client name flagged unverified.
 
+- R-LZ-1 (v0.1.73, C354, BRIDGE §7.5, MANIFEST M-OP-13): deploying a release with a `listing: "lazy"` op onto a workspace whose bridge's latest StatusReport does not declare `lazy_tools` → 409 `bridge_cap_missing` with `details.cap: "lazy_tools"`, nothing deployed and no config revision; the same release onto a bridge that declares the cap → accepted. Decided by the cap only: a bridge reporting a higher version without the cap is still refused.
+
 ## 5. Version matrix
 Every target runs against the current SDK major and the one before (bridge and Core must accept both; apps built with either must pass). Older majors are expected to fail with a clear `sdk_major_unsupported` error.
 
