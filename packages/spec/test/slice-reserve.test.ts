@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { CALLER_NAME_MAX_JSON_BYTES } from "../src/models.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
 const load = (f: string) => JSON.parse(readFileSync(new URL(f, dir), "utf8"));
@@ -59,6 +60,19 @@ const WS = `ws_${next()}`;
 const SELF = `ins_${next()}`;
 const BRG = `brg_${next()}`;
 
+/** Reference cut (QA-SPEC55-1): the longest code-point prefix whose JSON serialization (without quotes) is ≤ max bytes. */
+export function cutName(name: string, max = CALLER_NAME_MAX_JSON_BYTES): string {
+  let out = "";
+  for (const ch of name) {
+    if (Buffer.byteLength(JSON.stringify(out + ch)) - 2 > max) break;
+    out += ch;
+  }
+  return out;
+}
+const SCRIPTS: Record<string, string> = { ascii: "w", cjk: "名", emoji: "😀", accented: "é" };
+let script = "ascii";
+const callerName = (i: number) => cutName(SCRIPTS[script].repeat(200) + "abcdefghijklmnopqrstuvwxyz"[i % 26]);
+
 /** A companion grant (K10) as small as Core mints it, with its real `prd` — small grants let the most of them fit. */
 function grant(i: number) {
   const payload = {
@@ -90,7 +104,7 @@ function slice(callers: number, grants: number, auto: "min" | "max") {
     agents: [],
     companionTargets: Array.from({ length: grants }, () => ({ product: "t1", ins: `ins_${next()}` })),
     // QA-SPEC55-1: name at its schema maximum, provider at its real (here: maximum) value — measured part
-    companionCallers: Array.from({ length: callers }, (_, i) => ({ product: "c1", ins: `ins_${next()}`, name: word(MAX.callerName, i), provider: word(MAX.provider, i) })),
+    companionCallers: Array.from({ length: callers }, (_, i) => ({ product: "c1", ins: `ins_${next()}`, name: callerName(i), provider: word(MAX.provider, i) })),
     appsPolicy: { held: [] },
     ...(max ? { appCallers: "verified", portalUrl: origin(MAX.origin) } : {}),
     ...(max ? { standalone: { issuer: `tb:brg:${BRG}`, kid: key43(), ownerKeys: Array.from({ length: MAX.ownerKeys }, jwkMax) } } : {}),
@@ -120,8 +134,28 @@ test("QA-SPEC55: every accepted slice shape keeps ≥ 1,000 chars to the 65,536 
   for (const [c, g] of [[0, 0], [MAX.callers, 0], [MAX.callers, 8], [21, 16]]) {
     for (const auto of ["min", "max"] as const) assert.equal(validate(slice(c, g, auto)), true, JSON.stringify(validate.errors));
   }
-  const worst = worstShape();
-  const margin = SLICE_JWS_MAX_CHARS - (SLICE_CORE_MAX_CHARS + worst.growth);
-  assert.ok(worst.growth > 10_000, `growth ${worst.growth} looks too small: is a field missing?`);
-  assert.ok(margin >= 1_000, `worst shape ${JSON.stringify(worst)}: margin ${margin} < 1,000`);
+  for (const s of Object.keys(SCRIPTS)) {
+    script = s; // QA-SPEC55-1: caller names in other scripts are cut to the same JSON size, so no script grows the slice
+    const worst = worstShape();
+    const margin = SLICE_JWS_MAX_CHARS - (SLICE_CORE_MAX_CHARS + worst.growth);
+    assert.ok(worst.growth > 10_000, `${s}: growth ${worst.growth} looks too small: is a field missing?`);
+    assert.ok(margin >= 1_000, `${s}: worst shape ${JSON.stringify(worst)}: margin ${margin} < 1,000`);
+  }
+  script = "ascii";
+});
+
+test("QA-SPEC55-1: caller names are cut to ≤ 80 JSON bytes at a code-point boundary; manifest names refuse invisible characters", () => {
+  for (const name of ["Knowledge", "名".repeat(40), "😀".repeat(40), "é".repeat(60), "a\"b\\c".repeat(30)]) {
+    const cut = cutName(name);
+    assert.ok(Buffer.byteLength(JSON.stringify(cut)) - 2 <= CALLER_NAME_MAX_JSON_BYTES, name);
+    assert.ok(name.startsWith(cut), "a prefix");
+    assert.equal(cut.isWellFormed(), true, "never splits a surrogate pair");
+  }
+  assert.equal(cutName("名".repeat(40)).length, 26);
+  assert.equal([...cutName("😀".repeat(40))].length, 20);
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const nameSchema = load("manifest.schema.json").properties.name;
+  const v = ajv.compile(nameSchema);
+  for (const ok of ["Knowledge", "Task Board", "Café 東京", "😀 Helper"]) assert.equal(v(ok), true, ok);
+  for (const bad of ["a\u0001b", "a\u200bb", "a\u202eb", "a\u00adb", "a\u2028b", "a\u{e0041}b"]) assert.equal(v(bad), false, JSON.stringify(bad));
 });

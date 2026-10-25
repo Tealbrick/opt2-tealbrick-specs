@@ -95,9 +95,25 @@
             "$ref": "workspace-config.schema.json#/$defs/ed25519Jwk"
           }
         },
-        "caps": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" }, "description": "v0.1.54 (C292): capabilities the workspace bridge declared (BRIDGE_CAPS), normalised by Core from its last authenticated status report; absent or [] = none. Advisory: never widens access." },
+        "caps": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,39}$"
+          },
+          "description": "v0.1.54 (C292): capabilities the workspace bridge declared (BRIDGE_CAPS), normalised by Core from its last authenticated status report; absent or [] = none. Advisory: never widens access."
+        },
         "viewUrl": {
-          "oneOf": [{ "$ref": "workspace-config.schema.json#/$defs/httpsOrigin" }, { "type": "null" }],
+          "oneOf": [
+            {
+              "$ref": "workspace-config.schema.json#/$defs/httpsOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "v0.1.43 (LA-1, C232): the origin of the workspace views service (tb-views) or null when none exists yet; apps answer view_origin_missing (409) while null."
         },
         "publicUrl": {
@@ -158,13 +174,31 @@
           "scopeRequest": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["product", "kind"],
+            "required": [
+              "product",
+              "kind"
+            ],
             "description": "v0.1.18 (C106a): the channel the owner chose at adopt for an edge with scopeType channel.",
             "properties": {
-              "product": { "$ref": "workspace-config.schema.json#/$defs/productId" },
-              "kind": { "enum": ["buzz_channel", "connect_inbox"] },
-              "id": { "type": "string", "minLength": 1, "maxLength": 256 },
-              "createName": { "type": "string", "minLength": 1, "maxLength": 60 }
+              "product": {
+                "$ref": "workspace-config.schema.json#/$defs/productId"
+              },
+              "kind": {
+                "enum": [
+                  "buzz_channel",
+                  "connect_inbox"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "createName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              }
             }
           }
         }
@@ -180,10 +214,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["product", "ins"],
+        "required": [
+          "product",
+          "ins"
+        ],
         "properties": {
-          "product": { "$ref": "workspace-config.schema.json#/$defs/productId" },
-          "ins": { "$ref": "workspace-config.schema.json#/$defs/insId" }
+          "product": {
+            "$ref": "workspace-config.schema.json#/$defs/productId"
+          },
+          "ins": {
+            "$ref": "workspace-config.schema.json#/$defs/insId"
+          }
         }
       }
     },
@@ -194,26 +235,70 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["product", "ins", "name"],
+        "required": [
+          "product",
+          "ins",
+          "name"
+        ],
         "properties": {
-          "product": { "$ref": "workspace-config.schema.json#/$defs/productId" },
-          "ins": { "$ref": "workspace-config.schema.json#/$defs/insId" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 80 },
-          "provider": { "oneOf": [{ "type": "string", "pattern": "^[a-z][a-z0-9_]{1,31}$" }, { "type": "null" }], "description": "v0.1.48 (C240): where the calling instance runs (railway, own_infra, ...); null = unknown." }
+          "product": {
+            "$ref": "workspace-config.schema.json#/$defs/productId"
+          },
+          "ins": {
+            "$ref": "workspace-config.schema.json#/$defs/insId"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "QA-SPEC55-1: a display copy of the caller's manifest name, at most CALLER_NAME_MAX_JSON_BYTES (80) bytes as serialized JSON; Core cuts it at a code-point boundary and never inside an escape."
+          },
+          "provider": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "v0.1.48 (C240): where the calling instance runs (railway, own_infra, ...); null = unknown."
+          }
         }
       }
     },
     "appsPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["held"],
+      "required": [
+        "held"
+      ],
       "description": "v0.1.15 (C105a): the workspace apps policy; companion grants carry held = this list.",
       "properties": {
-        "held": { "type": "array", "maxItems": 8, "uniqueItems": true, "items": { "enum": ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] } }
+        "held": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "first_contact",
+              "profile_change",
+              "live_call",
+              "destructive",
+              "money",
+              "outward",
+              "identity",
+              "public_link"
+            ]
+          }
+        }
       }
     },
     "appCallers": {
-      "enum": ["verified"],
+      "enum": [
+        "verified"
+      ],
       "description": "v0.1.49 (C261): \"verified\" = every companion grant to this instance carries prd; the SDK refuses an app caller without a verified product (403 caller_unverified). Absent = the earlier lenient rule."
     },
     "portalUrl": {

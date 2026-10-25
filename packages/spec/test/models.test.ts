@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -342,4 +342,9 @@ test("C353: persona markers are exactly the allowed invisible script characters;
   }
   for (let cp = 0x20; cp <= 0x7e; cp++) assert.ok(re.test(`a${String.fromCodePoint(cp)}b`), `U+${cp.toString(16)}`);
   assert.ok(re.test("a\u00a0b"));
+});
+
+test("QA-SPEC55-1: MANIFEST_NAME_PATTERN equals the manifest schema pattern and reuses INVISIBLE_CHAR_CLASS", () => {
+  assert.equal(load("manifest.schema.json").properties.name.pattern, MANIFEST_NAME_PATTERN);
+  assert.ok(MANIFEST_NAME_PATTERN.includes(INVISIBLE_CHAR_CLASS));
 });
