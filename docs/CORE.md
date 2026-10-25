@@ -3,7 +3,8 @@
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
 ## Changelog → v0.1.75 (recipe follow-up: C359c, QA-BRIDGE22-6, QA-SPEC54 S4, RM-15; number taken at merge time, C340)
-- C359c (QA-CORE63-13): the measured worst case counts every verb-level edge at its full operation list in `wf`, so narrowing to an op list never grows past what was measured; RM-24c incl. a property test of random accepted owner changes.
+- C359c / C359d (QA-CORE63-13, QA-SPEC57-1): a change may skip the size check only if the measured worst case already covers its result; the worst case counts every verb-level edge at its full op list (≤ 128 ids), `held` at 8, and every paused grant as if resumed; limits named (slice 65,536, signed config 4 MiB). RM-24c + an executable sequence model `test/killpath-model.test.ts`.
+- `isDeniedRoleEnv()` moved into the package (`models.ts`) so the manifest package and `tb-exec` import one matcher (QA-SPEC57 S4).
 - `ENV_NAME_PATTERN` (manifest envName = config keyName); the bridge keeps only matching key-requirement names (BRIDGE §9.4).
 - `Instance.updatePolicyLowered[] {role, from, to, notice}` typed (RM-15; Core already sends it).
 - Tests: explicit CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE / PYTHONSTARTUP rows, an exported reference matcher `isDeniedRoleEnv` (test module), reserve fixtures asserted to carry `edge: false` and 8 held.

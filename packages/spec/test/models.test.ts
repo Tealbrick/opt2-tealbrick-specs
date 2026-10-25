@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { BRIDGE_CAPS, type BridgeErrorCode, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
 import { ENV_NAME_PATTERN } from "../src/manifest.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_DENIED_ENV, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, isDeniedRoleEnv, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_DENIED_ENV, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, Instance, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -375,10 +375,6 @@ test("QA-SPEC54-5: slice agent items — status stays required with edge:false, 
   assert.equal(code, "bad_request");
 });
 
-/** Reference matcher for MANIFEST M-MR-4 (QA-SPEC54 S4): a role env name is refused when it ends in `_PROXY` (any case) or
- *  matches MODEL_ROLE_DENIED_ENV (a trailing "*" is a prefix). The manifest package and tb-exec must agree with it. */
-export const isDeniedRoleEnv = (n: string) =>
-  /_PROXY$/i.test(n) || MODEL_ROLE_DENIED_ENV.some((d) => (d.endsWith("*") ? n.startsWith(d.slice(0, -1)) : n === d));
 
 test("QA-SPEC54-4: every M-MR-4 fixture env name is a valid env name and is denied (MODEL_ROLE_DENIED_ENV or *_PROXY)", () => {
   const envName = new RegExp(load("manifest.schema.json").$defs.envName.pattern);
