@@ -130,3 +130,76 @@ test("portal.info: public, read-only, no audit", () => {
   assert.equal(r.rate, "public_strict");
   assert.equal(r.audit, null);
 });
+
+// v0.1.70 (QA-SPEC43-4, -6): pin the shapes and constants a reviewer must see change.
+type ExactKeys<T, K extends PropertyKey> = [keyof T] extends [K] ? ([K] extends [keyof T] ? true : false) : false;
+const callResultKeys: ExactKeys<import("../src/routes.ts").PersonOpCallResult, "status" | "body"> = true;
+const bridgeResultKeys: ExactKeys<import("../src/routes.ts").BridgePersonOpResultInput, "pop" | "status" | "body"> = true;
+const newSignInKeys: ExactKeys<import("../src/routes.ts").NewSignIn, "osn" | "client" | "machineLabel" | "createdAt"> = true;
+const ackInputKeys: ExactKeys<import("../src/routes.ts").NewSignInsAckInput, "osns"> = true;
+void ackInputKeys;
+type IdkRequired = undefined extends import("../src/routes.ts").PersonOpCallInput["idempotencyKey"] ? false : true;
+const idkRequired: IdkRequired = true;
+void [callResultKeys, bridgeResultKeys, newSignInKeys, idkRequired];
+
+test("v0.1.70: push texts, allow-list and new-sign-in constants are exact (QA-SPEC43-4)", async () => {
+  assert.deepEqual({ ...PUSH.kinds }, {
+    decisions: "A decision is waiting",
+    session_added: "New TBM sign-in on your account. Not you? Open TBM.",
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(PERSON_OP_RELAY.allow)), [
+    { product: "inbox", read: ["items_list", "item_get"], write: ["item_decide", "item_snooze", "item_ack"] },
+  ]);
+  const { NEW_SIGN_IN } = await import("../src/routes.ts");
+  assert.deepEqual([...NEW_SIGN_IN.clients], ["tbm"]);
+  assert.ok(NEW_SIGN_IN.max > 0 && NEW_SIGN_IN.windowDays > 0);
+});
+
+test("v0.1.70: only the browser acknowledges new sign-ins (a K3 can never silence the notice)", () => {
+  const r = row("owner_sessions.ack_new_sign_ins");
+  assert.deepEqual([...r.auth], ["browser"]);
+  assert.equal(r.method, "POST");
+  assert.equal(r.input, "NewSignInsAckInput");
+  // QA-SPEC51-1 / S4: per-session ack of the shown ids, audited
+  assert.equal(r.audit, "owner_session.sign_in_ack");
+  assert.ok(AUDIT_ACTIONS.includes("owner_session.sign_in_ack"));
+});
+
+test("v0.1.70: new-sign-in bounds are exact; machine labels are bounded (QA-SPEC51 S4)", async () => {
+  const { NEW_SIGN_IN } = await import("../src/routes.ts");
+  assert.equal(NEW_SIGN_IN.max, 5);
+  assert.equal(NEW_SIGN_IN.windowDays, 30);
+  assert.equal(DEVICE_FLOW.machineLabelMax, 64);
+});
+
+test("v0.1.70 (C354): app capabilities are a closed list; person_op is declared by the app, not inferred from a version", async () => {
+  const { APP_CAPS } = await import("../src/bridge.ts");
+  assert.deepEqual([...APP_CAPS], ["person_op"]);
+});
+
+test("v0.1.70 (C354): the bridge's refusals are exact; cap bounds are fixed (fail closed, routing hint only)", async () => {
+  const { APP_CAPS, APP_CAPS_LIMITS, PERSON_OP_BRIDGE_REFUSALS } = await import("../src/bridge.ts");
+  assert.deepEqual({ ...PERSON_OP_BRIDGE_REFUSALS }, { instanceUnknown: "instance_unknown", appUnsupported: "person_op_unsupported" });
+  assert.deepEqual({ ...APP_CAPS_LIMITS }, { maxEntries: 16, maxLength: 32 });
+  for (const cap of APP_CAPS) assert.ok(cap.length <= APP_CAPS_LIMITS.maxLength, cap);
+  assert.ok(APP_CAPS.length <= APP_CAPS_LIMITS.maxEntries);
+});
+
+test("v0.1.70: machine labels refuse bidi, ZWJ and other invisible characters (QA specs#51)", async () => {
+  const { MACHINE_LABEL_PATTERN } = await import("../src/routes.ts");
+  const { INVISIBLE_CHAR_CLASS, PERSONA_PATTERN } = await import("../src/models.ts");
+  const re = new RegExp(MACHINE_LABEL_PATTERN, "u");
+  for (const ok of ["Martin's iPhone", "iPhone 🍎", "Pixel 9 Pro", "Téléphone de Zoë", "手机"]) assert.ok(re.test(ok), ok);
+  for (const bad of ["", "‮enohp", "i‍Phone", "a⁦b⁩", "tab\there", "line\nbreak", "﻿bom", "x​y", "tag\u{E0041}", "a b"]) {
+    assert.ok(!re.test(bad), JSON.stringify(bad));
+  }
+  // one class, reused (not copied) by the persona rule
+  assert.ok(MACHINE_LABEL_PATTERN.includes(INVISIBLE_CHAR_CLASS) && PERSONA_PATTERN.includes(INVISIBLE_CHAR_CLASS));
+});
+
+// QA mutants N12/N13/N14/N18: `caps` exists on the claim and the status push with exactly this type.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const claimCaps: Same<import("../src/bridge.ts").ClaimRequest["caps"], import("../src/bridge.ts").AppCap[] | undefined> = true;
+const statusCaps: Same<import("../src/bridge.ts").AppStatus["caps"], import("../src/bridge.ts").AppCap[] | undefined> = true;
+const capsIsOptionalOnClaim: undefined extends import("../src/bridge.ts").ClaimRequest["caps"] ? true : false = true;
+void [claimCaps, statusCaps, capsIsOptionalOnClaim];

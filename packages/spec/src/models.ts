@@ -92,8 +92,11 @@ export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
  *  U+1160, U+3164, U+FFA0), BOM, invisible operators etc. are refused, and every allowed invisible character is a marker.
  *  Unicode-mode regex (`u` flag) of the runtime (Node 24 / current browsers); Core's verdict wins. Clients turn CRLF into LF.
  *  Core also checks isWellFormed(). */
+/** v0.1.70: the ONE class of invisible / reordering characters (control, format incl. bidi U+202A–202E and U+2066–2069,
+ *  surrogates, default-ignorables, line/paragraph separators). PERSONA_PATTERN and MACHINE_LABEL_PATTERN (routes.ts) both use it. */
+export const INVISIBLE_CHAR_CLASS = "\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029" as const;
 export const PERSONA_PATTERN =
-  "^(?![\\s\\S]*[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u{110BD}\\u{110CD}\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}][\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}])(?:[\\t\\n]|[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u{110BD}\\u{110CD}\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$" as const;
+  `^(?![\\s\\S]*[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u{110BD}\\u{110CD}\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}][\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}])(?:[\\t\\n]|[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u{110BD}\\u{110CD}\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![${INVISIBLE_CHAR_CLASS}])[\\s\\S])*$` as const;
 
 /** C353: allowed invisible characters that scripts need (Persian, Hebrew, Arabic, Sinhala, Mongolian, Japanese IVS, emoji
  *  ZWJ sequences). The drafts review and the persona editor show each one as a visible labelled marker (e.g. `⟨ZWJ⟩`) next

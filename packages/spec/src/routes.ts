@@ -18,6 +18,7 @@ import type {
 } from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
 import type { DataPolicy, ModelRole, PolicyBasis } from "./models.ts";
+import { INVISIBLE_CHAR_CLASS } from "./models.ts";
 
 export type Crud = CrudAction;
 /** I14 shape `{write?, outward?, destructive?: {max, per}}` — owned by ./credentials.ts (FreeCaps). */
@@ -157,6 +158,8 @@ export const AUDIT_ACTIONS = [
   "push_device.register", "push_device.unregister",
   /** v0.1.64 (C326): one allow-listed person op relayed for a K3 of client tbm (details: client, product, op, outcome; never input or output) */
   "person_op.relay",
+  /** v0.1.70 (QA-SPEC51-1): the person acknowledged listed new sign-ins (details: count; the osns are the audit targets) */
+  "owner_session.sign_in_ack",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -239,7 +242,32 @@ export interface AccountMe {
   mfa?: AccountMfa;
   /** v0.1.37 (C184 §2.3): present while an operator suspended or banned this account (the Portal shows the notice) */
   restriction?: AccountRestriction;
+  /** v0.1.70 (QA-SPEC43-6, QA-SPEC51-1): live sign-ins of NEW_SIGN_IN.clients that the person has NOT acknowledged one by one
+   *  (newest first, ≤ NEW_SIGN_IN.max, ≤ NEW_SIGN_IN.windowDays old). The Portal shows a banner "New sign-in: TBM on <machineLabel>,
+   *  <time> — Not me? Revoke" until the person revokes (owner_sessions.revoke) or acknowledges exactly the shown ones
+   *  (owner_sessions.ack_new_sign_ins {osns}). A sign-in made after the page loaded, or beyond the first max, stays listed.
+   *  Absent or empty = no banner. Omitted by Core before 0.1.70. */
+  newSignIns?: NewSignIn[];
 }
+/** v0.1.70 (QA-SPEC43-6): one sign-in the owner has not seen yet. No IP or location (Core keeps none). */
+export interface NewSignIn {
+  osn: OwnerSessionId; client: OwnerSessionClient;
+  /** as entered at device.start: 1..DEVICE_FLOW.machineLabelMax chars matching MACHINE_LABEL_PATTERN (Core refuses others there
+   *  with validation_failed); the GUI renders it as plain text, never as markup */
+  machineLabel: string;
+  createdAt: IsoTime;
+}
+/** v0.1.70 (QA-SPEC51-1): the sign-ins the person saw and acknowledges ("It was me"): 1..NEW_SIGN_IN.max ids from newSignIns.
+ *  Core marks ONLY those (per session); ids that are not the caller's own unacknowledged live sign-ins are ignored without an
+ *  error (no cross-account signal); a repeat is a no-op. */
+export interface NewSignInsAckInput { osns: OwnerSessionId[] }
+/** v0.1.70 (QA-SPEC43-6): the Portal-side notice of new native sign-ins (also for an owner with no TBM device to push to). */
+/** v0.1.70 (QA specs#51): device.start `machine_label` — at least one character, none from INVISIBLE_CHAR_CLASS (the persona rule's
+ *  class, NO marker exceptions: a label is shown in a one-line banner where a marker cannot be rendered). So bidi controls
+ *  (U+202A–202E, U+2066–2069), ZWJ/ZWNJ, tag characters, BOM, TAB/LF and other controls are refused and a label cannot fake
+ *  another device name by reordering or hiding text. Unicode-mode regex (`u` flag). */
+export const MACHINE_LABEL_PATTERN = `^(?:(?![${INVISIBLE_CHAR_CLASS}])[\\s\\S])+$` as const;
+export const NEW_SIGN_IN = { clients: ["tbm"], max: 5, windowDays: 30 } as const satisfies { clients: readonly OwnerSessionClient[]; max: number; windowDays: number };
 export interface AccountRestriction { kind: "suspend" | "ban"; customerText: string | null; since: IsoTime; endsAt: IsoTime | null }
 export interface SetCurrentWorkspaceInput { ws: WorkspaceId }
 /** v0.1.32 (C196 ENG-1): a legal document the account accepts, at one version. Core keeps the ONE list (its config constant). */
@@ -1495,6 +1523,8 @@ export interface SchemaMap {
   /** v0.1.64 (C326, C332) */
   PushDeviceRegisterInput: PushDeviceRegisterInput; PushDevice: PushDevice; PersonOpCallInput: PersonOpCallInput; PersonOpCallResult: PersonOpCallResult;
   BridgePersonOpsQuery: BridgePersonOpsQuery; BridgePersonOpBatch: BridgePersonOpBatch; BridgePersonOpResultInput: BridgePersonOpResultInput; PortalInfo: PortalInfo;
+  /** v0.1.70 */
+  NewSignInsAckInput: NewSignInsAckInput;
 }
 export type SchemaName = keyof SchemaMap;
 
@@ -1655,6 +1685,8 @@ export const ROUTES = [
   // owner native sessions (K3)
   { opId: "owner_sessions.list", method: "GET", path: "/owner-sessions", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "OwnerSessionList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "owner_sessions.revoke", method: "DELETE", path: "/owner-sessions/{osn}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "OwnerSessionRef", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.revoke", draftable: false, confirm: false, idempotent: false, registry: "credential" },
+  /** v0.1.70 (QA-SPEC43-6): the browser acknowledges every listed new sign-in ("It was me"); browser only, so a K3 can never silence the notice. */
+  { opId: "owner_sessions.ack_new_sign_ins", method: "POST", path: "/owner-sessions/new-sign-ins/ack", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "NewSignInsAckInput", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.sign_in_ack", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   { opId: "owner_sessions.logout", method: "POST", path: "/owner-sessions/logout", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "Empty", output: "Ok", rate: "write", bodyLog: "meta", audit: "owner_session.revoke", draftable: false, confirm: false, idempotent: false, registry: "credential" },
   /** v0.1.64 (C332): the calling owner session's push device (client in PUSH.clients); revoke / logout / expiry deletes it. */
   { opId: "push_devices.register", method: "PUT", path: "/owner-sessions/current/push-device", auth: ["owner-cli"], exposure: "gateway", transport: "json", query: NOQ, input: "PushDeviceRegisterInput", output: "PushDevice", rate: "write", bodyLog: "none", audit: "push_device.register", draftable: false, confirm: false, idempotent: false, registry: "credential" },
