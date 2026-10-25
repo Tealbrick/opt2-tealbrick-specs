@@ -34,7 +34,11 @@ const MAX = {
   callerName: P.companionCallers.items.properties.name.maxLength as number,
   provider: maxRep(P.companionCallers.items.properties.provider.oneOf[0].pattern),
   product: maxRep(D.productId.pattern),
+  agents: P.agents.maxItems as number,
+  agentName: P.agents.items.properties.name.maxLength as number,
 };
+/** QA-SPEC54-2: `held` counted at all families on every grant (adding held families is never refused). */
+const ALL_HELD = P.appsPolicy.properties.held.items.enum as string[];
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ulid = (n: number) => {
@@ -77,13 +81,13 @@ const callerName = (i: number) => cutName(SCRIPTS[script].repeat(200) + "abcdefg
 function grant(i: number) {
   const payload = {
     v: 1, iss: "tb:portal", sub: `tb:ins:${SELF}`, aud: `tb:ins:ins_${next()}`, iat: 1_790_000_000, exp: 1_790_043_200, jti: next(), ws: WS,
-    mode: "bound", crud: ["read"], held: [], prd: word(MAX.product, i),
+    mode: "bound", crud: ["read"], held: ALL_HELD, prd: word(MAX.product, i),
   };
   return jws({ alg: "EdDSA", typ: "tb-grant+jwt", kid: key43() }, payload);
 }
 
 /** One slice for `callers` companion callers and `grants` companion grants; `auto` = the external fields at min or max. */
-function slice(callers: number, grants: number, auto: "min" | "max") {
+function slice(callers: number, grants: number, auto: "min" | "max", dirAgents = 0, dirName = 1) {
   const max = auto === "max";
   return {
     v: 1, iss: max ? `tb:brg:${BRG}` : "tb:portal", sub: `tb:ins:${SELF}`, aud: `tb:ins:${SELF}`, iat: 1_790_000_000, exp: 1_790_043_200,
@@ -101,11 +105,12 @@ function slice(callers: number, grants: number, auto: "min" | "max") {
     revoked: { jtis: Array.from({ length: 2 * (grants + callers) }, () => ({ jti: next(), exp: 1_790_043_200 })) },
     personNbf: 1_790_000_000,
     grants: Array.from({ length: grants }, (_, i) => grant(i)),
-    agents: [],
+    // QA-SPEC54-1: a directory slice lists every agent; `edge: false` on each is in the measured worst case (edges.delete is kill path)
+    agents: Array.from({ length: dirAgents }, (_, i) => ({ id: `agt_${next()}`, name: word(dirName, i), mode: "free", status: "active", edge: false })),
     companionTargets: Array.from({ length: grants }, () => ({ product: "t1", ins: `ins_${next()}` })),
     // QA-SPEC55-1: name at its schema maximum, provider at its real (here: maximum) value — measured part
     companionCallers: Array.from({ length: callers }, (_, i) => ({ product: "c1", ins: `ins_${next()}`, name: callerName(i), provider: word(MAX.provider, i) })),
-    appsPolicy: { held: [] },
+    appsPolicy: { held: ALL_HELD },
     ...(max ? { appCallers: "verified", portalUrl: origin(MAX.origin) } : {}),
     ...(max ? { standalone: { issuer: `tb:brg:${BRG}`, kid: key43(), ownerKeys: Array.from({ length: MAX.ownerKeys }, jwkMax) } } : {}),
   };
@@ -114,13 +119,18 @@ const sliceLen = (p: object) => jws({ alg: "EdDSA", typ: "tb-slice+jws", kid: ke
 
 /** Largest growth of the external fields over every shape Core accepts; exported numbers are pinned by the test below. */
 function worstShape() {
-  let worst = { growth: 0, callers: 0, grants: 0 };
-  for (let callers = 0; callers <= MAX.callers; callers++) {
-    for (let grants = 0; grants <= MAX.grants; grants++) {
-      const lo = slice(callers, grants, "min");
-      if (sliceLen(lo) > SLICE_CORE_MAX_CHARS) break; // Core refuses this shape (more grants only grow it)
-      const growth = sliceLen(slice(callers, grants, "max")) - sliceLen(lo);
-      if (growth > worst.growth) worst = { growth, callers, grants };
+  let worst = { growth: 0, callers: 0, grants: 0, agents: 0 };
+  const shapes: [number, number][] = [[0, 1]];
+  // directory slices (QA-SPEC54-1): many agents with short or long names, each carrying edge:false
+  for (const [agents, name] of [[MAX.agents, 1], [460, 1], [406, 12], [312, 40], [235, MAX.agentName]] as [number, number][]) shapes.push([agents, name]);
+  for (const [agents, name] of shapes) {
+    for (let callers = 0; callers <= MAX.callers; callers += agents ? 21 : 1) {
+      for (let grants = 0; grants <= MAX.grants; grants++) {
+        const lo = slice(callers, grants, "min", agents, name);
+        if (sliceLen(lo) > SLICE_CORE_MAX_CHARS) break; // Core refuses this shape (more grants only grow it)
+        const growth = sliceLen(slice(callers, grants, "max", agents, name)) - sliceLen(lo);
+        if (growth > worst.growth) worst = { growth, callers, grants, agents };
+      }
     }
   }
   return worst;
@@ -131,8 +141,8 @@ test("QA-SPEC55: every accepted slice shape keeps ≥ 1,000 chars to the 65,536 
   ajv.addSchema(CFG);
   const validate = ajv.compile(SLICE);
   assert.equal(SLICE_JWS_MAX_CHARS, D.compactJws.maxLength);
-  for (const [c, g] of [[0, 0], [MAX.callers, 0], [MAX.callers, 8], [21, 16]]) {
-    for (const auto of ["min", "max"] as const) assert.equal(validate(slice(c, g, auto)), true, JSON.stringify(validate.errors));
+  for (const [c, g, a] of [[0, 0, 0], [MAX.callers, 0, 0], [MAX.callers, 8, 0], [21, 16, 0], [0, 4, 235]]) {
+    for (const auto of ["min", "max"] as const) assert.equal(validate(slice(c, g, auto, a, a ? MAX.agentName : 1)), true, JSON.stringify(validate.errors));
   }
   for (const s of Object.keys(SCRIPTS)) {
     script = s; // QA-SPEC55-1: caller names in other scripts are cut to the same JSON size, so no script grows the slice
