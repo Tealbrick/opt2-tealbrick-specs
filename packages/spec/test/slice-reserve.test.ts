@@ -1,9 +1,11 @@
-// QA-SPEC49-30: the per-slice reserve holds for every feasible app shape, measured, not estimated.
-// Builds real slices (validated against instance-slice.schema.json) with the automatic, never-refused fields first at
-// their realistic minimum and then at their schema maximum, for every companion-hub shape that Core can accept
-// (worst-case slice ≤ SLICE_CORE_MAX_CHARS), and asserts that the grown slice stays ≥ 1,000 chars under the hard limit.
-// `prd` on every companion grant and `provider` on every caller are values Core knows when it mints the slice, so they are
-// part of Core's worst case (PORTAL-API "Config size"), not of the reserve; the reserve covers only external growth.
+// QA-SPEC49-30, QA-SPEC55-1..5: the per-slice reserve holds for every feasible app shape, measured, not estimated.
+// Builds real slices (validated against instance-slice.schema.json): the EXTERNAL automatic fields (never refused, not
+// known at mint) first at the smallest valid mint and then at their schema maximum, for every companion-hub shape that
+// Core can accept (measured worst-case slice ≤ SLICE_CORE_MAX_CHARS), and asserts ≥ 1,000 chars under the hard limit.
+// Values Core knows at mint are part of Core's measured worst case, not of the reserve: `prd` on every companion grant,
+// `provider` on every caller, every caller `name` counted at its schema maximum (it changes on the caller's update or
+// rollback, which is never refused), and the companion-grant `revoked.jtis` of every live grant (2 each while old and new
+// overlap). Every maximum below is READ FROM THE SCHEMA, so raising one in the schema fails or re-checks this test.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -12,6 +14,26 @@ import { SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
 const load = (f: string) => JSON.parse(readFileSync(new URL(f, dir), "utf8"));
+const CFG = load("workspace-config.schema.json");
+const SLICE = load("instance-slice.schema.json");
+const D = CFG.$defs;
+const P = SLICE.properties;
+const maxRep = (pattern: string) => Number(/\{\d+,(\d+)\}/.exec(pattern)?.[1]) + 1;
+const MAX = {
+  portalKeys: D.portalKeys.maxItems as number,
+  portalKeySet: D.portalKeySet.maxLength as number,
+  bridgeKeys: P.bridge.properties.keys.maxItems as number,
+  caps: P.bridge.properties.caps.maxItems as number,
+  capLen: maxRep(P.bridge.properties.caps.items.pattern),
+  origin: D.httpsOrigin.maxLength as number,
+  ownerKeys: D.standaloneBlock.properties.ownerKeys.maxItems as number,
+  grants: P.grants.maxItems as number,
+  // a caller is another instance of the workspace: bounded by the instance count (pause.instances maxItems) − itself
+  callers: Math.min(P.companionCallers.maxItems as number, (D.pause.properties.instances.maxItems as number) - 1),
+  callerName: P.companionCallers.items.properties.name.maxLength as number,
+  provider: maxRep(P.companionCallers.items.properties.provider.oneOf[0].pattern),
+  product: maxRep(D.productId.pattern),
+};
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ulid = (n: number) => {
@@ -31,74 +53,75 @@ const key43 = () => next().padEnd(43, "x");
 const jwkMin = () => ({ kty: "OKP", crv: "Ed25519", x: key43() });
 const jwkMax = () => ({ kty: "OKP", crv: "Ed25519", x: key43(), kid: key43(), alg: "EdDSA", use: "sig" });
 const origin = (len: number) => `https://${"o".repeat(len - "https://".length - ".example".length)}.example`;
-const label = (n: number, len: number) => `${"p".repeat(len - 1)}${CROCKFORD[n % 32].toLowerCase()}`.replace(/[^a-z0-9]/g, "a");
+const word = (len: number, i: number) => `${"w".repeat(len - 1)}${"abcdefghijklmnopqrstuvwxyz"[i % 26]}`;
 
 const WS = `ws_${next()}`;
 const SELF = `ins_${next()}`;
+const BRG = `brg_${next()}`;
 
-/** A companion grant (K10) as small as Core mints it — small grants let the most of them fit, the worst case for `prd`. */
-function grant(withPrd: boolean) {
-  const target = `tb:ins:ins_${next()}`;
+/** A companion grant (K10) as small as Core mints it, with its real `prd` — small grants let the most of them fit. */
+function grant(i: number) {
   const payload = {
-    v: 1, iss: "tb:portal", sub: `tb:ins:${SELF}`, aud: target, iat: 1_790_000_000, exp: 1_790_043_200, jti: next(), ws: WS,
-    mode: "bound", crud: ["read"], held: [], ...(withPrd ? { prd: label(seq, 32) } : {}),
+    v: 1, iss: "tb:portal", sub: `tb:ins:${SELF}`, aud: `tb:ins:ins_${next()}`, iat: 1_790_000_000, exp: 1_790_043_200, jti: next(), ws: WS,
+    mode: "bound", crud: ["read"], held: [], prd: word(MAX.product, i),
   };
   return jws({ alg: "EdDSA", typ: "tb-grant+jwt", kid: key43() }, payload);
 }
 
-/** One slice for `callers` companion callers and `grants` companion grants; `auto` = the automatic fields at min or max. */
+/** One slice for `callers` companion callers and `grants` companion grants; `auto` = the external fields at min or max. */
 function slice(callers: number, grants: number, auto: "min" | "max") {
   const max = auto === "max";
-  const keyset = max
-    ? "k".repeat(4096 - 87 - 2) // portalKeySet at its schema maximum (two dots + signature included)
-    : jws({ alg: "EdDSA", typ: "tb-keyset+jws", kid: key43() }, { seq: 1, keys: [jwkMin()] });
   return {
-    v: 1, iss: "tb:portal", sub: `tb:ins:${SELF}`, aud: `tb:ins:${SELF}`, iat: 1_790_000_000, exp: 1_790_043_200, jti: next(), ws: WS, rev: 123_456,
-    ins: SELF, product: "hub",
-    portalKeys: Array.from({ length: max ? 8 : 1 }, () => ({ jwk: max ? jwkMax() : jwkMin(), status: "active" })),
-    portalKeySet: max ? keyset.replace(/^(k+)$/, (k) => `${k.slice(0, 1000)}.${k.slice(1000)}.${"s".repeat(86)}`) : keyset,
+    v: 1, iss: max ? `tb:brg:${BRG}` : "tb:portal", sub: `tb:ins:${SELF}`, aud: `tb:ins:${SELF}`, iat: 1_790_000_000, exp: 1_790_043_200,
+    jti: next(), ws: WS, rev: max ? Number.MAX_SAFE_INTEGER : 1, ins: SELF, product: "hub",
+    portalKeys: Array.from({ length: max ? MAX.portalKeys : 0 }, () => ({ jwk: jwkMax(), status: "active" })),
+    ...(max ? { portalKeySet: `${"k".repeat(1000)}.${"k".repeat(MAX.portalKeySet - 1000 - 2 - 86)}.${"s".repeat(86)}` } : {}),
     bridge: {
-      id: `brg_${next()}`,
-      keys: Array.from({ length: max ? 4 : 1 }, () => (max ? jwkMax() : jwkMin())),
-      caps: max ? Array.from({ length: 16 }, (_, i) => `${"c".repeat(39)}${CROCKFORD[i].toLowerCase()}`.replace(/[^a-z0-9]/g, "a")) : [],
-      viewUrl: max ? origin(267) : null,
-      publicUrl: max ? origin(267) : "https://brg.example.com",
+      id: BRG,
+      keys: Array.from({ length: max ? MAX.bridgeKeys : 1 }, () => (max ? jwkMax() : jwkMin())),
+      ...(max ? { caps: Array.from({ length: MAX.caps }, (_, i) => word(MAX.capLen, i)), viewUrl: origin(MAX.origin), publicUrl: origin(MAX.origin) } : {}),
     },
-    // pause at its worst for this slice (C353: pause.agents is always []; own instance listed)
+    // pause at its worst for this slice (C353: pause.agents is always []; own instance listed) — measured part
     pause: { workspace: true, agents: [], instances: [SELF] },
-    revoked: { jtis: [] },
+    // QA-SPEC55-5: companion-grant jtis of every live grant, 2 each (old and new overlap) — measured part
+    revoked: { jtis: Array.from({ length: 2 * (grants + callers) }, () => ({ jti: next(), exp: 1_790_043_200 })) },
     personNbf: 1_790_000_000,
-    grants: Array.from({ length: grants }, () => grant(true)), // prd: known to Core, part of its worst case (not the reserve)
+    grants: Array.from({ length: grants }, (_, i) => grant(i)),
     agents: [],
     companionTargets: Array.from({ length: grants }, () => ({ product: "t1", ins: `ins_${next()}` })),
-    companionCallers: Array.from({ length: callers }, (_, i) => ({
-      product: "c1", ins: `ins_${next()}`, name: "C", provider: label(i, 32).replace(/-/g, "_"), // known to Core, in its worst case
-    })),
+    // QA-SPEC55-1: name at its schema maximum, provider at its real (here: maximum) value — measured part
+    companionCallers: Array.from({ length: callers }, (_, i) => ({ product: "c1", ins: `ins_${next()}`, name: word(MAX.callerName, i), provider: word(MAX.provider, i) })),
     appsPolicy: { held: [] },
-    ...(max ? { appCallers: "verified" } : {}),
-    portalUrl: max ? origin(267) : "https://portal.example.com",
+    ...(max ? { appCallers: "verified", portalUrl: origin(MAX.origin) } : {}),
+    ...(max ? { standalone: { issuer: `tb:brg:${BRG}`, kid: key43(), ownerKeys: Array.from({ length: MAX.ownerKeys }, jwkMax) } } : {}),
   };
 }
 const sliceLen = (p: object) => jws({ alg: "EdDSA", typ: "tb-slice+jws", kid: key43() }, p).length;
 
-test("QA-SPEC49-30: every accepted slice shape keeps ≥ 1,000 chars to the 65,536 limit after all automatic growth", () => {
-  const ajv = new Ajv2020({ strict: false, allErrors: true });
-  ajv.addSchema(load("workspace-config.schema.json"));
-  const validate = ajv.compile(load("instance-slice.schema.json"));
+/** Largest growth of the external fields over every shape Core accepts; exported numbers are pinned by the test below. */
+function worstShape() {
   let worst = { growth: 0, callers: 0, grants: 0 };
-  for (let callers = 0; callers <= 63; callers++) {
-    for (let grants = 0; grants <= 64; grants++) {
+  for (let callers = 0; callers <= MAX.callers; callers++) {
+    for (let grants = 0; grants <= MAX.grants; grants++) {
       const lo = slice(callers, grants, "min");
       if (sliceLen(lo) > SLICE_CORE_MAX_CHARS) break; // Core refuses this shape (more grants only grow it)
-      const hi = slice(callers, grants, "max");
-      const growth = sliceLen(hi) - sliceLen(lo);
+      const growth = sliceLen(slice(callers, grants, "max")) - sliceLen(lo);
       if (growth > worst.growth) worst = { growth, callers, grants };
-      if ((callers === 63 && grants % 16 === 0) || (callers % 21 === 0 && grants === 0)) {
-        assert.equal(validate(lo), true, JSON.stringify(validate.errors));
-        assert.equal(validate(hi), true, JSON.stringify(validate.errors));
-      }
     }
   }
+  return worst;
+}
+
+test("QA-SPEC55: every accepted slice shape keeps ≥ 1,000 chars to the 65,536 limit after all external automatic growth", () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  ajv.addSchema(CFG);
+  const validate = ajv.compile(SLICE);
+  assert.equal(SLICE_JWS_MAX_CHARS, D.compactJws.maxLength);
+  for (const [c, g] of [[0, 0], [MAX.callers, 0], [MAX.callers, 8], [21, 16]]) {
+    for (const auto of ["min", "max"] as const) assert.equal(validate(slice(c, g, auto)), true, JSON.stringify(validate.errors));
+  }
+  const worst = worstShape();
   const margin = SLICE_JWS_MAX_CHARS - (SLICE_CORE_MAX_CHARS + worst.growth);
+  assert.ok(worst.growth > 10_000, `growth ${worst.growth} looks too small: is a field missing?`);
   assert.ok(margin >= 1_000, `worst shape ${JSON.stringify(worst)}: margin ${margin} < 1,000`);
 });
