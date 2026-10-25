@@ -215,7 +215,7 @@ Settings are non-secret values chosen at deploy (and later, if `mutable`). Core 
 | M-MR-1 | `role` in `MODEL_ROLES`; one entry per role per manifest → `model_role_invalid`. |
 | M-MR-2 | `minPolicy` in `DATA_POLICIES` → `model_role_invalid`. |
 | M-MR-3 | `usedBy` items are `app` or declared service ids → `model_role_invalid`. |
-| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service → `model_role_invalid`. |
+| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service; no proxy or loader name (any name ending in `_PROXY` in any case, `npm_config_*proxy`, `NODE_USE_ENV_PROXY`, `NODE_OPTIONS`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `DYLD_*`, `PATH`; sdk#52 QA S4-3: such a name would re-add a proxy or loader with the owner's base URL after `tb-exec` stripped it) → `model_role_invalid`. |
 | M-MR-5 | `when` as for keys (M-ST-3) → `condition_invalid`. |
 
 ## 8. Hooks

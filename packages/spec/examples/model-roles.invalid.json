@@ -154,6 +154,52 @@
           }
         }
       ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name is a proxy variable",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "baseUrl": "HTTPS_PROXY"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name is a loader variable",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "NODE_OPTIONS"
+          }
+        }
+      ]
     }
   ]
 }
