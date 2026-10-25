@@ -321,7 +321,10 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
  *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
  *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output"] as const;
+/** v0.1.74 (C354a, QA-SPEC56-1): + `hold_families` = the bridge reads `DynamicResolution.holdFamilies` (held when any member is
+ *  held), passes it in `HookCallInfo.target.holdFamilies`, and refuses a variant resolution broader than its base
+ *  (`variantNarrowerOrEqual`, `dynamic_resolve_failed`). */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -423,7 +426,7 @@ export interface StatusReport {
     ins?: InstanceId;
   }[];
   /** v0.1.14 (L3): `catalog_failed` = a dynamic `list` op whose catalog bridge op failed, so its entries are missing */
-  toolsOmitted: { ins: InstanceId; name: string; code: "tool_name_too_long" | "name_collision" | "ceiling" | "catalog_failed" }[];
+  toolsOmitted: { ins: InstanceId; name: string; code: "tool_name_too_long" | "name_collision" | "ceiling" | "catalog_failed" | "catalog_name_invalid" }[];
 }
 export interface ClaimRecord {
   kind: EnrolCodeEntry["kind"];
@@ -461,7 +464,7 @@ export interface HookCallInfo {
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId };
   /** v0.1.68 (C336 RQ-2, cap `hook_tool`): `tool` = `DynamicResolution.tool` of a dynamic call (`crud`/`effect`/`holdFamily` are then
    *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
-  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
+  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; /** v0.1.74 (cap `hold_families`) */ holdFamilies?: HoldFamily[] };
   input?: JsonValue;
 }
 export interface HookRequestBase<P extends HookPhase> {

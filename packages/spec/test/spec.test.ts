@@ -518,7 +518,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
   // v0.1.63 adds model_roles (BRIDGE §15); v0.1.64 (C326) adds person_ops (BRIDGE §16)
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output"]); // + hook_tool, secret_output (C336)
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families"]); // + hook_tool, secret_output (C336), hold_families (C354a)
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {
@@ -609,3 +609,43 @@ test("v0.1.68 (C336 RQ-2, RQ-3; QA specs#47): narrowing v2, hook_tool / secret_o
     assert.equal(validate(withOp(bad)), false, JSON.stringify(bad));
   }
 });
+
+test("v0.1.74 (C354a): catalog names have no __ and no trailing _; dynamic tool names allow <name>__<suffix> up to 63 chars", async () => {
+  const { DYNAMIC_CATALOG_NAME_RE, DYNAMIC_TOOL_NAME_RE } = await import("../src/manifest.ts");
+  for (const ok of ["gmail_send", "ab", "a1", "x".repeat(48)]) assert.ok(DYNAMIC_CATALOG_NAME_RE.test(ok), ok);
+  for (const bad of ["gmail__send", "gmail_send_", "a", "1a", "A_b", "x".repeat(49), "send__all"]) assert.ok(!DYNAMIC_CATALOG_NAME_RE.test(bad), bad);
+  const variant = `${"a".repeat(48)}__first_contact`;
+  assert.equal(variant.length, 63);
+  assert.ok(DYNAMIC_TOOL_NAME_RE.test(variant));
+  assert.ok(!DYNAMIC_TOOL_NAME_RE.test(`${variant}x`));
+  assert.ok(DYNAMIC_TOOL_NAME_RE.test("gmail_send__first_contact"));
+});
+
+test("v0.1.74 (C354a, QA-C354-3, QA-SPEC56-1): variant suffix rule and never-broader as a hold-family superset", async () => {
+  const { dynamicVariantBase, variantNarrowerOrEqual, holdFamilySet } = await import("../src/manifest.ts");
+  assert.equal(dynamicVariantBase("gmail_send__first_contact"), "gmail_send");
+  assert.equal(dynamicVariantBase("a1__2x"), "a1");
+  for (const bad of ["send___y", "send__", "send__Y", "send_x", "send", "__x", "a__b__", `${"a".repeat(49)}__x`, `${"a".repeat(48)}__first_contactx`]) assert.equal(dynamicVariantBase(bad), null, bad);
+  const base = { crud: ["create" as const], effect: "outward" as const, holdFamily: "outward" as const };
+  assert.ok(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamily: "first_contact", holdFamilies: ["first_contact", "outward"] }, base));
+  assert.ok(!variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamily: "first_contact" }, base), "dropping outward is broader");
+  assert.ok(!variantNarrowerOrEqual({ crud: ["create"], effect: "destructive", holdFamilies: ["outward", "destructive"] }, base), "a later effect is broader");
+  assert.ok(!variantNarrowerOrEqual({ crud: ["create", "delete"], effect: "outward", holdFamily: "outward" }, base), "more crud is broader");
+  assert.ok(variantNarrowerOrEqual({ crud: ["create"], effect: "write", holdFamilies: ["outward"] }, base), "an earlier effect with the same holds is narrower");
+  assert.deepEqual([...holdFamilySet({})], []);
+});
+
+test("v0.1.74 (QA-SPEC56-3): the variant helpers fail closed on bad input", async () => {
+  const { variantNarrowerOrEqual, holdFamilySet } = await import("../src/manifest.ts");
+  const base = { crud: ["create" as const], effect: "outward" as const, holdFamily: "outward" as const };
+  // an effect outside EFFECTS, on either side, is never narrower or equal
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "nonsense" as never, holdFamilies: ["outward"] }, base), false);
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamilies: ["outward"] }, { ...base, effect: "nonsense" as never }), false);
+  // an empty holdFamilies falls back to holdFamily, never to "no holds"
+  assert.deepEqual([...holdFamilySet({ holdFamily: "first_contact", holdFamilies: [] })], ["first_contact"]);
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamily: "outward", holdFamilies: [] }, base), true);
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamily: "first_contact", holdFamilies: [] }, base), false);
+  // holdFamily always counts, also when holdFamilies omits it
+  assert.deepEqual([...holdFamilySet({ holdFamily: "first_contact", holdFamilies: ["outward"] })].sort(), ["first_contact", "outward"]);
+});
+

@@ -1,6 +1,6 @@
 {
   "name": "@opt2-tealbrick/spec",
-  "version": "0.1.73",
+  "version": "0.1.74",
   "private": true,
   "description": "Teal Brick opt2 frozen interface contract: JSON Schemas, TypeScript types, route table, vocabularies (data only).",
   "license": "SEE LICENSE IN LICENSE",
