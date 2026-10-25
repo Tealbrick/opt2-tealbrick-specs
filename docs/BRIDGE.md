@@ -528,7 +528,7 @@ Martin (C330(4)): "a role / model / key structure - in the bridge … Observer, 
 ### 15.1 Bindings (S11)
 - S11 holds bindings only; values stay in S3. Nothing else is added to the bridge: no model call, no usage counting, no provider health check (C330(4) as constrained by the Coordinator, 2026-10-24).
 - One binding per role per scope: `ins` absent = workspace default; `ins` set = override for that app instance. Resolve order for a caller: its instance override, then the workspace default.
-- `keyName` names a key in S3. v0.1.63: S3 also holds owner-named provider keys (label ≤ 60, e.g. "OpenAI main") next to requirement-named keys; ONE key may serve many roles and apps. A provider with `keyNeeded: false` has no `keyName`.
+- `keyName` names a key in S3. v0.1.63: S3 also holds owner-named provider keys (label ≤ 60, e.g. "OpenAI main") next to requirement-named keys; ONE key may serve many roles and apps. QA-BRIDGE22-1: the two are SEPARATE namespaces — a provider key is served only through role resolve (§15.4) for a binding that names it, never by `GET /tb/v1/keys/<name>` (§9.4), and a requirement key never satisfies a binding; a provider key labelled like a requirement name (e.g. "OPENAI_API_KEY") does not make that requirement "set". A provider with `keyNeeded: false` has no `keyName`.
 - `provider` is a `MODEL_PROVIDERS` id; `baseUrl` is required when the provider has no `defaultBaseUrl`, else optional (override). `dims` only for `embeddings`.
 - Any binding, key or Own hosts change bumps `keysRev` (one revision for keys, bindings and the list), so app long-polls (§10.3) and `tb-exec` restarts work unchanged.
 - Bindings never come from Portal and never reach Portal (only §15.5 labels). Standalone (§11) is unchanged: bindings live on the volume.
