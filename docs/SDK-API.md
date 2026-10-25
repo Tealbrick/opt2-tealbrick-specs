@@ -600,6 +600,6 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
   5. The manifest declares `requires.bridgeCaps: ["secret_output"]` (MANIFEST M-OP-12, C354); Core refuses a bridge without the cap. No version number is used for this gate.
   6. A schedule created before the op had `secretOutput` (or by an older release) is refused when it runs (`secret_output_not_schedulable`); the handler never runs from a job.
 
-## v0.1.73 — catalog name rule, variants (C354a)
+## v0.1.74 — catalog name rule, variants (C354a)
 - The SDK validates every catalog answer entry `name` with `DYNAMIC_CATALOG_NAME_RE` (no `__`, no trailing `_`) and drops entries that fail it (logged once per name). A dynamic call `tool` follows `DYNAMIC_TOOL_NAME_RE` (≤ 63 chars, so `<name>__<suffix>` variants pass); the app's `resolve` returns the requested name (the bridge refuses a different one). A variant the app resolves runs the same upstream action as its base with an effect and hold family equal to or stricter than the base's.
 

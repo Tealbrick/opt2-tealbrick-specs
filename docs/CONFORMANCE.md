@@ -305,7 +305,7 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `C-SO-4` — a handler that throws an error containing a canary → the envelope and the receipt carry neither the canary nor the message.
 - `C-SO-5` — hold, then approve → the output reaches only the retry; nothing is stored.
 
-## v0.1.73 rows (C354a; QA-C354-1, QA-SPEC47-16)
+## v0.1.74 rows (C354a; QA-C354-1, QA-SPEC47-16)
 - `B29.hook_tool_variant` — an agent requests `x__<suffix>` by name, the app resolves the same name: `target.tool` = `x__<suffix>`; a policy deny/hold on `x` applies; the variant's effect and hold family are not broader than `x`'s.
 - `B29.catalog_name_invalid` — a catalog answer with an entry named `a__b` or `a_` → the SDK drops those entries from its answer; a bridge given one drops it from tools/list (`toolsOmitted` `catalog_name_invalid`); the valid entries still list.
 - `C-SO-6` — a schedule of an op created before the op had `secretOutput` is refused at run time (`secret_output_not_schedulable`); the handler never runs.
