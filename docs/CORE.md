@@ -2,6 +2,12 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.75 (recipe follow-up: C359c, QA-BRIDGE22-6, QA-SPEC54 S4, RM-15; number taken at merge time, C340)
+- C359c (QA-CORE63-13): the measured worst case counts every verb-level edge at its full operation list in `wf`, so narrowing to an op list never grows past what was measured; RM-24c incl. a property test of random accepted owner changes.
+- `ENV_NAME_PATTERN` (manifest envName = config keyName); the bridge keeps only matching key-requirement names (BRIDGE §9.4).
+- `Instance.updatePolicyLowered[] {role, from, to, notice}` typed (RM-15; Core already sends it).
+- Tests: explicit CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE / PYTHONSTARTUP rows, an exported reference matcher `isDeniedRoleEnv` (test module), reserve fixtures asserted to carry `edge: false` and 8 held.
+
 ## Changelog → v0.1.73 (QA-SPEC49-26: scheduled ops after an edge delete; `bad_request` in BridgeErrorCode; number taken at merge time, C340)
 - Config size (core#63 QA): pause/resume are status-only (no grant withdrawal or re-mint); a withdrawal lists every live jti incl. a superseded one; safety tightenings are never refused; deploys/updates are measured with the companions they add. RM-24b.
 - `BridgeErrorCode` gains `bad_request` (BRIDGE §9.4 / §15.4 malformed percent-encoding, specs#55 text; the type was missed in #55).

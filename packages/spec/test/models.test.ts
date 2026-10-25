@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { BRIDGE_CAPS, type BridgeErrorCode, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { ENV_NAME_PATTERN } from "../src/manifest.ts";
 import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_DENIED_ENV, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
-import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
+import type { AgentCard, CatalogEntry, Instance, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
 const load = (f: string) => JSON.parse(readFileSync(new URL(f, dir), "utf8"));
@@ -374,10 +375,14 @@ test("QA-SPEC54-5: slice agent items — status stays required with edge:false, 
   assert.equal(code, "bad_request");
 });
 
+/** Reference matcher for MANIFEST M-MR-4 (QA-SPEC54 S4): a role env name is refused when it ends in `_PROXY` (any case) or
+ *  matches MODEL_ROLE_DENIED_ENV (a trailing "*" is a prefix). The manifest package and tb-exec must agree with it. */
+export const isDeniedRoleEnv = (n: string) =>
+  /_PROXY$/i.test(n) || MODEL_ROLE_DENIED_ENV.some((d) => (d.endsWith("*") ? n.startsWith(d.slice(0, -1)) : n === d));
+
 test("QA-SPEC54-4: every M-MR-4 fixture env name is a valid env name and is denied (MODEL_ROLE_DENIED_ENV or *_PROXY)", () => {
   const envName = new RegExp(load("manifest.schema.json").$defs.envName.pattern);
-  const denied = (n: string) =>
-    /_PROXY$/i.test(n) || MODEL_ROLE_DENIED_ENV.some((d) => (d.endsWith("*") ? n.startsWith(d.slice(0, -1)) : n === d));
+  const denied = isDeniedRoleEnv;
   const fx = JSON.parse(readFileSync(new URL("../examples/model-roles.invalid.json", import.meta.url), "utf8"));
   const names = fx.cases
     .filter((c: { rule: string }) => c.rule === "M-MR-4")
@@ -388,6 +393,21 @@ test("QA-SPEC54-4: every M-MR-4 fixture env name is a valid env name and is deni
     assert.match(n, envName, n);
     assert.ok(denied(n), n);
   }
-  for (const n of ["NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "NPM_CONFIG_NOPROXY", "PYTHONPATH", "LD_AUDIT", "GIT_SSH_COMMAND", "BASH_ENV"]) assert.ok(denied(n), n);
+  for (const n of ["NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "NPM_CONFIG_NOPROXY", "PYTHONPATH", "PYTHONSTARTUP", "LD_AUDIT", "GIT_SSH_COMMAND", "BASH_ENV"]) assert.ok(denied(n), n);
   for (const n of ["KN_EMBEDDINGS_MODEL", "OPENAI_API_KEY", "ENGINE_MODEL"]) assert.ok(!denied(n), n);
+});
+
+test("follow-up: ENV_NAME_PATTERN is the one env/key name pattern (manifest envName, config keyName)", () => {
+  assert.equal(load("manifest.schema.json").$defs.envName.pattern, ENV_NAME_PATTERN);
+  assert.equal(load("workspace-config.schema.json").$defs.keyName.pattern, ENV_NAME_PATTERN);
+  const re = new RegExp(ENV_NAME_PATTERN);
+  for (const bad of ["pk:openai-main", "TB_SECRET", "RAILWAY_TOKEN", "lower_case", "A"]) assert.equal(re.test(bad), false, bad);
+  assert.ok(re.test("OPENAI_API_KEY"));
+});
+
+test("RM-15: Instance.updatePolicyLowered carries role, from, to and the notice text", () => {
+  const row: NonNullable<Instance["updatePolicyLowered"]>[number] = {
+    role: "reasoning", from: "zdr", to: "standard", notice: "This version accepts a less private model for reasoning: zdr → standard",
+  };
+  assert.deepEqual(Object.keys(row).sort(), ["from", "notice", "role", "to"]);
 });

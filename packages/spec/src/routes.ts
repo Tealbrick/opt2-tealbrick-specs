@@ -893,6 +893,9 @@ export interface Instance {
   /** v0.1.14 (C100): companion access changes from the running release to `updateAvailable` (empty = none); the GUI
    *  shows widening entries before Confirm (the confirm is the consent) */
   updateCompanionChanges?: CompanionChange[];
+  /** v0.1.63 RM-15 (typed in this follow-up): roles whose `minPolicy` the available release LOWERS; the update needs the owner's
+   *  explicit consent. `notice` = "This version accepts a less private model for <role>: <from> → <to>". Absent = none. */
+  updatePolicyLowered?: { role: ModelRole; from: DataPolicy; to: DataPolicy; notice: string }[];
   /** v0.1.14 (A2A-11): this app's companion connections that do not work now */
   companionIssues?: { target: ProductId | "*"; edge: EdgeId | null; state: "blocked" | "not_deployed" | "unlicensed" | "paused" | "disabled"; reason: "companion_op_missing" | "target_not_deployed" | null; detail: string }[];
   provider: ProviderKey | "own_infra";

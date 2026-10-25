@@ -92,6 +92,9 @@ export type SemVer = string;
 export type HttpsUrl = string;
 /** `^(?!TB_|RAILWAY_)[A-Z][A-Z0-9_]{1,63}$`. */
 export type EnvName = string;
+/** The one env / key name pattern (manifest `envName`, workspace-config `keyName`). The bridge keeps only app-key requirement
+ *  names that match it, so a provider-namespace name (`pk:…`) or any other shape is never fetchable (BRIDGE §9.4, QA-BRIDGE22-6). */
+export const ENV_NAME_PATTERN = "^(?!TB_|RAILWAY_)[A-Z][A-Z0-9_]{1,63}$" as const;
 /** A JSON Schema 2020-12 document whose `type` is `"object"`; local `$ref` only. */
 export type JsonSchemaObject = { type: "object"; [keyword: string]: unknown };
 
