@@ -315,7 +315,7 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps).
  *  v0.1.57 (C274c/C274d): + `events` = the bridge implements BRIDGE §14 in full (ingest, per-agent log, delivery on /mcp).
  *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule).
- *  v0.1.71 (C330(1), M4b): + `lazy_tools` = the bridge implements BRIDGE §7.5 (lazy ops left out of tools/list, the
+ *  v0.1.73 (C330(1), M4b): + `lazy_tools` = the bridge implements BRIDGE §7.5 (lazy ops left out of tools/list, the
  *  `<product>__tb_more_search` / `<product>__tb_more_call` pair) and its validator accepts `listing: "lazy"`. */
 /** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
@@ -540,7 +540,7 @@ export const TOOL_NAME_RULE = {
   skillsOp: "tb_skills",
   searchSuffix: "_search",
   callSuffix: "_call",
-  /** v0.1.71 (BRIDGE §7.5): the per-product pair that serves `listing: "lazy"` ops; `tb_` cannot collide with an op id (M-OP-1) */
+  /** v0.1.73 (BRIDGE §7.5): the per-product pair that serves `listing: "lazy"` ops; `tb_` cannot collide with an op id (M-OP-1) */
   moreSearchOp: "tb_more_search",
   moreCallOp: "tb_more_call",
   idempotencyMetaKey: "tealbrick/idempotencyKey", // gitleaks:allow (MCP _meta key name, not a secret)
@@ -549,7 +549,7 @@ export const TOOL_NAME_RULE = {
   skillUriPrefix: "tealbrick://skills/",
 } as const;
 /** `<product>__<op>`, `<product>__<op>_search|_call`, `<product>__<dynamic list entry>`, `<product>__tb_hold_status`,
- *  `<product>__tb_more_search|tb_more_call` (v0.1.71). */
+ *  `<product>__tb_more_search|tb_more_call` (v0.1.73). */
 export type ToolName = `${ProductId}__${string}`;
 export type ParsedToolName =
   | { kind: "op"; product: ProductId; op: SnakeId }
@@ -559,9 +559,9 @@ export type ParsedToolName =
   | { kind: "hold_status"; product: ProductId }
   /** bridge-answered fallback read tool (C16 S10) */
   | { kind: "skills"; product: ProductId }
-  /** v0.1.71 (BRIDGE §7.5): bridge-answered search over this agent's lazy ops of the product */
+  /** v0.1.73 (BRIDGE §7.5): bridge-answered search over this agent's lazy ops of the product */
   | { kind: "more_search"; product: ProductId }
-  /** v0.1.71 (BRIDGE §7.5): one static op of the product, routed exactly as a direct call of that op */
+  /** v0.1.73 (BRIDGE §7.5): one static op of the product, routed exactly as a direct call of that op */
   | { kind: "more_call"; product: ProductId };
 export type SkillResourceUri = `tealbrick://skills/${ProductId}/${string}`;
 /** `structuredContent` of a held tool result (not an error). */
@@ -573,7 +573,7 @@ export interface HeldToolResult {
 }
 export interface HoldStatusToolInput { holdId: string }
 export interface SkillsToolInput { skillId?: string }
-/** v0.1.71 (BRIDGE §7.5): input of `<product>__tb_more_search` (= the dynamic search input; `query` "*" = every lazy op). */
+/** v0.1.73 (BRIDGE §7.5): input of `<product>__tb_more_search` (= the dynamic search input; `query` "*" = every lazy op). */
 export type MoreSearchInput = DynamicSearchInput;
 /** One hit: the same shape as a dynamic `_search` hit, `tool` = the op's own tool name `<product>__<op>`. */
 export interface MoreSearchHit {
@@ -585,7 +585,7 @@ export interface MoreSearchHit {
 }
 /** `structuredContent` of a `<product>__tb_more_search` result: hits after ranking and `limit`; `total` = matches before `limit`. */
 export interface MoreSearchResult { tools: MoreSearchHit[]; total: number }
-/** v0.1.71: input of `<product>__tb_more_call`. `tool` = `<product>__<op>` (as a hit names it) or the bare op id. */
+/** v0.1.73: input of `<product>__tb_more_call`. `tool` = `<product>__<op>` (as a hit names it) or the bare op id. */
 export interface MoreCallInput { tool: string; arguments: Record<string, unknown> }
 
 // ── OAuth AS (BRIDGE §6) ─────────────────────────────────────────────────────

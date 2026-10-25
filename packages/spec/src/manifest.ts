@@ -41,7 +41,7 @@ export const VOLUME_PURPOSES = ["data", "backup"] as const;
 export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as const;
 /** v0.1.43 (LR-1, C234): `workflow` = an agent op that is listed in tools/list and passes gate() ONLY when the grant's `wf`
  *  names it (machine ops). `default` (or absent) = today's rule.
- *  v0.1.71 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
+ *  v0.1.73 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
  *  it out of tools/list and serves it through the product's `<product>__tb_more_search` / `<product>__tb_more_call` pair
  *  (BRIDGE §7.5). Display only: gate(), hooks, holds, receipts and idempotency are the direct call's (MANIFEST §5.5). */
 export const OPERATION_LISTINGS = ["default", "workflow", "lazy"] as const;
@@ -263,7 +263,7 @@ export interface Operation {
   audience: OperationAudience;
   dynamic?: DynamicSpec;
   /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on.
-   *  v0.1.71: `lazy` needs a validator that pins spec ≥ 0.1.71 (MANIFEST §5.5, M-OP-13). */
+   *  v0.1.73: `lazy` needs a validator that pins spec ≥ 0.1.73 (MANIFEST §5.5, M-OP-13). */
   listing?: OperationListing;
 }
 
