@@ -261,11 +261,16 @@ export interface Operation {
   dynamic?: DynamicSpec;
   /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on. */
   listing?: OperationListing;
+  /** v0.1.68 (C336 RQ-3, S-8; MANIFEST M-OP-12): the output carries a secret (e.g. a short-lived credential). App callers
+   *  only (agent callers refused, `secret_output_app_only`), not schedulable, no idempotency row, receipt with input digest +
+   *  summary only, never logged or given to an `after` hook; errors carry a code and a fixed message. Needs a bridge with the
+   *  `secret_output` cap. */
+  secretOutput?: true;
 }
 
 /** One entry of a dynamic operation's catalog (bridge op `POST /tb/v1/bridge/catalog`, search results). */
 export interface DynamicCatalogEntry {
-  /** `^[a-z][a-z0-9_]{1,47}$`, unique within the app. */
+  /** `^[a-z][a-z0-9_]{1,47}$`, unique within the app; v0.1.68 (C354): never contains `__` (reserved for resolved variants such as `<name>__first_contact`). */
   name: string;
   title: string;
   description: string;
@@ -420,6 +425,9 @@ export interface Hook {
 /** v0.1.15 (C104): declared minimum versions (features the validator cannot see, e.g. a before hook that answers `hold`). */
 export interface ManifestRequires {
   bridge?: string;
+  /** v0.1.68 (C354): bridge capabilities the release needs (BRIDGE_CAPS, e.g. "secret_output"). Core refuses to deploy it
+   *  onto a workspace bridge that does not declare each one (`bridge_cap_missing`); a cap is never inferred from a version. */
+  bridgeCaps?: string[];
 }
 
 export interface Companion {

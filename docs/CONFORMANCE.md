@@ -287,3 +287,19 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - Core: C-NS-1 a new `tbm` session appears in `account.me.newSignIns` (osn, client, machineLabel, createdAt; no IP); C-NS-2 after `owner_sessions.ack_new_sign_ins {osns}` exactly those are gone; a session created after the list was read, or beyond the first `max`, stays (QA-SPEC51-1); a later new session appears again; C-NS-6 an ack with another account's osn changes nothing for either account and answers 200; C-NS-7 a double ack is a no-op; C-NS-8 every ack writes one `owner_session.sign_in_ack` audit row; C-NS-9 a `machine_label` with a control character, an RLO (U+202E), a ZWJ (U+200D) or over 64 chars is refused at `device.start` (`MACHINE_LABEL_PATTERN`); `iPhone 🍎` is accepted; C-NS-10 more than `max` new sign-ins → the newest `max` are listed, one older than `windowDays` is not; C-NS-3 a revoked session leaves the list; C-NS-4 a K3 calling `owner_sessions.ack_new_sign_ins` → refused (browser row); C-NS-5 `cli` / `tbd` sessions never appear.
 - Core: C-PO-13 a row not taken within `queueTtlS` → 502 `upstream_timeout` {reason: not_delivered}, and the app never receives it.
 - Bridge (C354): R-PO-7 a relay row for an app that does not declare `person_op` → result 409 `person_op_unsupported`, NO request reaches the app; R-PO-8 an app whose `caps` is not an array of strings within `APP_CAPS_LIMITS` (e.g. a string, 17 entries, a 33-char entry) is treated as declaring nothing (→ R-PO-7 refusal), while an unknown extra entry next to `person_op` is ignored (→ forwarded).
+
+## v0.1.68 rows (C336 RQ-2, RQ-3; proposed by QA on specs#47)
+- `A11.deep_datasets_anyof_empty` — `anyOf: []` → a dataset read is refused or `not_found`; a read naming no dataset is refused.
+- `A11.deep_datasets_noneof` — `noneOf` excludes the listed datasets from reads, lists and overviews.
+- `A11.deep_datasets_identity` — alias, quoted, NFD, zero-width and case variants of a dataset name never match another dataset's canonical id (resolved first; unknown → `not_found`).
+- `A11.deep_datasets_merge` — two narrowings → `anyOf` intersect, `noneOf` unite, the key survives the policy app's merge.
+- `A11.deep_datasets_old_reader` — a v1-only reader refuses a `v: 2` narrowing (`narrowing_unsupported`).
+- `A11.deep_datasets_malformed` — `{}`, `null`, non-array, non-string, over-limit → `narrowing_unsupported`.
+- `B29.hook_target_tool_list` / `_call` / `_relay` — `target.tool` = the resolution's tool on each path; absent for static ops and search; a resolution that differs from the requested name → `dynamic_resolve_failed`.
+- `B29.hook_tool_bypass` — case, space and alias variants of a held tool are refused or resolve to the same canonical tool (the hold applies).
+- `C-SO-1` — a secretOutput call writes no idempotency row, no receipt output, no log line with a canary secret, and calls no `after` hook (the check fails if one is called).
+- `C-SO-2` — an agent caller is refused `secret_output_app_only` and the tool is not listed for agents.
+- `C-SO-3` — `ctx.schedule` of the op is refused `secret_output_not_schedulable`.
+- `C-SO-4` — a handler that throws an error containing a canary → the envelope and the receipt carry neither the canary nor the message.
+- `C-SO-5` — hold, then approve → the output reaches only the retry; nothing is stored.
+
