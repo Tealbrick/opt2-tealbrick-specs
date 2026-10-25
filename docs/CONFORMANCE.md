@@ -299,10 +299,18 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `A11.deep_datasets_old_reader` — a v1-only reader refuses a `v: 2` narrowing (`narrowing_unsupported`).
 - `A11.deep_datasets_malformed` — `{}`, `null`, non-array, non-string, over-limit → `narrowing_unsupported`.
 - `B29.hook_target_tool_list` / `_call` / `_relay` — `target.tool` = the resolution's tool on each path; absent for static ops and search; a resolution that differs from the requested name → `dynamic_resolve_failed`.
-- `B29.hook_tool_bypass` — case, space and alias variants of a held tool are refused or resolve to the same canonical tool (the hold applies).
+- `B29.hook_tool_bypass` — case, space and alias variants of a held tool that differ from the app's resolution are refused (`dynamic_resolve_failed`); the resolution must equal the requested name (C354a).
 - `C-SO-1` — a secretOutput call writes no idempotency row, no receipt output, no log line with a canary secret, and calls no `after` hook (the check fails if one is called).
 - `C-SO-2` — an agent caller is refused `secret_output_app_only` and the tool is not listed for agents.
 - `C-SO-3` — `ctx.schedule` of the op is refused `secret_output_not_schedulable`.
 - `C-SO-4` — a handler that throws an error containing a canary → the envelope and the receipt carry neither the canary nor the message.
 - `C-SO-5` — hold, then approve → the output reaches only the retry; nothing is stored.
+
+## v0.1.74 rows (C354a; QA-C354-1, QA-SPEC47-16)
+- `B29.hook_tool_variant` — an agent requests `x__<suffix>` by name, the app resolves the same name: `target.tool` = `x__<suffix>`; a policy deny/hold on `x` applies; `variantNarrowerOrEqual(variant, base)` holds (Connect: `gmail_send__first_contact` resolves `holdFamilies` ⊇ {`outward`} plus `first_contact`). With cap `hold_families`, an owner who holds `outward` only still gets the variant held, and a variant resolution that drops a base family is refused (`dynamic_resolve_failed`).
+- `B29.variant_suffix` — `send___y`, `send__`, `send__Y` are not variants (`dynamicVariantBase` → null): a bridge refuses a resolution whose `tool` contains `__` and is not a valid variant (`dynamic_resolve_failed`); a policy app that still sees one matches it to its base `send` (deny and hold fail closed). The Rules writer refuses owner rule tool entries that fail `DYNAMIC_CATALOG_NAME_RE`.
+- `B29.catalog_name_invalid` — a catalog answer with an entry named `a__b` or `a_` → the SDK drops those entries from its answer; a bridge given one drops it from tools/list (`toolsOmitted` `catalog_name_invalid`); the valid entries still list.
+- `C-SO-6` — a schedule of an op created before the op had `secretOutput` is refused at run time (`secret_output_not_schedulable`); the handler never runs.
+- `D-CAP-1` — Core refuses to deploy a release whose `requires.bridgeCaps` lists a cap the workspace bridge does not declare (`bridge_cap_missing`, `details.cap`); a bridge refuses to register such an app the same way.
+- `A11.deep_datasets_noneof_unnamed` — under `deepDatasets.noneOf` only, a data read naming no dataset is refused (`narrowing_unsupported`) unless the op enumerates and excludes the listed datasets (SDK-API §18.5 rules 3–4).
 
