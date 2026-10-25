@@ -340,8 +340,11 @@ export const SLICE_JWS_MAX_CHARS = 65_536;
 /** QA-SPEC49-22, C356 / QA-SPEC49-27: owner changes keep every worst-case slice at or under this, so the automatic,
  *  never-refused growth always fits under SLICE_JWS_MAX_CHARS even at the schema maxima: Portal key set (`portalKeys` ≤ 8,
  *  `portalKeySet` ≤ 4,096), bridge key rotation (`bridge.keys` ≤ 4), the origins `bridge.publicUrl` / `bridge.viewUrl` /
- *  `portalUrl` (≤ 267 each, no path), `bridge.caps` ≤ 16, `appCallers`, `prd` / `provider` labels. Measured worst growth
- *  ≈ 11.4k chars; reserve 13.5k. Pause/revoke stay deliverable. */
+ *  `portalUrl` (≤ 267 each, no path), `bridge.caps` ≤ 16, `appCallers`. QA-SPEC49-30: `prd` on every companion grant and
+ *  `provider` on every caller are known to Core and part of its worst case, and so are every caller `name` at its schema
+ *  maximum (QA-SPEC55-1) and the companion `revoked.jtis` of every live grant (QA-SPEC55-5) — not of this reserve. Measured
+ *  external growth (smallest valid mint → schema maxima incl. `standalone`, bridge issuer, largest `rev`): 11,343 chars
+ *  (test/slice-reserve.test.ts) → margin 2,193 under 65,536. Pause/revoke stay deliverable. */
 export const SLICE_CORE_MAX_CHARS = 52_000;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
