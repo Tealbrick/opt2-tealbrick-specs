@@ -730,6 +730,16 @@
       "kind": "base",
       "input": "http://10.0.0.1/v1﹫evil",
       "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "http://10.0.0.1\\evil/v1",
+      "expect": "refused"
+    },
+    {
+      "kind": "base",
+      "input": "https://api.example.com\\@evil/v1",
+      "expect": "refused"
     }
   ]
 }
