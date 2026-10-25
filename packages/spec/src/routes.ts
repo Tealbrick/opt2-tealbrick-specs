@@ -18,6 +18,7 @@ import type {
 } from "./host.ts";
 import type { AgentMode, Category, Condition, CrudAction, Effect, HoldFamily, KeySource, ProductId, SettingChoice, SettingType } from "./manifest.ts";
 import type { DataPolicy, ModelRole, PolicyBasis } from "./models.ts";
+import { INVISIBLE_CHAR_CLASS } from "./models.ts";
 
 export type Crud = CrudAction;
 /** I14 shape `{write?, outward?, destructive?: {max, per}}` — owned by ./credentials.ts (FreeCaps). */
@@ -251,8 +252,8 @@ export interface AccountMe {
 /** v0.1.70 (QA-SPEC43-6): one sign-in the owner has not seen yet. No IP or location (Core keeps none). */
 export interface NewSignIn {
   osn: OwnerSessionId; client: OwnerSessionClient;
-  /** as entered at device.start: 1..DEVICE_FLOW.machineLabelMax chars, no control characters (Core refuses others there with
-   *  validation_failed); the GUI renders it as plain text, never as markup */
+  /** as entered at device.start: 1..DEVICE_FLOW.machineLabelMax chars matching MACHINE_LABEL_PATTERN (Core refuses others there
+   *  with validation_failed); the GUI renders it as plain text, never as markup */
   machineLabel: string;
   createdAt: IsoTime;
 }
@@ -261,6 +262,11 @@ export interface NewSignIn {
  *  error (no cross-account signal); a repeat is a no-op. */
 export interface NewSignInsAckInput { osns: OwnerSessionId[] }
 /** v0.1.70 (QA-SPEC43-6): the Portal-side notice of new native sign-ins (also for an owner with no TBM device to push to). */
+/** v0.1.70 (QA specs#51): device.start `machine_label` — at least one character, none from INVISIBLE_CHAR_CLASS (the persona rule's
+ *  class, NO marker exceptions: a label is shown in a one-line banner where a marker cannot be rendered). So bidi controls
+ *  (U+202A–202E, U+2066–2069), ZWJ/ZWNJ, tag characters, BOM, TAB/LF and other controls are refused and a label cannot fake
+ *  another device name by reordering or hiding text. Unicode-mode regex (`u` flag). */
+export const MACHINE_LABEL_PATTERN = `^(?:(?![${INVISIBLE_CHAR_CLASS}])[\\s\\S])+$` as const;
 export const NEW_SIGN_IN = { clients: ["tbm"], max: 5, windowDays: 30 } as const satisfies { clients: readonly OwnerSessionClient[]; max: number; windowDays: number };
 export interface AccountRestriction { kind: "suspend" | "ban"; customerText: string | null; since: IsoTime; endsAt: IsoTime | null }
 export interface SetCurrentWorkspaceInput { ws: WorkspaceId }

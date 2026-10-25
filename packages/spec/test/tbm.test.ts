@@ -184,3 +184,22 @@ test("v0.1.70 (C354): the bridge's refusals are exact; cap bounds are fixed (fai
   for (const cap of APP_CAPS) assert.ok(cap.length <= APP_CAPS_LIMITS.maxLength, cap);
   assert.ok(APP_CAPS.length <= APP_CAPS_LIMITS.maxEntries);
 });
+
+test("v0.1.70: machine labels refuse bidi, ZWJ and other invisible characters (QA specs#51)", async () => {
+  const { MACHINE_LABEL_PATTERN } = await import("../src/routes.ts");
+  const { INVISIBLE_CHAR_CLASS, PERSONA_PATTERN } = await import("../src/models.ts");
+  const re = new RegExp(MACHINE_LABEL_PATTERN, "u");
+  for (const ok of ["Martin's iPhone", "iPhone 🍎", "Pixel 9 Pro", "Téléphone de Zoë", "手机"]) assert.ok(re.test(ok), ok);
+  for (const bad of ["", "‮enohp", "i‍Phone", "a⁦b⁩", "tab\there", "line\nbreak", "﻿bom", "x​y", "tag\u{E0041}", "a b"]) {
+    assert.ok(!re.test(bad), JSON.stringify(bad));
+  }
+  // one class, reused (not copied) by the persona rule
+  assert.ok(MACHINE_LABEL_PATTERN.includes(INVISIBLE_CHAR_CLASS) && PERSONA_PATTERN.includes(INVISIBLE_CHAR_CLASS));
+});
+
+// QA mutants N12/N13/N14/N18: `caps` exists on the claim and the status push with exactly this type.
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const claimCaps: Same<import("../src/bridge.ts").ClaimRequest["caps"], import("../src/bridge.ts").AppCap[] | undefined> = true;
+const statusCaps: Same<import("../src/bridge.ts").AppStatus["caps"], import("../src/bridge.ts").AppCap[] | undefined> = true;
+const capsIsOptionalOnClaim: undefined extends import("../src/bridge.ts").ClaimRequest["caps"] ? true : false = true;
+void [claimCaps, statusCaps, capsIsOptionalOnClaim];
