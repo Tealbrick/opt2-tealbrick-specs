@@ -22,7 +22,8 @@ import type {
   OpResult,
   PreUpdateSnapshotRef,
   SchemaVersion,
-  ScopeSummaryResult
+  ScopeSourceItem,
+  ScopeSummaryResult,
 } from "./bridge.ts";
 import type {
   AgentId,
@@ -72,7 +73,7 @@ import type {
 import type { ModelRole } from "./models.ts";
 
 // Wire shapes owned by bridge.ts / credentials.ts / manifest.ts, re-exported for SDK users (not re-declared).
-export type { AppAttention, AppStatus, BridgeOp, BridgeOpBodies, CallEnvelope, ClaimRequest, ClaimResponse, HookRequest, HookResponseByPhase, InstanceSlice, OnBehalfOfContext, OpCallBody, OpResult, ScopeSummaryResult };
+export type { AppAttention, AppStatus, BridgeOp, BridgeOpBodies, CallEnvelope, ClaimRequest, ClaimResponse, HookRequest, HookResponseByPhase, InstanceSlice, OnBehalfOfContext, OpCallBody, OpResult, ScopeSourceItem, ScopeSummaryResult };
 
 // ════════════════════════════════════════════════════════════════════════════
 // §A  @opt2-tealbrick/manifest — pure, synchronous, no I/O
@@ -331,6 +332,10 @@ export type SdkAuditAction = (typeof SDK_AUDIT_ACTIONS)[number];
 // ════════════════════════════════════════════════════════════════════════════
 // §B  @opt2-tealbrick/miniapp-sdk — server
 // ════════════════════════════════════════════════════════════════════════════
+
+/** v0.1.63 + spec follow-up #49: `TbError.code` values the model-role helpers throw (SDK-API "modelFetch"). */
+export const SDK_MODEL_ERROR_CODES = ["role_undeclared", "model_endpoint_refused"] as const;
+export type SdkModelErrorCode = (typeof SDK_MODEL_ERROR_CODES)[number];
 
 export declare class TbError extends Error {
   constructor(code: string, message: string, httpStatus?: number);
@@ -823,8 +828,11 @@ export interface ScopeStore {
   set(principal: PersonPrincipal, agent: AgentId, type: string, instanceId: string, access: string | null): Promise<void>;
   /** applies manifest defaultGrants once per (agent, type) */
   applyDefaults(agent: SliceAgent): Promise<void>;
-  /** renders scopes[].summaryTemplate, ≤ 80 chars */
+  /** renders scopes[].summaryTemplate, ≤ 80 chars; v0.1.65: a type with no row for this agent adds `summaryEmpty` when declared */
   summary(agent: AgentId): Promise<string>;
+  /** v0.1.65 (C331 D8): this agent's rows as ScopeSourceItem (instance label, access id), ordered by type then label, at most
+   *  SCOPE_SOURCES_MAX; the default `scope_summary` answer carries them as `sources`. */
+  sources(agent: AgentId): Promise<ScopeSourceItem[]>;
 }
 
 // ── Keys (CORE §10) ──
@@ -841,6 +849,11 @@ export interface KeyApi {
   getKey(name: string): Promise<string | null>;
   /** v0.1.63; throws `role_undeclared` (programming error) for a role the manifest does not declare with `usedBy` `app` */
   modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
+  /** spec follow-up (QA-SPEC49-2c): the resolved binding plus a `fetch` bound to its canonical base URL origin with the
+   *  connect-time guard (BRIDGE §15.3): resolves the host, refuses NEVER_LOCAL and (for `local`) any address outside the
+   *  local ranges, pins the checked address for the request, refuses other origins and cross-origin redirects. The app
+   *  adds the provider's auth header itself from `binding.key`. null = as modelRole(). */
+  modelFetch(role: ModelRole): Promise<{ binding: ResolvedModelRole; fetch: (path: string, init?: RequestInit) => Promise<Response> } | null>;
   onKeysChanged(cb: (names: string[]) => void): () => void;
   status(): Promise<KeyStatus[]>;
 }

@@ -93,6 +93,9 @@
               "type": "null"
             }
           ]
+        },
+        "policyBasis": {
+          "$ref": "#/$defs/policyBasis"
         }
       }
     },
@@ -168,6 +171,9 @@
               "type": "null"
             }
           ]
+        },
+        "policyBasis": {
+          "$ref": "#/$defs/policyBasis"
         }
       }
     },
@@ -198,6 +204,12 @@
       "items": {
         "$ref": "#/$defs/modelRoleHint"
       }
+    },
+    "policyBasis": {
+      "enum": [
+        "verified",
+        "owner_attested"
+      ]
     }
   }
 }

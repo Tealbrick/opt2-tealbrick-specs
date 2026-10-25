@@ -97,11 +97,11 @@
         },
         "caps": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" }, "description": "v0.1.54 (C292): capabilities the workspace bridge declared (BRIDGE_CAPS), normalised by Core from its last authenticated status report; absent or [] = none. Advisory: never widens access." },
         "viewUrl": {
-          "oneOf": [{ "$ref": "workspace-config.schema.json#/$defs/httpsUrl" }, { "type": "null" }],
+          "oneOf": [{ "$ref": "workspace-config.schema.json#/$defs/httpsOrigin" }, { "type": "null" }],
           "description": "v0.1.43 (LA-1, C232): the origin of the workspace views service (tb-views) or null when none exists yet; apps answer view_origin_missing (409) while null."
         },
         "publicUrl": {
-          "$ref": "workspace-config.schema.json#/$defs/httpsUrl",
+          "$ref": "workspace-config.schema.json#/$defs/httpsOrigin",
           "description": "v0.1.10 (C64): the bridge's public origin; apps build third-party callback URLs `<publicUrl>/p/<product><path>` from it (SDK OpContext.publicUrl). Core MUST emit it once the bridge's public URL is known."
         }
       }
@@ -209,7 +209,7 @@
       "required": ["held"],
       "description": "v0.1.15 (C105a): the workspace apps policy; companion grants carry held = this list.",
       "properties": {
-        "held": { "type": "array", "uniqueItems": true, "items": { "enum": ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] } }
+        "held": { "type": "array", "maxItems": 8, "uniqueItems": true, "items": { "enum": ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] } }
       }
     },
     "appCallers": {
@@ -217,7 +217,7 @@
       "description": "v0.1.49 (C261): \"verified\" = every companion grant to this instance carries prd; the SDK refuses an app caller without a verified product (403 caller_unverified). Absent = the earlier lenient rule."
     },
     "portalUrl": {
-      "$ref": "workspace-config.schema.json#/$defs/httpsUrl",
+      "$ref": "workspace-config.schema.json#/$defs/httpsOrigin",
       "description": "v0.1.13 (C86): the Portal GUI origin (no path); apps build owner links `<portalUrl>/w/<ws>/open?product=<p>&path=<path>`."
     }
   }

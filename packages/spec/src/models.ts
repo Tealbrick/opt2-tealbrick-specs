@@ -32,6 +32,9 @@ export interface ModelProvider {
   zdrOffered: boolean;
   /** speaks the OpenAI HTTP API (chat/embeddings) at `baseUrl` */
   openaiCompatible: boolean;
+  /** routes to other upstream providers (OpenRouter, LiteLLM, a custom address): a `zdr` attestation names the host and
+   *  covers every upstream; a model change clears it (BRIDGE §15.3, QA-SPEC42-11) */
+  gateway: boolean;
   /** absent = the owner must enter a base URL */
   defaultBaseUrl?: string;
 }
@@ -41,20 +44,20 @@ export interface ModelProvider {
  * v1 Knowledge "Models" step (`_v1/knowledge/tealbrick.app.json`); UNVERIFIED by test call.
  */
 export const MODEL_PROVIDERS: readonly ModelProvider[] = [
-  { id: "openai", label: "OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, defaultBaseUrl: "https://api.openai.com/v1" },
-  { id: "anthropic", label: "Anthropic", roles: ["reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: false, defaultBaseUrl: "https://api.anthropic.com" },
-  { id: "google", label: "Google Gemini", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, defaultBaseUrl: "https://generativelanguage.googleapis.com" },
-  { id: "voyage", label: "Voyage AI", roles: ["embeddings", "rerank"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, defaultBaseUrl: "https://api.voyageai.com/v1" },
-  { id: "openrouter", label: "OpenRouter", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, defaultBaseUrl: "https://openrouter.ai/api/v1" },
-  { id: "deepseek", label: "DeepSeek", roles: ["reasoning", "utility", "dreaming", "summarize"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, defaultBaseUrl: "https://api.deepseek.com/v1" },
-  { id: "together", label: "Together AI", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, defaultBaseUrl: "https://api.together.xyz/v1" },
-  { id: "mistral", label: "Mistral AI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, defaultBaseUrl: "https://api.mistral.ai/v1" },
-  { id: "azure-openai", label: "Azure OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
-  { id: "ollama", label: "Ollama (own server)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "llama-server", label: "llama.cpp server (own server)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "lm-studio", label: "LM Studio (own machine)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true },
-  { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
-  { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true },
+  { id: "openai", label: "OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.openai.com/v1" },
+  { id: "anthropic", label: "Anthropic", roles: ["reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: false, gateway: false, defaultBaseUrl: "https://api.anthropic.com" },
+  { id: "google", label: "Google Gemini", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, gateway: false, defaultBaseUrl: "https://generativelanguage.googleapis.com" },
+  { id: "voyage", label: "Voyage AI", roles: ["embeddings", "rerank"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: false, gateway: false, defaultBaseUrl: "https://api.voyageai.com/v1" },
+  { id: "openrouter", label: "OpenRouter", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: true, defaultBaseUrl: "https://openrouter.ai/api/v1" },
+  { id: "deepseek", label: "DeepSeek", roles: ["reasoning", "utility", "dreaming", "summarize"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.deepseek.com/v1" },
+  { id: "together", label: "Together AI", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.together.xyz/v1" },
+  { id: "mistral", label: "Mistral AI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: true, local: false, zdrOffered: false, openaiCompatible: true, gateway: false, defaultBaseUrl: "https://api.mistral.ai/v1" },
+  { id: "azure-openai", label: "Azure OpenAI", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: false },
+  { id: "ollama", label: "Ollama (own server)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true, gateway: false },
+  { id: "llama-server", label: "llama.cpp server (own server)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true, gateway: false },
+  { id: "lm-studio", label: "LM Studio (own machine)", roles: ["embeddings", "reasoning", "utility", "dreaming", "summarize", "vision"], keyNeeded: false, local: true, zdrOffered: false, openaiCompatible: true, gateway: false },
+  { id: "litellm", label: "LiteLLM proxy", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: true },
+  { id: "openai-compatible", label: "OpenAI-compatible (custom address)", roles: ["embeddings", "rerank", "reasoning", "utility", "dreaming", "summarize", "vision", "transcribe"], keyNeeded: true, local: false, zdrOffered: true, openaiCompatible: true, gateway: true },
 ];
 
 /**
@@ -76,6 +79,65 @@ export const MODEL_ROLE_HINTS_MAX = 8;
 /** Agent card persona (PORTAL-API v0.1.63): markdown, the system-prompt fragment the owner edits. The limit counts UTF-16
  *  code units (JavaScript `.length`, as BRIDGE §14 `summary`); JSON Schema `maxLength` (code points) is only an outer bound. */
 export const PERSONA_MAX_CHARS = 8000;
+
+/** Total persona text per workspace (UTF-16 units over all agents), QA-SPEC49-11. With control characters and lone
+ *  surrogates forbidden (PERSONA_PATTERN, well-formed UTF-16), one unit costs at most 3 bytes in JSON, so 250,000 units are
+ *  ≤ 1 MB after base64url — well inside CONFIG_CORE_MAX_BYTES. Core refuses a create/update past it (`validation_failed`). */
+export const PERSONA_WORKSPACE_MAX_CHARS = 250_000;
+/** Persona text (C353, QA-SPEC49-23): one rule by Unicode property, so no range can be forgotten. A persona is accepted when
+ *  every character is TAB, LF, a PERSONA_MARKERS character (allowed, shown as a marker), or NOT in \p{Cc}, \p{Cf}, \p{Cs}
+ *  (lone surrogates), \p{Default_Ignorable_Code_Point}, U+2028 or U+2029 — and no variation selector directly follows a
+ *  marker character (C356 / QA-SPEC49-29: covers VS VS and VS ZWJ VS payloads; 🏳️‍🌈 and ❤️‍🔥 pass because their VS follows
+ *  the base character). So bidi controls, tag characters, Hangul fillers (U+115F,
+ *  U+1160, U+3164, U+FFA0), BOM, invisible operators etc. are refused, and every allowed invisible character is a marker.
+ *  Unicode-mode regex (`u` flag) of the runtime (Node 24 / current browsers); Core's verdict wins. Clients turn CRLF into LF.
+ *  Core also checks isWellFormed(). */
+export const PERSONA_PATTERN =
+  "^(?![\\s\\S]*[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}][\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}])(?:[\\t\\n]|[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029])[\\s\\S])*$" as const;
+
+/** C353: allowed invisible characters that scripts need (Persian, Hebrew, Arabic, Sinhala, Mongolian, Japanese IVS, emoji
+ *  ZWJ sequences). The drafts review and the persona editor show each one as a visible labelled marker (e.g. `⟨ZWJ⟩`) next
+ *  to the text, so nothing is hidden from the owner. `[from, to]` inclusive code points. */
+export const PERSONA_MARKERS: readonly { from: number; to: number; label: string }[] = [
+  { from: 0x00ad, to: 0x00ad, label: "SHY" },
+  { from: 0x034f, to: 0x034f, label: "CGJ" },
+  { from: 0x0600, to: 0x0605, label: "ANS" },
+  { from: 0x061c, to: 0x061c, label: "ALM" },
+  { from: 0x06dd, to: 0x06dd, label: "ANS" },
+  { from: 0x180b, to: 0x180d, label: "FVS" },
+  { from: 0x180e, to: 0x180e, label: "MVS" },
+  { from: 0x180f, to: 0x180f, label: "FVS" },
+  { from: 0x200b, to: 0x200b, label: "ZWSP" },
+  { from: 0x200c, to: 0x200c, label: "ZWNJ" },
+  { from: 0x200d, to: 0x200d, label: "ZWJ" },
+  { from: 0x200e, to: 0x200e, label: "LRM" },
+  { from: 0x200f, to: 0x200f, label: "RLM" },
+  { from: 0xfe00, to: 0xfe0f, label: "VS" },
+  { from: 0xe0100, to: 0xe01ef, label: "VS" },
+];
+
+/** Max origins in the owner's "Own hosts" list on the Keys and models page (BRIDGE §15.3). */
+export const OWN_HOSTS_MAX = 32;
+
+/** Never local, even when the owner lists them: link-local, cloud metadata (AWS IPv6, Alibaba, Oracle, Azure wireserver),
+ *  "this network", unspecified. BRIDGE §15.3 step 3. Pinned by test. */
+export const NEVER_LOCAL = [
+  "169.254.0.0/16",
+  "fe80::/10",
+  "fd00:ec2::254/128",
+  "100.100.100.200/32",
+  "192.0.0.192/32",
+  "168.63.129.16/32",
+  "0.0.0.0/8",
+  "::/128",
+] as const;
+/** Metadata host names that are never local, even when listed (BRIDGE §15.3 step 3). */
+export const NEVER_LOCAL_HOSTNAMES = ["metadata.google.internal", "metadata.goog", "metadata"] as const;
+
+/** Why a binding has its data policy (BRIDGE §15.3/§15.5): `verified` = the bridge checked it from the URL;
+ *  `owner_attested` = the owner said so (every `zdr`, and `local` through the Own hosts list). */
+export const POLICY_BASES = ["verified", "owner_attested"] as const;
+export type PolicyBasis = (typeof POLICY_BASES)[number];
 
 /** MCP resource URI under which the bridge serves the calling agent's persona (BRIDGE §15.6). */
 export const PERSONA_RESOURCE_URI = "tb://agent/persona" as const;

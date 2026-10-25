@@ -41,7 +41,7 @@ import type {
   SemVer,
   SnakeId,
 } from "./manifest.ts";
-import type { DataPolicy, ModelRole } from "./models.ts";
+import type { DataPolicy, ModelRole, PolicyBasis } from "./models.ts";
 
 // ── Common ───────────────────────────────────────────────────────────────────
 /** Compact JWS string (`header.payload.signature`). */
@@ -319,6 +319,30 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
  *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
 export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops"] as const;
+/** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
+ *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
+ *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
+ *  limit (BRIDGE §1.2 S2) keeps pause and revoke deliverable. */
+export const CONFIG_CORE_MAX_BYTES = 3_000_000;
+/** Spec follow-up (QA-SPEC49-13): pairing codes (K2b) of a workspace that are live OR cancelled-but-unexpired (their jti sits
+ *  in `revoked.jtis` until `exp`). Core refuses a new code at this count, so cancellations cannot grow the config past the
+ *  kill-path budget. */
+export const PAIRING_CODES_OPEN_MAX = 100;
+/** Spec follow-up (QA-SPEC49-15, C349): before it signs an owner change, Core also builds the WORST-CASE kill-path config of
+ *  the result — workspace + every agent + every instance paused, every connection revoked, PAIRING_CODES_OPEN_MAX cancelled
+ *  codes, with every app slice re-minted — and refuses the change (`config_too_large`) when that JWS is larger than this.
+ *  Margin to the bridge's 4 MiB (4,194,304) limit. */
+export const CONFIG_KILLPATH_MAX_BYTES = 4_000_000;
+/** C353 (QA-SPEC49-18): the per-slice limit (schema `compactJws` maxLength). Core's worst-case kill-path check (above) also
+ *  requires EVERY re-minted slice to stay at or under it; slices add no bytes on pause (`agents[].status`), so the check is
+ *  about the slice's normal content (edge-agent directory, companion grants). */
+export const SLICE_JWS_MAX_CHARS = 65_536;
+/** QA-SPEC49-22, C356 / QA-SPEC49-27: owner changes keep every worst-case slice at or under this, so the automatic,
+ *  never-refused growth always fits under SLICE_JWS_MAX_CHARS even at the schema maxima: Portal key set (`portalKeys` ≤ 8,
+ *  `portalKeySet` ≤ 4,096), bridge key rotation (`bridge.keys` ≤ 4), the origins `bridge.publicUrl` / `bridge.viewUrl` /
+ *  `portalUrl` (≤ 267 each, no path), `bridge.caps` ≤ 16, `appCallers`, `prd` / `provider` labels. Measured worst growth
+ *  ≈ 11.4k chars; reserve 13.5k. Pause/revoke stay deliverable. */
+export const SLICE_CORE_MAX_CHARS = 52_000;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
@@ -372,8 +396,10 @@ export interface StatusReport {
   /** v0.1.63 (BRIDGE §15.5): one row per declared role per instance — labels only, never a base URL, key name or key value.
    *  `set` = a binding resolves for it; `policyOk` = that binding meets the declared `minPolicy`. Absent (older bridge) = unknown. */
   roles?: ModelRoleStatus[];
-  /** display-only, ≤ 80 chars, no third-party identifiers */
-  scopeSummaries: { agt: AgentId; ins: InstanceId; label: string }[];
+  /** display-only, ≤ 80 chars, no third-party identifiers. v0.1.65 (C331 D8): `sources` = the app's ScopeSummaryResult.sources,
+   *  forwarded as given (≤ SCOPE_SOURCES_MAX, each label ≤ SCOPE_SOURCE_LABEL_MAX; a malformed item is dropped, never repaired);
+   *  absent when the app's SDK does not report them. */
+  scopeSummaries: { agt: AgentId; ins: InstanceId; label: string; sources?: ScopeSourceItem[] }[];
   connectionsCreated: { con: ConnectionId; agt: AgentId; method: "pairing"; clientName: string; createdAt: IsoTime; pairingJti: Ulid }[];
   connectionsRevoked: { con: ConnectionId; reason: "refresh_reuse" | "client_revoke" }[];
   claims: ClaimRecord[];
@@ -381,7 +407,8 @@ export interface StatusReport {
    *  v0.1.25 (C117): kind `config` + code `hook_not_listed` (+ `ins` of the hook app) = a matching declared hook missing from config.hooks (call refused).
    *  v0.1.14 (L3): `bridge_op` = a failed catalog / resolve / mark / scope_summary call to an app (code = the app's refusal or transport error).
    *  v0.1.17 (L3, C104): `manifest` = an app manifest the bridge refused (code = the refusal, e.g. `manifest_mismatch`, a validator code, `bridge_too_old`)
-   *  v0.1.63: kind `config` + code `persona_too_long` = an agent persona over PERSONA_MAX_CHARS, dropped for that agent (BRIDGE §15.6) */
+   *  v0.1.63: kind `config` + code `persona_too_long` = an agent persona over PERSONA_MAX_CHARS, dropped for that agent (BRIDGE §15.6);
+   *  spec follow-up #49: code `persona_invalid` = a persona that does not match PERSONA_PATTERN, dropped the same way */
   rejected: {
     kind: "config" | "grant" | "slice" | "assertion" | "ticket" | "pairing" | "claim" | "bridge_op" | "manifest";
     code: BridgeErrorCode | string;
@@ -480,7 +507,23 @@ export interface BridgeOpBodies {
 }
 /** v0.1.50 (C283 A1): `admittedOps` = this agent's STATIC ops with a scopeType whose crud an owner-set primary row admits
  *  (possibly above grant.crud); the bridge lists those tools too. Display only (the SDK authorizes each call). */
-export interface ScopeSummaryResult { agent: AgentId; label: string; admittedOps?: string[] }
+export interface ScopeSummaryResult {
+  agent: AgentId;
+  label: string;
+  admittedOps?: string[];
+  /** v0.1.65 (C331 D8): the scope instances this agent is assigned (display only, ≤ SCOPE_SOURCES_MAX). Absent = the SDK does not
+   *  report sources; [] = the agent has no assignment. */
+  sources?: ScopeSourceItem[];
+}
+/** v0.1.65 (C331 D8): one scope instance an agent may use, as the app's owner UI names it (a Connect account, a Knowledge area).
+ *  `id` = the app's OWN scope instance id (ScopeInstance.id, e.g. Connect `cna_…`), never a provider's id (no Stripe, Slack or
+ *  Google id). `label` = the scope instance label (≤ 60) with control characters and every format character (`\p{Cc}`,
+ *  `\p{Cf}`: zero-width, bidi marks) removed by the SDK and again by Core; apps never use a third-party identifier (an email
+ *  address, a phone number, a handle) as an instance label they create (the owner may type one). `access` = an access level id of
+ *  that scope type. Display only: Core shows it on the canvas; the SDK authorizes every call. */
+export interface ScopeSourceItem { type: SnakeId; id: string; label: string; access: SnakeId }
+export const SCOPE_SOURCES_MAX = 20;
+export const SCOPE_SOURCE_LABEL_MAX = 60;
 
 // ── MCP surface (BRIDGE §7) ──────────────────────────────────────────────────
 export const TOOL_NAME_RULE = {
@@ -834,6 +877,8 @@ export interface ModelRoleStatus {
   provider: string | null;
   model: string | null;
   dataPolicy: DataPolicy | null;
+  /** spec follow-up (QA-SPEC49-2): absent when unset; GUI shows `owner_attested` local as "local (owner-listed, not verified)" */
+  policyBasis?: PolicyBasis;
 }
 /** v0.1.63 (BRIDGE §15.4): `GET /tb/v1/model-roles/<role>` with `TB-Assert`; `Cache-Control: no-store`. */
 export interface ModelRoleFetchResponse {
