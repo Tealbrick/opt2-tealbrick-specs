@@ -171,3 +171,8 @@ test("v0.1.69: new-sign-in bounds are exact; machine labels are bounded (QA-SPEC
   assert.equal(NEW_SIGN_IN.windowDays, 30);
   assert.equal(DEVICE_FLOW.machineLabelMax, 64);
 });
+
+test("v0.1.69 (C354): app capabilities are a closed list; person_op is declared by the app, not inferred from a version", async () => {
+  const { APP_CAPS } = await import("../src/bridge.ts");
+  assert.deepEqual([...APP_CAPS], ["person_op"]);
+});

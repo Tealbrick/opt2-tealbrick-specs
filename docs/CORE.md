@@ -7,6 +7,7 @@ Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG
 - CREDENTIALS §3: K14 leeway exception written into the common token rule; S-PO-7 / S-PO-9 sharpened (QA-SPEC43-7).
 - Relay: untaken rows → 502 `not_delivered`; the bridge cuts oversize answers itself (findings from the Core and bridge builds).
 - Tests pin the relay result shapes, push texts, the allow-list snapshot and the required idempotency key (QA-SPEC43-4).
+- App capabilities `APP_CAPS` (`person_op`) on `ClaimRequest` / `AppStatus` (C354: gates by capability, never by version).
 
 ## Changelog → v0.1.64 (C326, C332, C332a: Teal Brick Mobile; additive)
 - Owner client `tbm` (scope owner only; stored client `tbm`; 7-day idle like `tbd`). `OWNER_SESSION_CLIENTS`, `DEVICE_FLOW` lists, `DeviceStartOwnerInput`.
