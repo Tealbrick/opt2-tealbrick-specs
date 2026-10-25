@@ -218,7 +218,7 @@ Settings are non-secret values chosen at deploy (and later, if `mutable`). Core 
 | M-MR-1 | `role` in `MODEL_ROLES`; one entry per role per manifest → `model_role_invalid`. |
 | M-MR-2 | `minPolicy` in `DATA_POLICIES` → `model_role_invalid`. |
 | M-MR-3 | `usedBy` items are `app` or declared service ids → `model_role_invalid`. |
-| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service → `model_role_invalid`. |
+| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service; no name in `MODEL_ROLE_DENIED_ENV` (the host deny list `HOST_DENIED_ENV` — code loading, library injection, egress — plus `NODE_TLS_REJECT_UNAUTHORIZED`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `NPM_CONFIG_*`, `PYTHON*`, `GIT_*`; prefixes end with `*`) and no name ending in `_PROXY` (sdk#52 QA S4-3, QA-SPEC54-4: such a name would re-add a proxy, a loader or a TLS-trust change with a role value after `tb-exec` stripped it) → `model_role_invalid`. |
 | M-MR-5 | `when` as for keys (M-ST-3) → `condition_invalid`. |
 
 ## 8. Hooks
@@ -245,7 +245,7 @@ Hooks match only `agent`-audience manifest operations reached through the bridge
 
 - `companions[] {product, operations, crud, purpose}`: app→app needs. For each entry Core mints the ONE grant (K10) with `sub = tb:ins:<this>`, `aud = tb:ins:<target>`, `crud = crud`, `mode = bound`, `wf = operations` (CORE I8), once both apps are deployed in the workspace (licence rule per CORE §6). `purpose` is shown on the canvas.
 - `unlocks[] {id, title, requires, provides {operations?, skills?}}`: features of THIS app that exist only when the companion product `requires` is deployed in the same workspace. The bridge hides the listed operations from MCP lists and Core leaves the listed skills out of the bundle until then. Unlocks are never licence features: the licence gates only Portal management in Core (deploy, grants, launch, updates); an app behaves the same licensed, unlicensed or self-hosted. No manifest field expresses "licence-only features".
-- `needsAgentDirectory` (default false): the instance slice lists all workspace agents, not only those with an edge (CORE §13).
+- `needsAgentDirectory` (default false): the instance slice lists all workspace agents, not only those with an edge (CORE §13). QA-SPEC49-26: an agent WITHOUT an edge to the app carries `edge: false` in that slice (absent = has an edge), so the app can tell a directory entry from a caller.
 
 | Rule | Check |
 |---|---|
