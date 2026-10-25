@@ -2,6 +2,13 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.70 (QA-SPEC43-6, -7, -4; additive)
+- `AccountMe.newSignIns` + `NEW_SIGN_IN` + browser row `owner_sessions.ack_new_sign_ins {osns}` (per-session acknowledgement of exactly the shown ids, QA-SPEC51-1; audit `owner_session.sign_in_ack`): a Portal banner for every new `tbm` sign-in with Revoke / It was me (QA-SPEC43-6).
+- CREDENTIALS §3: K14 leeway exception written into the common token rule; S-PO-7 / S-PO-9 sharpened (QA-SPEC43-7).
+- Relay: untaken rows → 502 `not_delivered`; the bridge cuts oversize answers itself (findings from the Core and bridge builds).
+- Tests pin the relay result shapes, push texts, the allow-list snapshot and the required idempotency key (QA-SPEC43-4).
+- App capabilities `APP_CAPS` (`person_op`) on `ClaimRequest` / `AppStatus` (C354: gates by capability, never by version).
+
 ## Changelog → v0.1.69 (C356: model-role follow-up after specs#49; number taken at merge time, C340)
 - QA-SPEC49-27: slice URLs (`bridge.publicUrl`, `bridge.viewUrl`, `portalUrl`) are `httpsOrigin` (no path, ≤ 267); `portalKeySet` ≤ 4,096; `SLICE_CORE_MAX_CHARS` 52,000 (reserve 13.5k ≥ the measured worst automatic growth).
 - QA-SPEC49-28/-29: persona — no variation selector directly after a marker (closes `VS ZWJ VS` payloads); test rows U+0008/U+001B, a full Cc sweep (allowed ⇔ TAB/LF), printable ASCII + NBSP accepted.
