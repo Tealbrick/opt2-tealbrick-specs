@@ -9,4 +9,4 @@ export * as manifest from "./manifest.ts";
 export * as models from "./models.ts";
 export * as routes from "./routes.ts";
 export * as sdk from "./sdk.ts";
-export const SPEC_VERSION = "0.1.73" as const;
+export const SPEC_VERSION = "0.1.75" as const;

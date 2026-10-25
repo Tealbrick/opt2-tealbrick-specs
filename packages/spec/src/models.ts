@@ -1,3 +1,5 @@
+import { HOST_DENIED_ENV } from "./host.ts";
+
 // Model roles, data policies and compatible providers (v0.1.63, C322(3), C330(4)). Data only.
 // MANIFEST §7.1 (modelRoles), BRIDGE §15 (workspace role registry), PORTAL-API §4.7 (persona, role status).
 
@@ -102,6 +104,15 @@ export const MANIFEST_NAME_PATTERN = `^[^${INVISIBLE_CHAR_CLASS}]+$` as const;
  *  as serialized JSON (without the quotes); Core cuts it at a code-point boundary, never inside an escape, and counts every
  *  caller name at exactly this size in its measured worst-case slice. */
 export const CALLER_NAME_MAX_JSON_BYTES = 80;
+
+/** QA-SPEC54-4 / sdk#52 S4-3: env names a model role may NOT fill (MANIFEST M-MR-4) — the host deny list (code loading,
+ *  library injection, egress) plus TLS trust and package-manager config. Prefixes end with "*"; besides these, any name
+ *  ending in `_PROXY` is refused. Role values are canonical origins, model ids, numbers and keys, so the reachable harm is
+ *  egress routing and TLS trust (e.g. a model id "0" in NODE_TLS_REJECT_UNAUTHORIZED). */
+export const MODEL_ROLE_DENIED_ENV = [
+  ...HOST_DENIED_ENV,
+  "NODE_TLS_REJECT_UNAUTHORIZED", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "NPM_CONFIG_*", "PYTHON*", "GIT_*",
+] as const;
 export const PERSONA_PATTERN =
   `^(?![\\s\\S]*[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u{110BD}\\u{110CD}\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}][\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}])(?:[\\t\\n]|[\\u00AD\\u034F\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890\\u0891\\u08E2\\u{110BD}\\u{110CD}\\u180B-\\u180F\\u200B-\\u200F\\uFE00-\\uFE0F\\u{E0100}-\\u{E01EF}]|(?![${INVISIBLE_CHAR_CLASS}])[\\s\\S])*$` as const;
 

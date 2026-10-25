@@ -753,6 +753,24 @@ export interface RulesNarrowingV1 {
   };
 }
 
+/** v0.1.68 (C336 RQ-2, SDK-API §18.5): written instead of V1 exactly when `deepDatasets` is present, so a reader without
+ *  dataset narrowing refuses it (`narrowing_unsupported`, unknown `v`) instead of answering unfiltered. */
+export interface RulesNarrowingV2 {
+  v: 2;
+  ruleId: string;
+  reason: string;
+  memoryTags?: RulesNarrowingV1["memoryTags"];
+  /** Canonical dataset ids as the data app lists them; exact, case-sensitive. `anyOf` present but EMPTY = nothing passes;
+   *  a read that names no dataset reads every dataset in scope (§18.5 rule 4). Each list ≤ 64 ids of 1–128 chars. */
+  deepDatasets?: {
+    anyOf?: string[];
+    noneOf?: string[];
+  };
+}
+export type RulesNarrowing = RulesNarrowingV1 | RulesNarrowingV2;
+/** v0.1.68: refusal codes of `secretOutput` ops (SDK-API v0.1.68). */
+export type SecretOutputRefusalCode = "secret_output_app_only" | "secret_output_not_schedulable";
+
 /** Person only (tb.holds_decide). */
 export interface HoldDecideInput {
   holdId: `hld_${Ulid}`;

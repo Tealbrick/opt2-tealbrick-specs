@@ -121,7 +121,8 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | `receipt` | `true` → the SDK writes a receipt for every executed call (inputDigest + app-redacted summary, never raw bodies). |
 | `audience` | `agent` → reachable through the bridge (MCP, relay, app→app), becomes an MCP tool. `person` → only from the app UI in a person session (launch ticket); never an MCP tool, never hooked, never a companion target. |
 | `dynamic?` | Dynamic tool family (§5.3). |
-| `listing?` | Agent ops only. Absent or `default` = listed in tools/list. `workflow` (v0.1.43, M-OP-11) = listed and callable only when the grant's `wf` names it. `lazy` (v0.1.73, §5.5) = callable as `default`, served through the product's `tb_more_search` / `tb_more_call` pair instead of the list. |
+| `listing?` | Agent ops only. Absent or `default` = listed in tools/list. `workflow` (v0.1.43, M-OP-11) = listed and callable only when the grant's `wf` names it. `lazy` (v0.1.75, §5.5) = callable as `default`, served through the product's `tb_more_search` / `tb_more_call` pair instead of the list. |
+| `secretOutput?` | v0.1.68 (C336 RQ-3, S-8): `true` = the output carries a secret (e.g. a short-lived credential). See M-OP-12. |
 
 ### 5.2 Rules
 | Rule | Check |
@@ -135,8 +136,9 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-OP-7 | `scopeType` names a declared scope; the union of that scope's `access[].crud` ⊇ `op.crud` → `scope_ref_invalid`. |
 | M-OP-8 | Non-dynamic `agent` ops declare `input` and `output`. Embedded schemas: no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType` → `io_schema_invalid`. |
 | M-OP-9 | `audience = person` ⇒ no `dynamic` → `person_dynamic`. |
+| M-OP-12 | v0.1.68: `secretOutput: true` ⇒ `audience = agent` (reached by APP callers through the bridge; agent callers are refused, SDK-API v0.1.68), no `dynamic`, `idempotency = none`, `receipt = true` (input digest + `redact` summary only) → `secret_output_invalid`. The manifest declares `requires.bridgeCaps: ["secret_output"]`. `effect` is the op's own; a credential lease is `read`, so default policy gating does not hold it — its audit is the receipt. |
 | M-OP-10 | `dynamic` ⇒ `crud = ["read"]`, `effect = read`, no `holdFamily`, `idempotency = supported`, `receipt = false`, `audience = agent`, no `input`/`output`; `crudCeiling = ["read"]` ⇒ `effectCeiling = read` → `dynamic_invalid`. |
-| M-OP-13 | (v0.1.73) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic` → `listing_invalid`. A manifest with any lazy op needs a workspace bridge that DECLARES the `lazy_tools` cap (C354: capability gating, never a version): Core refuses the deploy onto a bridge without it (409 `bridge_cap_missing`, `details.cap: "lazy_tools"`) and such a bridge refuses the registration (BRIDGE §7.5). No `requires.bridge` value is derived from it. |
+| M-OP-13 | (v0.1.75) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic` → `listing_invalid`. A manifest with any lazy op needs a workspace bridge that DECLARES the `lazy_tools` cap (C354: capability gating, never a version): Core refuses the deploy onto a bridge without it (409 `bridge_cap_missing`, `details.cap: "lazy_tools"`) and such a bridge refuses the registration (BRIDGE §7.5). No `requires.bridge` value is derived from it. |
 
 ### 5.3 Dynamic operations (the engine-tool gap)
 Some apps expose tool sets that are not known at build time: an engine with ~100 native operations that depend on the chosen engine version, or a connector catalog with thousands of third-party tools. Listing each as a manifest operation is impossible; one generic "call anything" operation would hide each tool's CRUD class and effect. A dynamic operation closes the gap with one mechanism (CORE §13):
@@ -163,13 +165,13 @@ Some apps expose tool sets that are not known at build time: an engine with ~100
 
 Input/output shapes: SDK-API §6. The canvas scope summary is not a standard op: the bridge fetches it with the bridge op `POST /tb/v1/bridge/scope-summary` (≤ 80-char label per agent, no third-party identifiers) for its status report. `tb.hold_status` needs only a valid grant; agent edges need not include `read` (CORE I4); it returns only the caller's own holds and writes no receipt. Reserved: the `tb.` namespace (including the bridge-served read tool `<product>__tb_skills`, BRIDGE) and the `tb_` prefix for operation, hook, scope, step, setting, volume, unlock and artifact ids; `tb-` for service and skill ids; `TB_`/`RAILWAY_` env and key names; the `/tb/` path prefix inside the app (ui paths, public routes, helper paths). The schema enforces these patterns.
 
-### 5.5 Lazy listing (v0.1.73; C330(1), M4b)
+### 5.5 Lazy listing (v0.1.75; C330(1), M4b)
 An app with many agent ops keeps the most used ones in tools/list ("hot") and marks the rest `listing: "lazy"`. The agent finds a lazy op with `<product>__tb_more_search` and calls it with `<product>__tb_more_call` or by its own name (BRIDGE §7.5).
 - Display only. Visibility, `gate()`, `authorize()`, hooks, holds, receipts, idempotency and events are exactly those of the same op with `listing` absent. An agent whose grants do not make the op visible cannot find or call it.
 - Static agent ops only (M-OP-13). A dynamic family is already one search away (§5.3).
 - Advisory size: ≤ 8 hot agent ops per product (with `tb_hold_status`, `tb_skills` and the pair, about ten tools). Not enforced.
 - Write the op `description` for search: the words an agent would use to look for it.
-- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.73 and a workspace bridge that declares `lazy_tools` (M-OP-13). A bridge without the cap has no fallback, so it refuses the registration and Core refuses the deploy (409 `bridge_cap_missing`); the gate is the capability, never a bridge version.
+- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.75 and a workspace bridge that declares `lazy_tools` (M-OP-13). A bridge without the cap has no fallback, so it refuses the registration and Core refuses the deploy (409 `bridge_cap_missing`); the gate is the capability, never a bridge version.
 
 ## 6. Scopes
 
@@ -188,6 +190,7 @@ A scope type is an app-declared sub-resource for grants (Connect: accounts; Know
 | M-SC-1 | Types unique; access ids unique within a type → `scope_duplicate`. |
 | M-SC-2 | `defaultGrants[].access` names an access id of the same scope; kinds unique within a scope → `default_grant_invalid`. |
 | M-SC-3 | `summaryTemplate` uses only the listed variables with declared access ids → `template_invalid`. |
+| M-SC-6 | v0.1.68 (RQ-4): an app MAY declare several scope types. The canvas edge to the app carries the FIRST declared type (primary; Core keeps one `scope_type` per edge); grants on the other types are set on the app's own scope page (`ui.configurePath`). |
 | M-SC-4 | `scopes` non-empty ⇒ `ui.configurePath` present (scopes are edited in the app) → `configure_ui_required`. |
 | M-SC-5 | v0.1.65: `summaryEmpty` is 1–40 chars and holds no `{` or `}` (no variables) → `template_invalid`. |
 
@@ -225,7 +228,7 @@ Settings are non-secret values chosen at deploy (and later, if `mutable`). Core 
 | M-MR-1 | `role` in `MODEL_ROLES`; one entry per role per manifest → `model_role_invalid`. |
 | M-MR-2 | `minPolicy` in `DATA_POLICIES` → `model_role_invalid`. |
 | M-MR-3 | `usedBy` items are `app` or declared service ids → `model_role_invalid`. |
-| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service → `model_role_invalid`. |
+| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service; no name in `MODEL_ROLE_DENIED_ENV` (the host deny list `HOST_DENIED_ENV` — code loading, library injection, egress — plus `NODE_TLS_REJECT_UNAUTHORIZED`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `NPM_CONFIG_*`, `PYTHON*`, `GIT_*`; prefixes end with `*`) and no name ending in `_PROXY` (sdk#52 QA S4-3, QA-SPEC54-4: such a name would re-add a proxy, a loader or a TLS-trust change with a role value after `tb-exec` stripped it) → `model_role_invalid`. |
 | M-MR-5 | `when` as for keys (M-ST-3) → `condition_invalid`. |
 
 ## 8. Hooks
@@ -252,7 +255,7 @@ Hooks match only `agent`-audience manifest operations reached through the bridge
 
 - `companions[] {product, operations, crud, purpose}`: app→app needs. For each entry Core mints the ONE grant (K10) with `sub = tb:ins:<this>`, `aud = tb:ins:<target>`, `crud = crud`, `mode = bound`, `wf = operations` (CORE I8), once both apps are deployed in the workspace (licence rule per CORE §6). `purpose` is shown on the canvas.
 - `unlocks[] {id, title, requires, provides {operations?, skills?}}`: features of THIS app that exist only when the companion product `requires` is deployed in the same workspace. The bridge hides the listed operations from MCP lists and Core leaves the listed skills out of the bundle until then. Unlocks are never licence features: the licence gates only Portal management in Core (deploy, grants, launch, updates); an app behaves the same licensed, unlicensed or self-hosted. No manifest field expresses "licence-only features".
-- `needsAgentDirectory` (default false): the instance slice lists all workspace agents, not only those with an edge (CORE §13).
+- `needsAgentDirectory` (default false): the instance slice lists all workspace agents, not only those with an edge (CORE §13). QA-SPEC49-26: an agent WITHOUT an edge to the app carries `edge: false` in that slice (absent = has an edge), so the app can tell a directory entry from a caller.
 
 | Rule | Check |
 |---|---|
@@ -368,6 +371,7 @@ None. v0.1 review items applied: S6 (§7), S8 + N6 (§10, §13), N1 (§2, §5.4)
 - §12: `ui.configurePath` stays optional; Core's catalog exposes `hasUi` (Open) separately from `hasConfigureUi` (configure screen).
 
 ## v0.1.15 additions (C104, queued)
+- v0.1.68 (C354): `requires.bridgeCaps?: string[]` — the bridge capabilities (BRIDGE_CAPS) the release needs, e.g. `secret_output`, `hook_tool`, `lazy_tools`, `model_roles`. Core refuses to deploy the release onto a workspace bridge whose declared caps lack one (`bridge_cap_missing`, `details.cap`). Feature gates use capabilities, never bridge version numbers: versions are assigned at merge time (C352), so no package hard-codes "the first bridge version with X". A manifest with a `secretOutput` op MUST list `secret_output` (validator: `secret_output_invalid`).
 - `requires {bridge?: semver}` (optional): the minimum workspace bridge version for features the validator cannot see (a before hook that answers `hold` needs ≥ 0.1.17 — DECLARED by such apps; "any before hook → 0.1.17" was rejected as too strict: an older bridge treats a hold answer as an invalid hook answer → refuse, fail closed, so the declaration is about the feature, not safety). The release signer records `requires.bridge` = max(this, the feature table of `requiredBridgeVersion`): dynamic ops ≥ 0.1.15 (C91 catalog binding), wildcard companion or `tb.holds_pending` as a companion op ≥ 0.1.16. One function in @opt2-tealbrick/manifest; the signer and Core never keep their own table (L1).
 
 ## v0.1.16 additions (C107)

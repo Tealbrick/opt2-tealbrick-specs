@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { BRIDGE_CAPS, type BridgeErrorCode, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_DENIED_ENV, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -347,4 +347,47 @@ test("C353: persona markers are exactly the allowed invisible script characters;
 test("QA-SPEC55-1: MANIFEST_NAME_PATTERN equals the manifest schema pattern and reuses INVISIBLE_CHAR_CLASS", () => {
   assert.equal(load("manifest.schema.json").properties.name.pattern, MANIFEST_NAME_PATTERN);
   assert.ok(MANIFEST_NAME_PATTERN.includes(INVISIBLE_CHAR_CLASS));
+});
+
+test("QA-SPEC49-26: a directory slice may mark an agent without an edge as edge: false (only false)", () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of ["workspace-config.schema.json", "instance-slice.schema.json"]) ajv.addSchema(load(f));
+  const slice = load("instance-slice.schema.json");
+  const item = ajv.compile({ $id: "https://spec.opt2.tealbrick.com/t-edge.json", ...slice.properties.agents.items });
+  const a = { id: "agt_01JA0000000000000000000001", name: "Scout", mode: "free", status: "active" };
+  assert.equal(item(a), true, JSON.stringify(item.errors));
+  assert.equal(item({ ...a, edge: false }), true, JSON.stringify(item.errors));
+  assert.equal(item({ ...a, edge: true }), false);
+});
+
+test("QA-SPEC54-5: slice agent items — status stays required with edge:false, no extra fields, ≤ 500; bad_request is a bridge code", () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of ["workspace-config.schema.json", "instance-slice.schema.json"]) ajv.addSchema(load(f));
+  const slice = load("instance-slice.schema.json");
+  const item = ajv.compile({ $id: "https://spec.opt2.tealbrick.com/t-edge54.json", ...slice.properties.agents.items });
+  const a = { id: "agt_01JA0000000000000000000001", name: "Scout", mode: "free" };
+  assert.equal(item({ ...a, edge: false }), false, "status missing");
+  assert.equal(item({ ...a, status: "paused", edge: false }), true, JSON.stringify(item.errors));
+  assert.equal(item({ ...a, status: "active", edge: false, extra: 1 }), false);
+  assert.equal(slice.properties.agents.maxItems, 500);
+  const code: BridgeErrorCode = "bad_request";
+  assert.equal(code, "bad_request");
+});
+
+test("QA-SPEC54-4: every M-MR-4 fixture env name is a valid env name and is denied (MODEL_ROLE_DENIED_ENV or *_PROXY)", () => {
+  const envName = new RegExp(load("manifest.schema.json").$defs.envName.pattern);
+  const denied = (n: string) =>
+    /_PROXY$/i.test(n) || MODEL_ROLE_DENIED_ENV.some((d) => (d.endsWith("*") ? n.startsWith(d.slice(0, -1)) : n === d));
+  const fx = JSON.parse(readFileSync(new URL("../examples/model-roles.invalid.json", import.meta.url), "utf8"));
+  const names = fx.cases
+    .filter((c: { rule: string }) => c.rule === "M-MR-4")
+    .flatMap((c: { modelRoles: { env?: Record<string, string> }[] }) => c.modelRoles.flatMap((r) => Object.values(r.env ?? {})))
+    .filter((n: string) => denied(n) || /PROXY|NODE_|LD_|PYTHON|NPM_CONFIG|GIT_/.test(n));
+  assert.ok(names.length >= 8, String(names.length));
+  for (const n of names) {
+    assert.match(n, envName, n);
+    assert.ok(denied(n), n);
+  }
+  for (const n of ["NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "NPM_CONFIG_NOPROXY", "PYTHONPATH", "LD_AUDIT", "GIT_SSH_COMMAND", "BASH_ENV"]) assert.ok(denied(n), n);
+  for (const n of ["KN_EMBEDDINGS_MODEL", "OPENAI_API_KEY", "ENGINE_MODEL"]) assert.ok(!denied(n), n);
 });

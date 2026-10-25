@@ -58,7 +58,7 @@
     "settings": { "$ref": "#/$defs/settings" },
     "hooks": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/hook" } },
     "companions": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/companion" } },
-    "requires": { "type": "object", "additionalProperties": false, "properties": { "bridge": { "$ref": "#/$defs/semver" } } },
+    "requires": { "type": "object", "additionalProperties": false, "properties": { "bridge": { "$ref": "#/$defs/semver" }, "bridgeCaps": { "type": "array", "uniqueItems": true, "maxItems": 16, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,31}$" }, "description": "v0.1.68 (C354): bridge capabilities the release needs; Core refuses a bridge without each (bridge_cap_missing). Never inferred from a version." } } },
     "needsAgentDirectory": { "type": "boolean", "default": false },
     "skills": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/skill" } },
     "harnessHints": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/harnessHint" } },
@@ -260,6 +260,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "title", "description", "crud", "effect", "idempotency", "receipt", "audience"],
+      "if": { "required": ["secretOutput"] },
+      "then": {
+        "description": "v0.1.68 M-OP-12: a secretOutput op is an agent-audience op reached by app callers, not dynamic, idempotency none, receipt true.",
+        "properties": { "audience": { "const": "agent" }, "idempotency": { "const": "none" }, "receipt": { "const": true } },
+        "not": { "required": ["dynamic"] }
+      },
       "properties": {
         "id": { "$ref": "#/$defs/snakeId" },
         "title": { "type": "string", "minLength": 1, "maxLength": 60 },
@@ -273,7 +279,8 @@
         "idempotency": { "enum": ["required", "supported", "none"] },
         "receipt": { "type": "boolean" },
         "audience": { "enum": ["agent", "person"] },
-        "listing": { "enum": ["default", "workflow", "lazy"], "description": "v0.1.43 (LR-1): agent ops only; workflow = listed and callable only when the grant wf names the op. v0.1.73 (C330(1)): lazy = static agent op left out of tools/list and served through <product>__tb_more_search / <product>__tb_more_call (BRIDGE 7.5)." },
+        "listing": { "enum": ["default", "workflow", "lazy"], "description": "v0.1.43 (LR-1): agent ops only; workflow = listed and callable only when the grant wf names the op. v0.1.75 (C330(1)): lazy = static agent op left out of tools/list and served through <product>__tb_more_search / <product>__tb_more_call (BRIDGE 7.5)." },
+        "secretOutput": { "const": true, "description": "v0.1.68 (C336 RQ-3, S-8, M-OP-12): the output carries a secret; app callers only, never stored, logged, replayed or given to after hooks. Requires audience agent, no dynamic, idempotency none, receipt true." },
         "dynamic": { "$ref": "#/$defs/dynamic" }
       }
     },

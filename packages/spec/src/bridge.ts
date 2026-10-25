@@ -99,6 +99,12 @@ export type BridgeErrorCode =
   | "manifest_mismatch"
   | "key_not_declared"
   | "key_not_set"
+  /** malformed percent-encoding in a key or role path, after authentication (BRIDGE §9.4 / §15.4, QA-SPEC49-31) */
+  | "bad_request"
+  /** v0.1.75 (BRIDGE §7.5, C354): a manifest needs a capability this bridge does not declare (`lazy_tools`): refused registration */
+  | "bridge_cap_missing"
+  /** v0.1.75 (BRIDGE §7.5 rule (b)): tb_more_call names an op wider than the hints this session last listed; re-list tools */
+  | "tools_stale"
   /** v0.1.63 (C330(4), BRIDGE §15.4): model-role resolve refusals */
   | "role_not_declared"
   | "role_not_set"
@@ -258,7 +264,8 @@ export interface InstanceSlice extends SliceClaims {
   /** companion grants this app presents as `TB-Grant` (K10 compact JWS) */
   grants: CompactJws[];
   /** v0.1.18 (C106a): `scopeRequest` = the channel the owner chose at adopt for an edge with scopeType "channel" (Connect tethers it) */
-  agents: { id: AgentId; name: string; mode: AgentMode; status: "active" | "paused"; scopeRequest?: ScopeRequest }[];
+  /** QA-SPEC49-26: `edge: false` only in a needsAgentDirectory slice, on an agent without an edge to this app (absent = edge). */
+  agents: { id: AgentId; name: string; mode: AgentMode; status: "active" | "paused"; edge?: false; scopeRequest?: ScopeRequest }[];
   standalone?: StandaloneState;
   /** v0.1.13 (C86): the Portal GUI origin (`https://…`, no path); apps build owner links (`/w/<ws>/open?product=&path=`) */
   portalUrl?: string;
@@ -315,13 +322,13 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.54 (C292): capabilities a bridge can declare (StatusReport.bridge.caps → slice.bridge.caps → ctx.bridgeCaps).
  *  v0.1.57 (C274c/C274d): + `events` = the bridge implements BRIDGE §14 in full (ingest, per-agent log, delivery on /mcp).
  *  A bridge declares it only together with `owner_rows` (scoped events use the owner-row rule).
- *  v0.1.73 (C330(1), M4b): + `lazy_tools` = the bridge implements BRIDGE §7.5 (lazy ops left out of tools/list, the
+ *  v0.1.75 (C330(1), M4b): + `lazy_tools` = the bridge implements BRIDGE §7.5 (lazy ops left out of tools/list, the
  *  `<product>__tb_more_search` / `<product>__tb_more_call` pair) and its validator accepts `listing: "lazy"`. */
 /** v0.1.63 (C330(4), QA-SPEC42-1): + `model_roles` = the bridge implements BRIDGE §15 in full (S11 bindings, Keys and models
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
  *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
  *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "lazy_tools"] as const;
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "lazy_tools"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -459,7 +466,9 @@ export interface HookCallInfo {
    *  config (never from input or a manifest name); a policy app matches "calls from product X" on it, since an instance id
    *  changes on reinstall. Absent for agents, and for a caller the bridge cannot map (then treat it as unverified). */
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId };
-  target: { instance: InstanceId; product: ProductId; op: SnakeId; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
+  /** v0.1.68 (C336 RQ-2, cap `hook_tool`): `tool` = `DynamicResolution.tool` of a dynamic call (`crud`/`effect`/`holdFamily` are then
+   *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
+  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
   input?: JsonValue;
 }
 export interface HookRequestBase<P extends HookPhase> {
@@ -540,7 +549,7 @@ export const TOOL_NAME_RULE = {
   skillsOp: "tb_skills",
   searchSuffix: "_search",
   callSuffix: "_call",
-  /** v0.1.73 (BRIDGE §7.5): the per-product pair that serves `listing: "lazy"` ops; `tb_` cannot collide with an op id (M-OP-1) */
+  /** v0.1.75 (BRIDGE §7.5): the per-product pair that serves `listing: "lazy"` ops; `tb_` cannot collide with an op id (M-OP-1) */
   moreSearchOp: "tb_more_search",
   moreCallOp: "tb_more_call",
   idempotencyMetaKey: "tealbrick/idempotencyKey", // gitleaks:allow (MCP _meta key name, not a secret)
@@ -549,7 +558,7 @@ export const TOOL_NAME_RULE = {
   skillUriPrefix: "tealbrick://skills/",
 } as const;
 /** `<product>__<op>`, `<product>__<op>_search|_call`, `<product>__<dynamic list entry>`, `<product>__tb_hold_status`,
- *  `<product>__tb_more_search|tb_more_call` (v0.1.73). */
+ *  `<product>__tb_more_search|tb_more_call` (v0.1.75). */
 export type ToolName = `${ProductId}__${string}`;
 export type ParsedToolName =
   | { kind: "op"; product: ProductId; op: SnakeId }
@@ -559,9 +568,9 @@ export type ParsedToolName =
   | { kind: "hold_status"; product: ProductId }
   /** bridge-answered fallback read tool (C16 S10) */
   | { kind: "skills"; product: ProductId }
-  /** v0.1.73 (BRIDGE §7.5): bridge-answered search over this agent's lazy ops of the product */
+  /** v0.1.75 (BRIDGE §7.5): bridge-answered search over this agent's lazy ops of the product */
   | { kind: "more_search"; product: ProductId }
-  /** v0.1.73 (BRIDGE §7.5): one static op of the product, routed exactly as a direct call of that op */
+  /** v0.1.75 (BRIDGE §7.5): one static op of the product, routed exactly as a direct call of that op */
   | { kind: "more_call"; product: ProductId };
 export type SkillResourceUri = `tealbrick://skills/${ProductId}/${string}`;
 /** `structuredContent` of a held tool result (not an error). */
@@ -573,7 +582,7 @@ export interface HeldToolResult {
 }
 export interface HoldStatusToolInput { holdId: string }
 export interface SkillsToolInput { skillId?: string }
-/** v0.1.73 (BRIDGE §7.5): input of `<product>__tb_more_search` (= the dynamic search input; `query` "*" = every lazy op). */
+/** v0.1.75 (BRIDGE §7.5): input of `<product>__tb_more_search` (= the dynamic search input; `query` "*" = every lazy op). */
 export type MoreSearchInput = DynamicSearchInput;
 /** One hit: the same shape as a dynamic `_search` hit, `tool` = the op's own tool name `<product>__<op>`. */
 export interface MoreSearchHit {
@@ -585,7 +594,7 @@ export interface MoreSearchHit {
 }
 /** `structuredContent` of a `<product>__tb_more_search` result: hits after ranking and `limit`; `total` = matches before `limit`. */
 export interface MoreSearchResult { tools: MoreSearchHit[]; total: number }
-/** v0.1.73: input of `<product>__tb_more_call`. `tool` = `<product>__<op>` (as a hit names it) or the bare op id. */
+/** v0.1.75: input of `<product>__tb_more_call`. `tool` = `<product>__<op>` (as a hit names it) or the bare op id. */
 export interface MoreCallInput { tool: string; arguments: Record<string, unknown> }
 
 // ── OAuth AS (BRIDGE §6) ─────────────────────────────────────────────────────

@@ -171,6 +171,10 @@
               "paused"
             ]
           },
+          "edge": {
+            "const": false,
+            "description": "QA-SPEC49-26: only in a needsAgentDirectory slice, only on an agent WITHOUT an edge to this app (absent = has an edge). The SDK refuses that agent's scheduled ops at fire time with agent_removed."
+          },
           "scopeRequest": {
             "type": "object",
             "additionalProperties": false,
