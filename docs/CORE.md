@@ -2,6 +2,14 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.75 (recipe follow-up: C359c, QA-BRIDGE22-6, QA-SPEC54 S4, RM-15; number taken at merge time, C340)
+- C359c / C359d (QA-CORE63-13, QA-SPEC57-1): a change may skip the size check only if the measured worst case already covers its result; the worst case counts every verb-level edge at its full op list (≤ 128 ids), `held` at 8, and every paused grant as if resumed; limits named (slice 65,536, signed config 4 MiB). RM-24c + an executable sequence model `test/killpath-model.test.ts`.
+- QA-SPEC57 S3: `CONFIG_KILLPATH_MAX_BYTES` is DERIVED (signer limit − 65 × ceil(SLICE_AUTO_GROWTH_CHARS × 4/3), rounded down: 3,197,000, was 4,000,000) with `CONFIG_SIGNER_MAX_BYTES`, `WORKSPACE_INSTANCES_MAX`, `SLICE_AUTO_GROWTH_CHARS` (11,500 ≥ measured 11,343); pinned by tests.
+- `isDeniedRoleEnv()` moved into the package (`models.ts`) so the manifest package and `tb-exec` import one matcher (QA-SPEC57 S4).
+- `ENV_NAME_PATTERN` (manifest envName = config keyName); the bridge keeps only matching key-requirement names (BRIDGE §9.4).
+- `Instance.updatePolicyLowered[] {role, from, to, notice}` typed (RM-15; Core already sends it).
+- Tests: explicit CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE / PYTHONSTARTUP rows, an exported reference matcher `isDeniedRoleEnv` (test module), reserve fixtures asserted to carry `edge: false` and 8 held.
+
 ## Changelog → v0.1.73 (QA-SPEC49-26: scheduled ops after an edge delete; `bad_request` in BridgeErrorCode; number taken at merge time, C340)
 - Config size (core#63 QA): pause/resume are status-only (no grant withdrawal or re-mint); a withdrawal lists every live jti incl. a superseded one; safety tightenings are never refused; deploys/updates are measured with the companions they add. RM-24b.
 - `BridgeErrorCode` gains `bad_request` (BRIDGE §9.4 / §15.4 malformed percent-encoding, specs#55 text; the type was missed in #55).

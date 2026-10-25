@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { SLICE_AUTO_GROWTH_CHARS, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
 import { CALLER_NAME_MAX_JSON_BYTES } from "../src/models.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -146,10 +146,16 @@ test("QA-SPEC55: every accepted slice shape keeps ≥ 1,000 chars to the 65,536 
   }
   for (const s of Object.keys(SCRIPTS)) {
     script = s; // QA-SPEC55-1: caller names in other scripts are cut to the same JSON size, so no script grows the slice
-    const worst = worstShape();
+    // QA-SPEC54 S4: the measured fixtures really carry the worst-case fields
+  const dir = slice(0, 2, "min", 3, 5) as { agents: { edge?: boolean }[]; grants: string[]; appsPolicy: { held: string[] } };
+  assert.ok(dir.agents.length === 3 && dir.agents.every((a) => a.edge === false));
+  assert.equal(dir.appsPolicy.held.length, 8);
+  assert.equal(ALL_HELD.length, 8);
+  const worst = worstShape();
     const margin = SLICE_JWS_MAX_CHARS - (SLICE_CORE_MAX_CHARS + worst.growth);
     assert.ok(worst.growth > 10_000, `${s}: growth ${worst.growth} looks too small: is a field missing?`);
     assert.ok(margin >= 1_000, `${s}: worst shape ${JSON.stringify(worst)}: margin ${margin} < 1,000`);
+    assert.ok(worst.growth <= SLICE_AUTO_GROWTH_CHARS, `${s}: measured growth ${worst.growth} > SLICE_AUTO_GROWTH_CHARS (the config budget assumes it)`);
   }
   script = "ascii";
 });

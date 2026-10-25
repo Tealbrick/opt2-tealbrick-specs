@@ -41,7 +41,7 @@ export const VOLUME_PURPOSES = ["data", "backup"] as const;
 export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as const;
 /** v0.1.43 (LR-1, C234): `workflow` = an agent op that is listed in tools/list and passes gate() ONLY when the grant's `wf`
  *  names it (machine ops). `default` (or absent) = today's rule.
- *  v0.1.75 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
+ *  v0.1.76 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
  *  it out of tools/list and serves it through the product's `<product>__tb_more_search` / `<product>__tb_more_call` pair
  *  (BRIDGE §7.5). Display only: gate(), hooks, holds, receipts and idempotency are the direct call's (MANIFEST §5.5). */
 export const OPERATION_LISTINGS = ["default", "workflow", "lazy"] as const;
@@ -95,6 +95,9 @@ export type SemVer = string;
 export type HttpsUrl = string;
 /** `^(?!TB_|RAILWAY_)[A-Z][A-Z0-9_]{1,63}$`. */
 export type EnvName = string;
+/** The one env / key name pattern (manifest `envName`, workspace-config `keyName`). The bridge keeps only app-key requirement
+ *  names that match it, so a provider-namespace name (`pk:…`) or any other shape is never fetchable (BRIDGE §9.4, QA-BRIDGE22-6). */
+export const ENV_NAME_PATTERN = "^(?!TB_|RAILWAY_)[A-Z][A-Z0-9_]{1,63}$" as const;
 /** A JSON Schema 2020-12 document whose `type` is `"object"`; local `$ref` only. */
 export type JsonSchemaObject = { type: "object"; [keyword: string]: unknown };
 
@@ -263,7 +266,7 @@ export interface Operation {
   audience: OperationAudience;
   dynamic?: DynamicSpec;
   /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on.
-   *  v0.1.75: `lazy` needs a validator that pins spec ≥ 0.1.75 (MANIFEST §5.5, M-OP-13). */
+   *  v0.1.76: `lazy` needs a validator that pins spec ≥ 0.1.76 (MANIFEST §5.5, M-OP-13). */
   listing?: OperationListing;
   /** v0.1.68 (C336 RQ-3, S-8; MANIFEST M-OP-12): the output carries a secret (e.g. a short-lived credential). App callers
    *  only (agent callers refused, `secret_output_app_only`), not schedulable, no idempotency row, receipt with input digest +
@@ -272,9 +275,51 @@ export interface Operation {
   secretOutput?: true;
 }
 
+/** C354a (QA-C354-1): a catalog entry name — `^[a-z][a-z0-9_]{1,47}$`, never contains `__` and never ends in `_`, so a
+ *  resolved variant `<name>__<suffix>` splits uniquely at its first `__`. SDKs and bridges drop other entry names. */
+export const DYNAMIC_CATALOG_NAME_RE = /^(?!.*__)[a-z][a-z0-9_]{0,46}[a-z0-9]$/;
+/** C354a: a requested or resolved dynamic tool — a catalog name, or a variant `<catalog name>__<suffix>` an app resolves
+ *  (≤ 63 chars; e.g. `gmail_send__first_contact`). A variant runs the same upstream action as its base, never broader
+ *  (`variantNarrowerOrEqual`). */
+export const DYNAMIC_TOOL_NAME_RE = /^[a-z][a-z0-9_]{1,62}$/;
+/** C354a (QA-C354-3): a variant name — base (a catalog name: no `__`, no trailing `_`) + `__` + a suffix that starts with a
+ *  letter or digit (`send___y` is not a variant). Group 1 = base, group 2 = suffix. Length limits: `dynamicVariantBase`. */
+export const DYNAMIC_VARIANT_RE = /^([a-z](?:[a-z0-9]|_(?!_))*[a-z0-9])__([a-z0-9][a-z0-9_]*)$/;
+
+/** C354a: the base catalog name of a variant `<base>__<suffix>`, or null when `name` is not a valid variant (bad shape,
+ *  base fails `DYNAMIC_CATALOG_NAME_RE`, or the whole name fails `DYNAMIC_TOOL_NAME_RE`). Rules and bridges split here only. */
+export function dynamicVariantBase(name: string): string | null {
+  if (!DYNAMIC_TOOL_NAME_RE.test(name)) return null;
+  const m = DYNAMIC_VARIANT_RE.exec(name);
+  return m?.[1] && DYNAMIC_CATALOG_NAME_RE.test(m[1]) ? m[1] : null;
+}
+
+/** C354a (QA-SPEC56-1): the hold families of a resolution or catalog entry as a set (`holdFamilies`, else `[holdFamily]`).
+ *  QA-SPEC56-3: an EMPTY `holdFamilies` never means "no holds": it falls back to `holdFamily` like an absent one. */
+export function holdFamilySet(r: { holdFamily?: HoldFamily; holdFamilies?: HoldFamily[] }): Set<HoldFamily> {
+  const set = new Set<HoldFamily>(r.holdFamilies ?? []);
+  if (r.holdFamily) set.add(r.holdFamily);
+  return set;
+}
+
+/** C354a (QA-SPEC56-1): "never broader" for a variant against its base — crud ⊆ base crud, effect at or below the base
+ *  effect in `EFFECTS` order, and hold families ⊇ the base's (a variant may add holds, never drops one). */
+export function variantNarrowerOrEqual(
+  variant: { crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; holdFamilies?: HoldFamily[] },
+  base: { crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; holdFamilies?: HoldFamily[] },
+): boolean {
+  if (!variant.crud.every((c) => base.crud.includes(c))) return false;
+  // QA-SPEC56-3: an effect outside EFFECTS (either side) is never "narrower or equal" (fail closed)
+  const ve = EFFECTS.indexOf(variant.effect);
+  const be = EFFECTS.indexOf(base.effect);
+  if (ve < 0 || be < 0 || ve > be) return false;
+  const v = holdFamilySet(variant);
+  return [...holdFamilySet(base)].every((f) => v.has(f));
+}
+
 /** One entry of a dynamic operation's catalog (bridge op `POST /tb/v1/bridge/catalog`, search results). */
 export interface DynamicCatalogEntry {
-  /** `^[a-z][a-z0-9_]{1,47}$`, unique within the app; v0.1.68 (C354): never contains `__` (reserved for resolved variants such as `<name>__first_contact`). */
+  /** `DYNAMIC_CATALOG_NAME_RE`, unique within the app (C354a: no `__`, no trailing `_`; `__` is reserved for resolved variants such as `<name>__first_contact`). */
   name: string;
   title: string;
   description: string;
@@ -306,6 +351,10 @@ export interface DynamicResolution {
   crud: CrudAction[];
   effect: Effect;
   holdFamily?: HoldFamily;
+  /** v0.1.74 (C354a, QA-SPEC56-1; bridge cap `hold_families`): the full hold-family SET of this call; the call is held when
+   *  ANY member is held for the caller. When present it contains `holdFamily`, and `holdFamily` = the family a bridge without
+   *  the cap applies (put the one held by default first, e.g. `first_contact`). A variant's set ⊇ its base's. */
+  holdFamilies?: HoldFamily[];
 }
 
 // ---------- Scopes ----------
