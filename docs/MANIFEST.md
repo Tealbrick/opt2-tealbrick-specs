@@ -70,6 +70,8 @@ A single-app repo keeps the manifest at the repo root, so both bases are the sam
 | M-ID-1 | `source.license` is a valid SPDX expression; `NONE`/`NOASSERTION` refused → `license_invalid`. |
 | M-ID-2 | Intents unique after trim + lower-case → `intent_duplicate`. |
 
+- QA-SPEC55-1: `name` (1..40) has no control, format or other invisible character (`MANIFEST_NAME_PATTERN`, the persona rule's `INVISIBLE_CHAR_CLASS` without marker exceptions) → `manifest_invalid` otherwise.
+
 ## 4. Runtime
 
 The app container is always built from source: `runtime.build {context, dockerfile}` (repo-relative, §3). CI pins the result by digest in the release record.
