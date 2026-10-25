@@ -735,11 +735,20 @@ export interface ClaimRequest {
  *  app ONLY when the app's current claim or status lists it (capability, never inferred from a version number). */
 export const PROOF_CLAIM_CAPS = ["bd"] as const;
 export type ProofClaimCap = (typeof PROOF_CLAIM_CAPS)[number];
-/** v0.1.69 (C354): what an app SERVES, declared by the app (claim + every status push; absent, non-array or unknown entries = none).
- *  Gates (bridge, conformance) read this, never a version number. `person_op` = the app serves `POST /tb/v1/person-op`
- *  (SDK-API §21). */
+/** v0.1.69 (C354): what an app SERVES, declared by the app (claim + every status push). A ROUTING HINT ONLY, never an authority:
+ *  the owner's grant and the app's own checks still decide every call. Gates (bridge, conformance) read it, never a version number.
+ *  Readers ignore unknown entries (forward-compatible) and treat a value that is not an array of strings within APP_CAPS_LIMITS
+ *  as NO caps (fail closed). `person_op` = the app serves `POST /tb/v1/person-op` (SDK-API §21). */
 export const APP_CAPS = ["person_op"] as const;
 export type AppCap = (typeof APP_CAPS)[number];
+export const APP_CAPS_LIMITS = { maxEntries: 16, maxLength: 32 } as const;
+/** v0.1.69 (C354): the bridge's fixed refusals in a person-op result (status 409, body `{error: {code}}`), nothing forwarded. */
+export const PERSON_OP_BRIDGE_REFUSALS = {
+  /** `ins` is not an instance of the bridge's current config */
+  instanceUnknown: "instance_unknown",
+  /** the target app's latest claim/status does not declare `person_op` (or its caps are malformed) — fail closed */
+  appUnsupported: "person_op_unsupported",
+} as const;
 export interface ClaimResponse {
   ins: InstanceId;
   bridge: { id: BridgeId; publicKey: Ed25519PublicJwk; internalUrl: InternalUrl };

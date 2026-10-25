@@ -176,3 +176,11 @@ test("v0.1.69 (C354): app capabilities are a closed list; person_op is declared 
   const { APP_CAPS } = await import("../src/bridge.ts");
   assert.deepEqual([...APP_CAPS], ["person_op"]);
 });
+
+test("v0.1.69 (C354): the bridge's refusals are exact; cap bounds are fixed (fail closed, routing hint only)", async () => {
+  const { APP_CAPS, APP_CAPS_LIMITS, PERSON_OP_BRIDGE_REFUSALS } = await import("../src/bridge.ts");
+  assert.deepEqual({ ...PERSON_OP_BRIDGE_REFUSALS }, { instanceUnknown: "instance_unknown", appUnsupported: "person_op_unsupported" });
+  assert.deepEqual({ ...APP_CAPS_LIMITS }, { maxEntries: 16, maxLength: 32 });
+  for (const cap of APP_CAPS) assert.ok(cap.length <= APP_CAPS_LIMITS.maxLength, cap);
+  assert.ok(APP_CAPS.length <= APP_CAPS_LIMITS.maxEntries);
+});
