@@ -283,7 +283,7 @@ export interface AuthorizeInput {
   grant: string;
   trust: TrustContext;
   /** effective op (dynamic ops: crud/effect/holdFamily from `resolve`) */
-  op: { id: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; scopeType?: string };
+  op: { id: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; /** v0.1.74 (C354a): resolution set; held when any member is held */ holdFamilies?: HoldFamily[]; scopeType?: string };
   /** caller's access on the targeted scope instance (or best access when the op spans instances); null when the op has no scopeType.
    *  v0.1.50 (C283 A1): `authority` "owner" → step (2) is `op.crud ⊆ access.crud` (the owner row's crud, also above
    *  grant.crud; a narrower owner row still narrows); "bounded"/absent → `op.crud ⊆ grant.crud ∩ access.crud`. For an op
