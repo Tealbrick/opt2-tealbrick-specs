@@ -2,6 +2,11 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.71 (QA-SPEC49-30/-31 + prepended marks; number taken at merge time, C340)
+- QA-SPEC49-30: Core's worst-case slice includes `prd` and `provider` (known to Core); the reserve covers only external growth, measured at 9,515 chars for every shape by `test/slice-reserve.test.ts` (RM-26); `SLICE_CORE_MAX_CHARS` stays 52,000 (margin ≥ 4,000).
+- QA-SPEC49-31: expected results for "a requirement key never satisfies a binding"; malformed percent-encoding → `400 bad_request` in BRIDGE §9.4 / §15.4; RM-25 checks the status report and Portal.
+- Coordinator decision: the prepended concatenation marks U+070F, U+0890–0891, U+08E2 (and U+110BD, U+110CD, same class) are PERSONA_MARKERS (label PCM).
+
 ## Changelog → v0.1.69 (C356: model-role follow-up after specs#49; number taken at merge time, C340)
 - QA-SPEC49-27: slice URLs (`bridge.publicUrl`, `bridge.viewUrl`, `portalUrl`) are `httpsOrigin` (no path, ≤ 267); `portalKeySet` ≤ 4,096; `SLICE_CORE_MAX_CHARS` 52,000 (reserve 13.5k ≥ the measured worst automatic growth).
 - QA-SPEC49-28/-29: persona — no variation selector directly after a marker (closes `VS ZWJ VS` payloads); test rows U+0008/U+001B, a full Cc sweep (allowed ⇔ TAB/LF), printable ASCII + NBSP accepted.
