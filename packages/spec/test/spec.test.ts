@@ -635,3 +635,17 @@ test("v0.1.74 (C354a, QA-C354-3, QA-SPEC56-1): variant suffix rule and never-bro
   assert.deepEqual([...holdFamilySet({})], []);
 });
 
+test("v0.1.74 (QA-SPEC56-3): the variant helpers fail closed on bad input", async () => {
+  const { variantNarrowerOrEqual, holdFamilySet } = await import("../src/manifest.ts");
+  const base = { crud: ["create" as const], effect: "outward" as const, holdFamily: "outward" as const };
+  // an effect outside EFFECTS, on either side, is never narrower or equal
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "nonsense" as never, holdFamilies: ["outward"] }, base), false);
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamilies: ["outward"] }, { ...base, effect: "nonsense" as never }), false);
+  // an empty holdFamilies falls back to holdFamily, never to "no holds"
+  assert.deepEqual([...holdFamilySet({ holdFamily: "first_contact", holdFamilies: [] })], ["first_contact"]);
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamily: "outward", holdFamilies: [] }, base), true);
+  assert.equal(variantNarrowerOrEqual({ crud: ["create"], effect: "outward", holdFamily: "first_contact", holdFamilies: [] }, base), false);
+  // holdFamily always counts, also when holdFamilies omits it
+  assert.deepEqual([...holdFamilySet({ holdFamily: "first_contact", holdFamilies: ["outward"] })].sort(), ["first_contact", "outward"]);
+});
+

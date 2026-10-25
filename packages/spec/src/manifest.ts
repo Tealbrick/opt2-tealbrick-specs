@@ -287,9 +287,12 @@ export function dynamicVariantBase(name: string): string | null {
   return m?.[1] && DYNAMIC_CATALOG_NAME_RE.test(m[1]) ? m[1] : null;
 }
 
-/** C354a (QA-SPEC56-1): the hold families of a resolution or catalog entry as a set (`holdFamilies`, else `[holdFamily]`). */
+/** C354a (QA-SPEC56-1): the hold families of a resolution or catalog entry as a set (`holdFamilies`, else `[holdFamily]`).
+ *  QA-SPEC56-3: an EMPTY `holdFamilies` never means "no holds": it falls back to `holdFamily` like an absent one. */
 export function holdFamilySet(r: { holdFamily?: HoldFamily; holdFamilies?: HoldFamily[] }): Set<HoldFamily> {
-  return new Set(r.holdFamilies ?? (r.holdFamily ? [r.holdFamily] : []));
+  const set = new Set<HoldFamily>(r.holdFamilies ?? []);
+  if (r.holdFamily) set.add(r.holdFamily);
+  return set;
 }
 
 /** C354a (QA-SPEC56-1): "never broader" for a variant against its base — crud ⊆ base crud, effect at or below the base
@@ -299,7 +302,10 @@ export function variantNarrowerOrEqual(
   base: { crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; holdFamilies?: HoldFamily[] },
 ): boolean {
   if (!variant.crud.every((c) => base.crud.includes(c))) return false;
-  if (EFFECTS.indexOf(variant.effect) > EFFECTS.indexOf(base.effect)) return false;
+  // QA-SPEC56-3: an effect outside EFFECTS (either side) is never "narrower or equal" (fail closed)
+  const ve = EFFECTS.indexOf(variant.effect);
+  const be = EFFECTS.indexOf(base.effect);
+  if (ve < 0 || be < 0 || ve > be) return false;
   const v = holdFamilySet(variant);
   return [...holdFamilySet(base)].every((f) => v.has(f));
 }
