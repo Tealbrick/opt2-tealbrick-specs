@@ -121,6 +121,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | `receipt` | `true` → the SDK writes a receipt for every executed call (inputDigest + app-redacted summary, never raw bodies). |
 | `audience` | `agent` → reachable through the bridge (MCP, relay, app→app), becomes an MCP tool. `person` → only from the app UI in a person session (launch ticket); never an MCP tool, never hooked, never a companion target. |
 | `dynamic?` | Dynamic tool family (§5.3). |
+| `secretOutput?` | v0.1.68 (C336 RQ-3, S-8): `true` = the output carries a secret (e.g. a short-lived credential). See M-OP-12. |
 
 ### 5.2 Rules
 | Rule | Check |
@@ -134,6 +135,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-OP-7 | `scopeType` names a declared scope; the union of that scope's `access[].crud` ⊇ `op.crud` → `scope_ref_invalid`. |
 | M-OP-8 | Non-dynamic `agent` ops declare `input` and `output`. Embedded schemas: no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType` → `io_schema_invalid`. |
 | M-OP-9 | `audience = person` ⇒ no `dynamic` → `person_dynamic`. |
+| M-OP-12 | v0.1.68: `secretOutput: true` ⇒ `audience = agent` (reached by APP callers through the bridge; agent callers are refused, SDK-API v0.1.68), no `dynamic`, `idempotency = none`, `receipt = true` (input digest + `redact` summary only) → `secret_output_invalid`. The manifest declares `requires.bridgeCaps: ["secret_output"]`. `effect` is the op's own; a credential lease is `read`, so default policy gating does not hold it — its audit is the receipt. |
 | M-OP-10 | `dynamic` ⇒ `crud = ["read"]`, `effect = read`, no `holdFamily`, `idempotency = supported`, `receipt = false`, `audience = agent`, no `input`/`output`; `crudCeiling = ["read"]` ⇒ `effectCeiling = read` → `dynamic_invalid`. |
 
 ### 5.3 Dynamic operations (the engine-tool gap)
@@ -178,6 +180,7 @@ A scope type is an app-declared sub-resource for grants (Connect: accounts; Know
 | M-SC-1 | Types unique; access ids unique within a type → `scope_duplicate`. |
 | M-SC-2 | `defaultGrants[].access` names an access id of the same scope; kinds unique within a scope → `default_grant_invalid`. |
 | M-SC-3 | `summaryTemplate` uses only the listed variables with declared access ids → `template_invalid`. |
+| M-SC-6 | v0.1.68 (RQ-4): an app MAY declare several scope types. The canvas edge to the app carries the FIRST declared type (primary; Core keeps one `scope_type` per edge); grants on the other types are set on the app's own scope page (`ui.configurePath`). |
 | M-SC-4 | `scopes` non-empty ⇒ `ui.configurePath` present (scopes are edited in the app) → `configure_ui_required`. |
 | M-SC-5 | v0.1.65: `summaryEmpty` is 1–40 chars and holds no `{` or `}` (no variables) → `template_invalid`. |
 
@@ -358,6 +361,7 @@ None. v0.1 review items applied: S6 (§7), S8 + N6 (§10, §13), N1 (§2, §5.4)
 - §12: `ui.configurePath` stays optional; Core's catalog exposes `hasUi` (Open) separately from `hasConfigureUi` (configure screen).
 
 ## v0.1.15 additions (C104, queued)
+- v0.1.68 (C354): `requires.bridgeCaps?: string[]` — the bridge capabilities (BRIDGE_CAPS) the release needs, e.g. `secret_output`, `hook_tool`, `lazy_tools`, `model_roles`. Core refuses to deploy the release onto a workspace bridge whose declared caps lack one (`bridge_cap_missing`, `details.cap`). Feature gates use capabilities, never bridge version numbers: versions are assigned at merge time (C352), so no package hard-codes "the first bridge version with X". A manifest with a `secretOutput` op MUST list `secret_output` (validator: `secret_output_invalid`).
 - `requires {bridge?: semver}` (optional): the minimum workspace bridge version for features the validator cannot see (a before hook that answers `hold` needs ≥ 0.1.17 — DECLARED by such apps; "any before hook → 0.1.17" was rejected as too strict: an older bridge treats a hold answer as an invalid hook answer → refuse, fail closed, so the declaration is about the feature, not safety). The release signer records `requires.bridge` = max(this, the feature table of `requiredBridgeVersion`): dynamic ops ≥ 0.1.15 (C91 catalog binding), wildcard companion or `tb.holds_pending` as a companion op ≥ 0.1.16. One function in @opt2-tealbrick/manifest; the signer and Core never keep their own table (L1).
 
 ## v0.1.16 additions (C107)

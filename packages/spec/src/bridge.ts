@@ -321,7 +321,7 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  page, `GET /tb/v1/model-roles/<role>`, `StatusReport.roles`, persona in instructions + resource). Core sends
  *  `agents[].persona` and `modelRoleRequirements[]` only to a bridge that declares it.
  *  v0.1.64 (C326): + `person_ops` = the bridge runs the person-op relay (BRIDGE §16); Core queues relay requests only for it. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops"] as const;
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -459,7 +459,9 @@ export interface HookCallInfo {
    *  config (never from input or a manifest name); a policy app matches "calls from product X" on it, since an instance id
    *  changes on reinstall. Absent for agents, and for a caller the bridge cannot map (then treat it as unverified). */
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId };
-  target: { instance: InstanceId; product: ProductId; op: SnakeId; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
+  /** v0.1.68 (C336 RQ-2, cap `hook_tool`): `tool` = `DynamicResolution.tool` of a dynamic call (`crud`/`effect`/`holdFamily` are then
+   *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
+  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily };
   input?: JsonValue;
 }
 export interface HookRequestBase<P extends HookPhase> {
