@@ -98,6 +98,8 @@ export type BridgeErrorCode =
   | "manifest_mismatch"
   | "key_not_declared"
   | "key_not_set"
+  /** spec follow-up #55 (QA-SPEC49-31): malformed percent-encoding in a key or role path, after authentication */
+  | "bad_request"
   /** v0.1.63 (C330(4), BRIDGE §15.4): model-role resolve refusals */
   | "role_not_declared"
   | "role_not_set"
