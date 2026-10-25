@@ -98,6 +98,8 @@ export type BridgeErrorCode =
   | "manifest_mismatch"
   | "key_not_declared"
   | "key_not_set"
+  /** malformed percent-encoding in a key or role path, after authentication (BRIDGE §9.4 / §15.4, QA-SPEC49-31) */
+  | "bad_request"
   /** v0.1.63 (C330(4), BRIDGE §15.4): model-role resolve refusals */
   | "role_not_declared"
   | "role_not_set"
@@ -257,7 +259,8 @@ export interface InstanceSlice extends SliceClaims {
   /** companion grants this app presents as `TB-Grant` (K10 compact JWS) */
   grants: CompactJws[];
   /** v0.1.18 (C106a): `scopeRequest` = the channel the owner chose at adopt for an edge with scopeType "channel" (Connect tethers it) */
-  agents: { id: AgentId; name: string; mode: AgentMode; status: "active" | "paused"; scopeRequest?: ScopeRequest }[];
+  /** QA-SPEC49-26: `edge: false` only in a needsAgentDirectory slice, on an agent without an edge to this app (absent = edge). */
+  agents: { id: AgentId; name: string; mode: AgentMode; status: "active" | "paused"; edge?: false; scopeRequest?: ScopeRequest }[];
   standalone?: StandaloneState;
   /** v0.1.13 (C86): the Portal GUI origin (`https://…`, no path); apps build owner links (`/w/<ws>/open?product=&path=`) */
   portalUrl?: string;

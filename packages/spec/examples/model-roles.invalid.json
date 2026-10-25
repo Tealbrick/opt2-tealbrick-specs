@@ -154,6 +154,190 @@
           }
         }
       ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name is a proxy variable",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "baseUrl": "HTTPS_PROXY"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name is a loader variable",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "NODE_OPTIONS"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name NODE_TLS_REJECT_UNAUTHORIZED (TLS trust)",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "NODE_TLS_REJECT_UNAUTHORIZED"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name NPM_CONFIG_REGISTRY (package-manager config)",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "NPM_CONFIG_REGISTRY"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name PYTHONPATH (code loading)",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "PYTHONPATH"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name LD_AUDIT (library injection (LD_*))",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "LD_AUDIT"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name GRPC_PROXY (proxy (*_PROXY))",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "GRPC_PROXY"
+          }
+        }
+      ]
+    },
+    {
+      "rule": "M-MR-4",
+      "code": "model_role_invalid",
+      "what": "env name GIT_SSH_COMMAND (git config)",
+      "services": [
+        {
+          "id": "engine",
+          "build": true
+        }
+      ],
+      "modelRoles": [
+        {
+          "role": "reasoning",
+          "required": false,
+          "usedBy": [
+            "engine"
+          ],
+          "env": {
+            "model": "GIT_SSH_COMMAND"
+          }
+        }
+      ]
     }
   ]
 }
