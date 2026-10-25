@@ -2,6 +2,7 @@
 // Mirrors specs/manifest.schema.json exactly; MANIFEST.md holds the cross-field rules.
 // Data only: the `as const` vocabularies below are the ONE declaration of these literals.
 // `@opt2-tealbrick/manifest` re-exports them; no other package declares them.
+import type { DataPolicy, ModelRole } from "./models.ts";
 
 // ---------- Shared vocabularies ----------
 
@@ -40,7 +41,7 @@ export const VOLUME_PURPOSES = ["data", "backup"] as const;
 export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as const;
 /** v0.1.43 (LR-1, C234): `workflow` = an agent op that is listed in tools/list and passes gate() ONLY when the grant's `wf`
  *  names it (machine ops). `default` (or absent) = today's rule.
- *  v0.1.66 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
+ *  v0.1.71 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
  *  it out of tools/list and serves it through the product's `<product>__tb_more_search` / `<product>__tb_more_call` pair
  *  (BRIDGE §7.5). Display only: gate(), hooks, holds, receipts and idempotency are the direct call's (MANIFEST §5.5). */
 export const OPERATION_LISTINGS = ["default", "workflow", "lazy"] as const;
@@ -262,7 +263,7 @@ export interface Operation {
   audience: OperationAudience;
   dynamic?: DynamicSpec;
   /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on.
-   *  v0.1.66: `lazy` needs a validator that pins spec ≥ 0.1.66 (MANIFEST §5.5, M-OP-13). */
+   *  v0.1.71: `lazy` needs a validator that pins spec ≥ 0.1.71 (MANIFEST §5.5, M-OP-13). */
   listing?: OperationListing;
 }
 
@@ -325,6 +326,9 @@ export interface Scope {
   defaultGrants: DefaultGrant[];
   /** Variables: `{count}`, `{label}`, `{labelPlural}`, `{access.<id>}`. Rendered output ≤ 80 chars. */
   summaryTemplate: string;
+  /** v0.1.65 (C331 D5b): plain text (≤ 40, no variables) the summary shows for an agent with NO assignment of this type, e.g.
+   *  Connect "no account yet". Absent = the type adds nothing for that agent (before v0.1.65: always). M-SC-5. */
+  summaryEmpty?: string;
 }
 
 // ---------- Settings and keys ----------
@@ -374,9 +378,29 @@ export interface KeyRequirement {
   step?: SnakeId;
 }
 
+/**
+ * v0.1.63 (C322(3), C330(4)): a model role the app (or a service) uses. The workspace bridge resolves it from the owner's
+ * role registry (BRIDGE §15) and never serves a binding below `minPolicy`. MANIFEST §7.1, rules M-MR-1..5.
+ */
+export interface ModelRoleRequirement {
+  role: ModelRole;
+  /** true: the app reports `needs_keys` + attention `model_role_missing` while unset; false: it runs without (attention optional) */
+  required: boolean;
+  /** default `standard`; Observer-type apps that read sensitive data declare `zdr` or `local` */
+  minPolicy?: DataPolicy;
+  /** `"app"` or `runtime.services[].id` */
+  usedBy: string[];
+  /** env names `tb-exec` fills for services from the resolved binding (M-MR-4) */
+  env?: { provider?: EnvName; model?: EnvName; baseUrl?: EnvName; key?: EnvName; dims?: EnvName };
+  help?: string;
+  when?: Condition;
+}
+
 export interface Settings {
   steps: SettingStep[];
   keys?: KeyRequirement[];
+  /** v0.1.63 */
+  modelRoles?: ModelRoleRequirement[];
 }
 
 // ---------- Hooks, companions, unlocks ----------

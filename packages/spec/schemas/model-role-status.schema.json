@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.opt2.tealbrick.com/model-role-status.schema.json",
+  "title": "Model-role labels that reach Portal (v0.1.63)",
+  "description": "v0.1.63 (C330(4), QA-SPEC42-3/-4): the ONLY model-role shapes that cross from the bridge to Portal or from Portal to the bridge page: StatusReport.roles[] rows, keys.status roles[] rows, and role hints (tickets.keys input, K11 `roles` claim). Labels only: additionalProperties false; never a base URL, key name or key value (BRIDGE §15.5, RM-13). Core validates bridge reports against modelRoleStatus and drops a row that fails.",
+  "$defs": {
+    "role": {
+      "enum": [
+        "embeddings",
+        "rerank",
+        "reasoning",
+        "utility",
+        "dreaming",
+        "summarize",
+        "vision",
+        "transcribe"
+      ]
+    },
+    "dataPolicy": {
+      "enum": [
+        "local",
+        "zdr",
+        "standard"
+      ]
+    },
+    "providerId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$"
+    },
+    "modelId": {
+      "type": "string",
+      "pattern": "^(?!.*//)[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$"
+    },
+    "insId": {
+      "type": "string",
+      "pattern": "^ins_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "productId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$"
+    },
+    "modelRoleStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "ins",
+        "set",
+        "policyOk",
+        "provider",
+        "model",
+        "dataPolicy"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "ins": {
+          "$ref": "#/$defs/insId"
+        },
+        "set": {
+          "type": "boolean"
+        },
+        "policyOk": {
+          "type": "boolean"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/providerId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/modelId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dataPolicy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/dataPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyBasis": {
+          "$ref": "#/$defs/policyBasis"
+        }
+      }
+    },
+    "keyStatusRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "product",
+        "ins",
+        "required",
+        "minPolicy",
+        "set",
+        "policyOk",
+        "provider",
+        "model",
+        "dataPolicy"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "product": {
+          "$ref": "#/$defs/productId"
+        },
+        "ins": {
+          "$ref": "#/$defs/insId"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "minPolicy": {
+          "$ref": "#/$defs/dataPolicy"
+        },
+        "set": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "policyOk": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/providerId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/modelId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dataPolicy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/dataPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policyBasis": {
+          "$ref": "#/$defs/policyBasis"
+        }
+      }
+    },
+    "modelRoleHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/role"
+        },
+        "provider": {
+          "$ref": "#/$defs/providerId"
+        },
+        "model": {
+          "$ref": "#/$defs/modelId"
+        },
+        "dataPolicy": {
+          "$ref": "#/$defs/dataPolicy"
+        }
+      }
+    },
+    "modelRoleHints": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/modelRoleHint"
+      }
+    },
+    "policyBasis": {
+      "enum": [
+        "verified",
+        "owner_attested"
+      ]
+    }
+  }
+}

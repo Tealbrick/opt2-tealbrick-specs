@@ -307,7 +307,7 @@ test("v0.1.42 (C230, owners' review): shared app-to-app contracts — schema + f
 test("v0.1.43 (LA-1, LR-1): viewer route purpose, workflow listing, slice viewUrl, StatusReport.views", async () => {
   const m = await import("../src/manifest.ts");
   assert.deepEqual([...m.PUBLIC_ROUTE_PURPOSES], ["oauth_callback", "webhook", "viewer"]);
-  assert.deepEqual([...m.OPERATION_LISTINGS].slice(0, 2), ["default", "workflow"]); // v0.1.66 appends `lazy` (lazy.test.ts)
+  assert.deepEqual([...m.OPERATION_LISTINGS].slice(0, 2), ["default", "workflow"]); // v0.1.71 appends `lazy` (lazy.test.ts)
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
   const validate = ajv.getSchema(load("manifest.schema.json").$id);
@@ -517,7 +517,8 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.deepEqual([...EVENT_AUDIENCES], ["target", "granted"]);
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
-  assert.deepEqual([...BRIDGE_CAPS].slice(0, 2), ["owner_rows", "events"]); // later caps: their own version tests
+  // v0.1.63 adds model_roles (BRIDGE §15); v0.1.64 (C326) adds person_ops (BRIDGE §16); v0.1.71 (M4b) adds lazy_tools (BRIDGE §7.5)
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "lazy_tools"]);
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {
@@ -539,4 +540,43 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   const opts: import("../src/sdk.ts").EmitOptions = { subject: e.subject, to: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF"], instanceId: "prj_1", summary: e.summary };
   assert.ok(opts.subject.id);
   assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
+});
+
+test("v0.1.67 (C331 D1): licences.staff_comp is the one staff route; browser only, draftable, idempotent, audited", async () => {
+  const row = ROUTES.find((r) => r.opId === "licences.staff_comp");
+  assert.ok(row);
+  // C342: every field pinned (QA mutants on rate, bodyLog, output, registry, exposure)
+  assert.deepEqual(
+    { ...row, auth: [...row.auth], query: [...row.query] },
+    {
+      opId: "licences.staff_comp", method: "POST", path: "/me/staff-comps", auth: ["browser"], exposure: "gateway", transport: "json", query: [],
+      input: "StaffCompInput", output: "LicenceChange", rate: "sensitive", bodyLog: "meta", audit: "licence.staff_comp", draftable: true, confirm: true,
+      idempotent: true, registry: "entitlement",
+    },
+  );
+  assert.deepEqual(ROUTES.filter((r) => /staff/u.test(r.opId) || /staff/u.test(r.path)).map((r) => r.opId), ["licences.staff_comp"], "PORTAL-API §6: no other staff route");
+  assert.ok((AUDIT_ACTIONS as readonly string[]).includes("licence.staff_comp"));
+  const { STAFF_COMP_MAX_DAYS, STAFF_COMP_DEFAULT_DAYS } = await import("../src/routes.ts");
+  assert.deepEqual([STAFF_COMP_DEFAULT_DAYS, STAFF_COMP_MAX_DAYS], [14, 30]);
+  const input: import("../src/routes.ts").StaffCompInput = { product: "knowledge", days: 14, reason: "DEV demo" };
+  assert.equal(input.days, STAFF_COMP_DEFAULT_DAYS);
+});
+
+test("v0.1.65 (C331 D5b/D8): summaryEmpty on a scope type; scope sources on the summary, the ack and the canvas edge", async () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const validate = ajv.compile(load("manifest.schema.json"));
+  const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
+  const withEmpty = (summaryEmpty: unknown) => ({ ...ex, scopes: ex.scopes.map((s: Record<string, unknown>) => ({ ...s, summaryEmpty })) });
+  assert.equal(validate(withEmpty("no notebook yet")), true, JSON.stringify(validate.errors));
+  assert.equal(validate(withEmpty("{count} empty")), false, "no variables (M-SC-5)");
+  assert.equal(validate(withEmpty("x".repeat(41))), false, "at most 40 chars");
+  assert.equal(validate(withEmpty("")), false);
+  const { SCOPE_SOURCES_MAX, SCOPE_SOURCE_LABEL_MAX } = await import("../src/bridge.ts");
+  assert.equal(SCOPE_SOURCES_MAX, 20);
+  assert.equal(SCOPE_SOURCE_LABEL_MAX, 60);
+  const item: import("../src/bridge.ts").ScopeSourceItem = { type: "account", id: "cna_01", label: "Acme LLC data", access: "read" };
+  const result: import("../src/bridge.ts").ScopeSummaryResult = { agent: "agt_01", label: "no account yet", sources: [] };
+  const row: import("../src/bridge.ts").StatusReport["scopeSummaries"][number] = { agt: "agt_01", ins: "ins_01", label: "1 read", sources: [item] };
+  const edge: Pick<import("../src/routes.ts").Edge, "scopeSummary" | "scopeSources"> = { scopeSummary: row.label, scopeSources: row.sources ?? null };
+  assert.deepEqual([result.sources, edge.scopeSources], [[], [item]]);
 });

@@ -116,6 +116,7 @@ Own-infrastructure bridge (PRD §3 rule 5): `tealbrick bridge enrol --code - [--
 - Connect to the bridge like any MCP client (relay stdio or remote URL); hold no policy, no grants, no person credential; the agent process env is allow-listed (CREDENTIALS §12).
 - On a held result (`structuredContent {status: "held", holdId, expiresAt, checkWith}`) they show "waiting for owner approval in <product>" and poll `checkWith` (≥ 10 s interval) until `approved` (then repeat the same call, SDK-API §4.3), `denied`, or expiry. They never approve, retry with different input, or treat a hold as an error.
 - Eve code lives only in `harness-eve` (REPOS §2).
+- App hooks (harness wave 1, opt-in, OFF by default — C345): `tealbrick hook [<event>] --app <app> [--harness claude-code|hermes]` and `harness-claude` `sdkAppHooks()` follow HARNESS-HOOKS.md (runner = plumbing; app modules own app behaviour; no policy; fail-open; exit 0 always). Without `--app` nothing runs. `tealbrick hook --print-settings --app <app>` prints the Claude Code `hooks` block; nothing writes it implicitly (§6 rule).
 
 ## 8. Environment variables (CLI; one name per setting)
 | Name | Meaning |
@@ -124,6 +125,8 @@ Own-infrastructure bridge (PRD §3 rule 5): `tealbrick bridge enrol --code - [--
 | `TB_WORKSPACE` | default workspace for owner commands |
 | `TB_AGENT` | default agent item for agent commands |
 | `TB_CREDENTIAL_STORE` | `keychain` (default) or `file` (agent items only, headless) |
+| `TB_HOOKS` | `0` / `off` / `false` / `no` switches every app hook off (`tealbrick hook`, `sdkAppHooks`, Hermes adapter; HARNESS-HOOKS HH-7) |
+| `TB_HOOKS_<APP>` | the same for one app, e.g. `TB_HOOKS_KNOWLEDGE=0` |
 | `TB_DATA_DIR` | state directory of an own-infrastructure full bridge (`bridge enrol` / `bridge run`); same name as bridge and apps (N3) |
 No other variable is read; no token is ever taken from the environment.
 

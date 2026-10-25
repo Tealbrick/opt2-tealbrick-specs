@@ -1,4 +1,4 @@
-// v0.1.66 (C330(1), M4b): `listing: "lazy"` and the per-product `<product>__tb_more_search` / `<product>__tb_more_call` pair.
+// v0.1.71 (C330(1), M4b): `listing: "lazy"` and the per-product `<product>__tb_more_search` / `<product>__tb_more_call` pair.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -9,7 +9,7 @@ import { OPERATION_LISTINGS } from "../src/manifest.ts";
 const dir = new URL("../schemas/", import.meta.url);
 const load = (f: string) => JSON.parse(readFileSync(new URL(f, dir), "utf8"));
 
-test("v0.1.66: listing vocabulary, schema enum and bridge cap", () => {
+test("v0.1.71: listing vocabulary, schema enum and bridge cap", () => {
   assert.deepEqual([...OPERATION_LISTINGS], ["default", "workflow", "lazy"]);
   assert.ok((BRIDGE_CAPS as readonly string[]).includes("lazy_tools"));
   const ajv = new Ajv2020({ strict: false, allErrors: true });
@@ -26,7 +26,7 @@ test("v0.1.66: listing vocabulary, schema enum and bridge cap", () => {
   assert.deepEqual(schemaEnum, [...OPERATION_LISTINGS]);
 });
 
-test("v0.1.66: the pair names are valid tool names, carry the reserved tb_ prefix and fit 64 chars for the longest product id", () => {
+test("v0.1.71: the pair names are valid tool names, carry the reserved tb_ prefix and fit 64 chars for the longest product id", () => {
   const re = new RegExp(TOOL_NAME_RULE.pattern);
   const longestProduct = `a${"b".repeat(31)}`; // ProductId ^[a-z][a-z0-9-]{1,31}$
   for (const op of [TOOL_NAME_RULE.moreSearchOp, TOOL_NAME_RULE.moreCallOp]) {

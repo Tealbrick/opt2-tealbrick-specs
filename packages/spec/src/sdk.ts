@@ -16,11 +16,13 @@ import type {
   HookResponseByPhase,
   InstanceSlice,
   IsoTime,
+  ModelRoleFetchResponse,
   OnBehalfOfContext,
   OpCallBody,
   OpResult,
   PreUpdateSnapshotRef,
   SchemaVersion,
+  ScopeSourceItem,
   ScopeSummaryResult,
 } from "./bridge.ts";
 import type {
@@ -39,6 +41,7 @@ import type {
   InstanceRef,
   KeySetStatementClaims,
   PersonId,
+  PersonOpClient,
   PersonTicketLaunchClaims,
   PortalRef,
   PortalRootChannel,
@@ -67,9 +70,10 @@ import type {
   Skill,
   StandardOperationId,
 } from "./manifest.ts";
+import type { ModelRole } from "./models.ts";
 
 // Wire shapes owned by bridge.ts / credentials.ts / manifest.ts, re-exported for SDK users (not re-declared).
-export type { AppAttention, AppStatus, BridgeOp, BridgeOpBodies, CallEnvelope, ClaimRequest, ClaimResponse, HookRequest, HookResponseByPhase, InstanceSlice, OnBehalfOfContext, OpCallBody, OpResult, ScopeSummaryResult };
+export type { AppAttention, AppStatus, BridgeOp, BridgeOpBodies, CallEnvelope, ClaimRequest, ClaimResponse, HookRequest, HookResponseByPhase, InstanceSlice, OnBehalfOfContext, OpCallBody, OpResult, ScopeSourceItem, ScopeSummaryResult };
 
 // ════════════════════════════════════════════════════════════════════════════
 // §A  @opt2-tealbrick/manifest — pure, synchronous, no I/O
@@ -329,6 +333,10 @@ export type SdkAuditAction = (typeof SDK_AUDIT_ACTIONS)[number];
 // §B  @opt2-tealbrick/miniapp-sdk — server
 // ════════════════════════════════════════════════════════════════════════════
 
+/** v0.1.63 + spec follow-up #49: `TbError.code` values the model-role helpers throw (SDK-API "modelFetch"). */
+export const SDK_MODEL_ERROR_CODES = ["role_undeclared", "model_endpoint_refused"] as const;
+export type SdkModelErrorCode = (typeof SDK_MODEL_ERROR_CODES)[number];
+
 export declare class TbError extends Error {
   constructor(code: string, message: string, httpStatus?: number);
   readonly code: string;
@@ -406,6 +414,8 @@ export interface OpContext {
   context: Record<string, Json>;
   receipt: ReceiptHelpers;
   getKey(name: string): Promise<string | null>;
+  /** v0.1.63 (SDK-API "v0.1.63 additions"): the resolved binding of a role the manifest declares for `app`; null = unset or below `minPolicy`. */
+  modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
   callApp<O = Json>(product: string, op: string, input: Json, opts?: { idempotencyKey?: string }): Promise<CompanionResult<O>>;
   callServiceHelper<O = Json>(serviceId: string, path: string, body: Json): Promise<O>;
   db: Db;
@@ -459,6 +469,8 @@ export interface StartContext {
   scopes: ScopeStore;
   secrets: AppSecrets;
   getKey(name: string): Promise<string | null>;
+  /** v0.1.63 (SDK-API "v0.1.63 additions"): the resolved binding of a role the manifest declares for `app`; null = unset or below `minPolicy`. */
+  modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
   callServiceHelper<O = Json>(serviceId: string, path: string, body: Json): Promise<O>;
   /** v0.1.13 (C85): app-initiated companion call (timers, background refresh): no parentCall, own companion grant; same
    *  hooks, holds, rate limits as any caller; audited `call.app_initiated` by the bridge. Usable for the app's lifetime. */
@@ -523,6 +535,8 @@ export interface HookContext {
   log: Logger;
   db: Db;
   getKey(name: string): Promise<string | null>;
+  /** v0.1.63 (SDK-API "v0.1.63 additions"): the resolved binding of a role the manifest declares for `app`; null = unset or below `minPolicy`. */
+  modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
   signal: AbortSignal;
   /** v0.1.3 (C31) */
   secrets: AppSecrets;
@@ -814,8 +828,11 @@ export interface ScopeStore {
   set(principal: PersonPrincipal, agent: AgentId, type: string, instanceId: string, access: string | null): Promise<void>;
   /** applies manifest defaultGrants once per (agent, type) */
   applyDefaults(agent: SliceAgent): Promise<void>;
-  /** renders scopes[].summaryTemplate, ≤ 80 chars */
+  /** renders scopes[].summaryTemplate, ≤ 80 chars; v0.1.65: a type with no row for this agent adds `summaryEmpty` when declared */
   summary(agent: AgentId): Promise<string>;
+  /** v0.1.65 (C331 D8): this agent's rows as ScopeSourceItem (instance label, access id), ordered by type then label, at most
+   *  SCOPE_SOURCES_MAX; the default `scope_summary` answer carries them as `sources`. */
+  sources(agent: AgentId): Promise<ScopeSourceItem[]>;
 }
 
 // ── Keys (CORE §10) ──
@@ -825,12 +842,23 @@ export interface KeyStatus {
   present: boolean;
   source: "app_own" | "account_default" | null;
 }
+/** v0.1.63: `ModelRoleFetchResponse` without `keysRev`. Never logged; re-read after `onKeysChanged` (one revision for keys
+ *  and role bindings). */
+export type ResolvedModelRole = Omit<ModelRoleFetchResponse, "keysRev">;
 export interface KeyApi {
   getKey(name: string): Promise<string | null>;
+  /** v0.1.63; throws `role_undeclared` (programming error) for a role the manifest does not declare with `usedBy` `app` */
+  modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
+  /** spec follow-up (QA-SPEC49-2c): the resolved binding plus a `fetch` bound to its canonical base URL origin with the
+   *  connect-time guard (BRIDGE §15.3): resolves the host, refuses NEVER_LOCAL and (for `local`) any address outside the
+   *  local ranges, pins the checked address for the request, refuses other origins and cross-origin redirects. The app
+   *  adds the provider's auth header itself from `binding.key`. null = as modelRole(). */
+  modelFetch(role: ModelRole): Promise<{ binding: ResolvedModelRole; fetch: (path: string, init?: RequestInit) => Promise<Response> } | null>;
   onKeysChanged(cb: (names: string[]) => void): () => void;
   status(): Promise<KeyStatus[]>;
 }
 export declare function getKey(name: string): Promise<string | null>;
+export declare function modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
 export declare function onKeysChanged(cb: (names: string[]) => void): () => void;
 
 // ── Health / readiness ──
@@ -940,9 +968,15 @@ export interface PersonPrincipal {
   ws: WorkspaceId;
   instance: InstanceId;
   iss: PortalRef | BridgeRef | InstanceRef;
-  /** epoch ms; absolute 8 h */
+  /** epoch ms; absolute 8 h (v0.1.64: for a relayed op = K14 exp × 1000) */
   sessionExpiresAt: number;
+  /** v0.1.64 (C326): native owner-session client of a relayed person op (K14 `cli`, SDK-API §21); absent for browser sessions */
+  via?: PersonOpClient;
 }
+/** v0.1.64 (C332a(4), SDK-API §21): false when a relayed decision (`via` set) may not decide a hold of this family — a family in
+ *  PERSON_OP_RELAY.refuseFamiliesFor[via], a null / unknown family, or a `via` without an entry there (all deny by default).
+ *  Browser sessions (`via` undefined) → true. */
+export declare function familyAllowedFor(via: PersonOpClient | undefined, family: HoldFamily | null): boolean;
 export declare const SESSION_COOKIE: "tb_session";
 export declare const CSRF_HEADER: "TB-CSRF";
 export interface SessionInfo {

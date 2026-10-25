@@ -119,7 +119,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | `receipt` | `true` → the SDK writes a receipt for every executed call (inputDigest + app-redacted summary, never raw bodies). |
 | `audience` | `agent` → reachable through the bridge (MCP, relay, app→app), becomes an MCP tool. `person` → only from the app UI in a person session (launch ticket); never an MCP tool, never hooked, never a companion target. |
 | `dynamic?` | Dynamic tool family (§5.3). |
-| `listing?` | Agent ops only. Absent or `default` = listed in tools/list. `workflow` (v0.1.43, M-OP-11) = listed and callable only when the grant's `wf` names it. `lazy` (v0.1.66, §5.5) = callable as `default`, served through the product's `tb_more_search` / `tb_more_call` pair instead of the list. |
+| `listing?` | Agent ops only. Absent or `default` = listed in tools/list. `workflow` (v0.1.43, M-OP-11) = listed and callable only when the grant's `wf` names it. `lazy` (v0.1.71, §5.5) = callable as `default`, served through the product's `tb_more_search` / `tb_more_call` pair instead of the list. |
 
 ### 5.2 Rules
 | Rule | Check |
@@ -134,7 +134,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-OP-8 | Non-dynamic `agent` ops declare `input` and `output`. Embedded schemas: no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType` → `io_schema_invalid`. |
 | M-OP-9 | `audience = person` ⇒ no `dynamic` → `person_dynamic`. |
 | M-OP-10 | `dynamic` ⇒ `crud = ["read"]`, `effect = read`, no `holdFamily`, `idempotency = supported`, `receipt = false`, `audience = agent`, no `input`/`output`; `crudCeiling = ["read"]` ⇒ `effectCeiling = read` → `dynamic_invalid`. |
-| M-OP-13 | (v0.1.66) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic`; a manifest with any lazy op states `requires.bridge` ≥ `LAZY_LISTING_MIN_BRIDGE` (@opt2-tealbrick/manifest: the first bridge with cap `lazy_tools`) → `listing_invalid`. |
+| M-OP-13 | (v0.1.71) `listing = lazy` ⇒ `audience = agent` (M-OP-11) and no `dynamic`; a manifest with any lazy op states `requires.bridge` ≥ `LAZY_LISTING_MIN_BRIDGE` (@opt2-tealbrick/manifest: the first bridge with cap `lazy_tools`) → `listing_invalid`. |
 
 ### 5.3 Dynamic operations (the engine-tool gap)
 Some apps expose tool sets that are not known at build time: an engine with ~100 native operations that depend on the chosen engine version, or a connector catalog with thousands of third-party tools. Listing each as a manifest operation is impossible; one generic "call anything" operation would hide each tool's CRUD class and effect. A dynamic operation closes the gap with one mechanism (CORE §13):
@@ -161,13 +161,13 @@ Some apps expose tool sets that are not known at build time: an engine with ~100
 
 Input/output shapes: SDK-API §6. The canvas scope summary is not a standard op: the bridge fetches it with the bridge op `POST /tb/v1/bridge/scope-summary` (≤ 80-char label per agent, no third-party identifiers) for its status report. `tb.hold_status` needs only a valid grant; agent edges need not include `read` (CORE I4); it returns only the caller's own holds and writes no receipt. Reserved: the `tb.` namespace (including the bridge-served read tool `<product>__tb_skills`, BRIDGE) and the `tb_` prefix for operation, hook, scope, step, setting, volume, unlock and artifact ids; `tb-` for service and skill ids; `TB_`/`RAILWAY_` env and key names; the `/tb/` path prefix inside the app (ui paths, public routes, helper paths). The schema enforces these patterns.
 
-### 5.5 Lazy listing (v0.1.66; C330(1), M4b)
+### 5.5 Lazy listing (v0.1.71; C330(1), M4b)
 An app with many agent ops keeps the most used ones in tools/list ("hot") and marks the rest `listing: "lazy"`. The agent finds a lazy op with `<product>__tb_more_search` and calls it with `<product>__tb_more_call` or by its own name (BRIDGE §7.5).
 - Display only. Visibility, `gate()`, `authorize()`, hooks, holds, receipts, idempotency and events are exactly those of the same op with `listing` absent. An agent whose grants do not make the op visible cannot find or call it.
 - Static agent ops only (M-OP-13). A dynamic family is already one search away (§5.3).
 - Advisory size: ≤ 8 hot agent ops per product (with `tb_hold_status`, `tb_skills` and the pair, about ten tools). Not enforced.
 - Write the op `description` for search: the words an agent would use to look for it.
-- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.66 and MUST state `requires.bridge` ≥ the first bridge with cap `lazy_tools` (M-OP-13; `requiredBridgeVersion` feature `lazy_listing`). An older bridge has no fallback: it refuses the manifest (`schema_invalid`) and the app loses ALL its tools, so Core refuses the deploy onto a bridge without the cap (409 `bridge_cap_missing`, BRIDGE §7.5).
+- A manifest that uses `lazy` needs a validator that pins spec ≥ 0.1.71 and MUST state `requires.bridge` ≥ the first bridge with cap `lazy_tools` (M-OP-13; `requiredBridgeVersion` feature `lazy_listing`). An older bridge has no fallback: it refuses the manifest (`schema_invalid`) and the app loses ALL its tools, so Core refuses the deploy onto a bridge without the cap (409 `bridge_cap_missing`, BRIDGE §7.5).
 
 ## 6. Scopes
 
@@ -179,6 +179,7 @@ A scope type is an app-declared sub-resource for grants (Connect: accounts; Know
 | `access[] {id, label, crud}` | Access levels for this type, each mapping to a CRUD set. `authorize()` maps an assignment's level → `crud`. |
 | `defaultGrants[] {kind, access}` | Assignments the SDK creates when an edge to a caller first appears (C1). `own` = the caller's own instance (the app creates it if absent); `shared` = instances the app marks shared (v0.1.13, Kanban QA S2: also applied when an instance BECOMES shared later — created shared or switched to shared — for every caller seen before; an existing assignment, i.e. an owner edit, always wins; re-saving an already shared instance never re-grants); `all` = every existing instance. An empty list = nothing until the owner assigns in Configure. |
 | `summaryTemplate` | Used by the SDK default scope-summary bridge op (`/tb/v1/bridge/scope-summary`); variables `{count}`, `{label}`, `{labelPlural}`, `{access.<id>}` (count per level). Apps may override the summary in code; output ≤ 80 chars. |
+| `summaryEmpty?` | v0.1.65 (C331 D5b): plain text (≤ 40 chars, no variables) the SDK default summary shows for an agent that has NO assignment of this type (Connect: "no account yet"), so the canvas line does not look ready when the agent can reach nothing. Absent = nothing for that type (the behaviour before v0.1.65). |
 
 | Rule | Check |
 |---|---|
@@ -186,6 +187,7 @@ A scope type is an app-declared sub-resource for grants (Connect: accounts; Know
 | M-SC-2 | `defaultGrants[].access` names an access id of the same scope; kinds unique within a scope → `default_grant_invalid`. |
 | M-SC-3 | `summaryTemplate` uses only the listed variables with declared access ids → `template_invalid`. |
 | M-SC-4 | `scopes` non-empty ⇒ `ui.configurePath` present (scopes are edited in the app) → `configure_ui_required`. |
+| M-SC-5 | v0.1.65: `summaryEmpty` is 1–40 chars and holds no `{` or `}` (no variables) → `template_invalid`. |
 
 ## 7. Settings and key requirements
 
@@ -205,6 +207,24 @@ Settings are non-secret values chosen at deploy (and later, if `mutable`). Core 
 | M-ST-5 | `usedBy` items are `app` or declared service ids; `app_own` ⇒ `usedBy = ["app"]` and `ui.configurePath` present; `step` names a declared step → `key_invalid`. |
 | M-ST-6 | A field referenced by any `services[].when` has `mutable: false` (changing it would add or remove containers) → `setting_must_be_immutable`. |
 | M-ST-7 | Every field is referenced by at least one `env[].setting`, or by a `when` (fields, steps, keys, services, skills) or a skill `{{settings.<key>}}` → `setting_unused`. |
+
+### 7.1 Model roles (v0.1.63; C322(3), C330(4))
+
+`settings.modelRoles[] {role, required, minPolicy = "standard", usedBy[], env?, help?, when?}`: model roles the app or its services use. The workspace bridge resolves each from the owner's role registry (BRIDGE §15) and never serves a binding below `minPolicy`. Roles and policies: `MODEL_ROLES`, `DATA_POLICIES` (`packages/spec/src/models.ts`). "Chat" = `reasoning`.
+- `required: true` → while the role is unset or below policy the app reports readiness `needs_keys` with `attention {code: "model_role_missing", reason}` naming the role(s) (the owner action is the same page). `required: false` → the app runs without it and MAY report `attention {code: "model_role_optional"}` (readiness `degraded`; the GUI opens the app) — e.g. Knowledge without `embeddings` = keyword recall. Codes: `MODEL_ROLE_ATTENTION`.
+- Applying a binding: `env` (below) for services started by `tb-exec`; the env names are the service's own and need not be upstream env vars — a service boot script may map them to engine config (e.g. `gbrain config set models.tier.utility …`). API-configured engines (Open Notebook model registration, Foundry `PUT /provider`) are configured by the app from SDK `modelRole(role)` (`usedBy` `app`); a role may list both `app` and services.
+- `embeddings` is special: an engine's index is built with one model and size. The app stores the model + `dims` it built with; when the resolved binding differs, it keeps using the stored one, reports `attention {code: "embeddings_changed"}` and re-embeds only after the owner approves (its own repair flow). With no `embeddings` binding at the engine's first start, the app initialises it without embeddings (e.g. GBrain `--no-embedding`) and adds them later the same way. Therefore an `embeddings` role's `env` names are the app's OWN names (e.g. `KN_EMBEDDINGS_MODEL`), read only by its boot script at the engine's first start, never the engine's run-time model variables: `tb-exec` restarts the service on every `keysRev` change, and an engine that reads its model from env at run time would embed queries with a new model against the old index. Keys likewise go to the provider's upstream env name chosen by the boot script per provider id.
+- `minPolicy`: an app that reads sensitive data (Observer) declares `zdr` or `local` on every role.
+- `env`: env names `tb-exec` fills for a SERVICE from the resolved binding (`provider`, `model`, `baseUrl`, `key`, `dims`). The app itself reads roles with SDK `modelRole(role)`.
+- Keys a role uses are NOT declared again in `keys[]`; `keys[]` stays for non-model secrets and legacy apps.
+
+| Rule | Check |
+|---|---|
+| M-MR-1 | `role` in `MODEL_ROLES`; one entry per role per manifest → `model_role_invalid`. |
+| M-MR-2 | `minPolicy` in `DATA_POLICIES` → `model_role_invalid`. |
+| M-MR-3 | `usedBy` items are `app` or declared service ids → `model_role_invalid`. |
+| M-MR-4 | `env` only when every `usedBy` item is a service with `build` (the `tb-exec` entrypoint, as M-RT-6); env names unique across `runtime.env`, `keys[]` and all `modelRoles[].env` of that service → `model_role_invalid`. |
+| M-MR-5 | `when` as for keys (M-ST-3) → `condition_invalid`. |
 
 ## 8. Hooks
 
