@@ -609,3 +609,15 @@ test("v0.1.68 (C336 RQ-2, RQ-3; QA specs#47): narrowing v2, hook_tool / secret_o
     assert.equal(validate(withOp(bad)), false, JSON.stringify(bad));
   }
 });
+
+test("v0.1.73 (C354a): catalog names have no __ and no trailing _; dynamic tool names allow <name>__<suffix> up to 63 chars", async () => {
+  const { DYNAMIC_CATALOG_NAME_RE, DYNAMIC_TOOL_NAME_RE } = await import("../src/manifest.ts");
+  for (const ok of ["gmail_send", "ab", "a1", "x".repeat(48)]) assert.ok(DYNAMIC_CATALOG_NAME_RE.test(ok), ok);
+  for (const bad of ["gmail__send", "gmail_send_", "a", "1a", "A_b", "x".repeat(49), "send__all"]) assert.ok(!DYNAMIC_CATALOG_NAME_RE.test(bad), bad);
+  const variant = `${"a".repeat(48)}__first_contact`;
+  assert.equal(variant.length, 63);
+  assert.ok(DYNAMIC_TOOL_NAME_RE.test(variant));
+  assert.ok(!DYNAMIC_TOOL_NAME_RE.test(`${variant}x`));
+  assert.ok(DYNAMIC_TOOL_NAME_RE.test("gmail_send__first_contact"));
+});
+

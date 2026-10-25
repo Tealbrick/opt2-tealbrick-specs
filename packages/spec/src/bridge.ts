@@ -420,7 +420,7 @@ export interface StatusReport {
     ins?: InstanceId;
   }[];
   /** v0.1.14 (L3): `catalog_failed` = a dynamic `list` op whose catalog bridge op failed, so its entries are missing */
-  toolsOmitted: { ins: InstanceId; name: string; code: "tool_name_too_long" | "name_collision" | "ceiling" | "catalog_failed" }[];
+  toolsOmitted: { ins: InstanceId; name: string; code: "tool_name_too_long" | "name_collision" | "ceiling" | "catalog_failed" | "catalog_name_invalid" }[];
 }
 export interface ClaimRecord {
   kind: EnrolCodeEntry["kind"];

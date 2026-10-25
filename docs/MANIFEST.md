@@ -143,6 +143,7 @@ Some apps expose tool sets that are not known at build time: an engine with ~100
 
 - The manifest op declares the family and its ceilings: `dynamic: {mode, crudCeiling, effectCeiling}`. The op's own `crud`/`effect` (`["read"]`/`read`) describe discovery only.
 - The app serves, through the bridge op `POST /tb/v1/bridge/catalog`, a catalog of `DynamicCatalogEntry {name, title, description, inputSchema, crud, effect, holdFamily?}` (types/manifest.ts). Each entry obeys M-OP-2…4 and the ceilings (`crud ⊆ crudCeiling`, effect ≤ `effectCeiling` in the effect order).
+- v0.1.73 (C354a): an entry `name` matches `DYNAMIC_CATALOG_NAME_RE` (types/manifest.ts): `^[a-z][a-z0-9_]{1,47}$`, no `__`, no trailing `_`. The SDK drops other names from a catalog answer (logged once per name); a bridge drops any that still arrive from listings (`toolsOmitted` code `catalog_name_invalid`). An app MAY resolve a variant `<name>__<suffix>` (e.g. `<tool>__first_contact`) that an agent requests by that exact name; a variant runs the same upstream action as `<name>` with an effect and hold family equal to or stricter than its base, never broader.
 - `mode: "list"` (≤ 256 entries): the bridge shows each entry as its own MCP tool `<product>__<entry.name>` (names unique within the app, not colliding with static op ids).
 - `mode: "search"`: the bridge shows `<product>__<op>_search` (input `{query, limit?}`, returns entries) and `<product>__<op>_call` (input `{tool, arguments}`).
 - Every call goes to `POST /tb/v1/ops/<op>` with input `DynamicCallInput {tool, arguments}`. Before `gate()` and hooks the bridge resolves the concrete tool's `{crud, effect, holdFamily}` via the bridge op `POST /tb/v1/bridge/resolve` (cacheable 5 min) and gates, hooks, authorizes and receipts with the resolved values. The effect never comes from the agent. A resolution outside the ceilings → refuse `dynamic_ceiling_exceeded`; a resolved non-read call always gets a receipt.
@@ -180,9 +181,9 @@ A scope type is an app-declared sub-resource for grants (Connect: accounts; Know
 | M-SC-1 | Types unique; access ids unique within a type → `scope_duplicate`. |
 | M-SC-2 | `defaultGrants[].access` names an access id of the same scope; kinds unique within a scope → `default_grant_invalid`. |
 | M-SC-3 | `summaryTemplate` uses only the listed variables with declared access ids → `template_invalid`. |
-| M-SC-6 | v0.1.68 (RQ-4): an app MAY declare several scope types. The canvas edge to the app carries the FIRST declared type (primary; Core keeps one `scope_type` per edge); grants on the other types are set on the app's own scope page (`ui.configurePath`). |
 | M-SC-4 | `scopes` non-empty ⇒ `ui.configurePath` present (scopes are edited in the app) → `configure_ui_required`. |
 | M-SC-5 | v0.1.65: `summaryEmpty` is 1–40 chars and holds no `{` or `}` (no variables) → `template_invalid`. |
+| M-SC-6 | v0.1.68 (RQ-4): an app MAY declare several scope types. The canvas edge to the app carries the FIRST declared type (primary; Core keeps one `scope_type` per edge); grants on the other types are set on the app's own scope page (`ui.configurePath`). |
 
 ## 7. Settings and key requirements
 

@@ -268,9 +268,16 @@ export interface Operation {
   secretOutput?: true;
 }
 
+/** C354a (QA-C354-1): a catalog entry name — `^[a-z][a-z0-9_]{1,47}$`, never contains `__` and never ends in `_`, so a
+ *  resolved variant `<name>__<suffix>` splits uniquely at its first `__`. SDKs and bridges drop other entry names. */
+export const DYNAMIC_CATALOG_NAME_RE = /^(?!.*__)[a-z][a-z0-9_]{0,46}[a-z0-9]$/;
+/** C354a: a requested or resolved dynamic tool — a catalog name, or a variant `<catalog name>__<suffix>` an app resolves
+ *  (≤ 63 chars; e.g. `gmail_send__first_contact`). A variant runs the same upstream action as its base, never broader. */
+export const DYNAMIC_TOOL_NAME_RE = /^[a-z][a-z0-9_]{1,62}$/;
+
 /** One entry of a dynamic operation's catalog (bridge op `POST /tb/v1/bridge/catalog`, search results). */
 export interface DynamicCatalogEntry {
-  /** `^[a-z][a-z0-9_]{1,47}$`, unique within the app; v0.1.68 (C354): never contains `__` (reserved for resolved variants such as `<name>__first_contact`). */
+  /** `DYNAMIC_CATALOG_NAME_RE`, unique within the app (C354a: no `__`, no trailing `_`; `__` is reserved for resolved variants such as `<name>__first_contact`). */
   name: string;
   title: string;
   description: string;
