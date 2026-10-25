@@ -307,7 +307,7 @@ test("v0.1.42 (C230, owners' review): shared app-to-app contracts — schema + f
 test("v0.1.43 (LA-1, LR-1): viewer route purpose, workflow listing, slice viewUrl, StatusReport.views", async () => {
   const m = await import("../src/manifest.ts");
   assert.deepEqual([...m.PUBLIC_ROUTE_PURPOSES], ["oauth_callback", "webhook", "viewer"]);
-  assert.deepEqual([...m.OPERATION_LISTINGS], ["default", "workflow"]);
+  assert.deepEqual([...m.OPERATION_LISTINGS].slice(0, 2), ["default", "workflow"]); // v0.1.76 appends `lazy` (lazy.test.ts)
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
   const validate = ajv.getSchema(load("manifest.schema.json").$id);
@@ -517,8 +517,8 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
   assert.deepEqual([...EVENT_AUDIENCES], ["target", "granted"]);
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
-  // v0.1.63 adds model_roles (BRIDGE §15); v0.1.64 (C326) adds person_ops (BRIDGE §16)
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families"]); // + hook_tool, secret_output (C336), hold_families (C354a)
+  // v0.1.63 model_roles (BRIDGE §15); v0.1.64 (C326) person_ops (BRIDGE §16); v0.1.72 (C336) hook_tool, secret_output; v0.1.74 (C354a) hold_families; v0.1.76 (M4b) lazy_tools (BRIDGE §7.5)
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "lazy_tools"]);
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {

@@ -40,8 +40,11 @@ export const VOLUME_PURPOSES = ["data", "backup"] as const;
  *  `/v/<product>/` is reserved for untrusted documents (sandbox CSP enforced by tb-views). */
 export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as const;
 /** v0.1.43 (LR-1, C234): `workflow` = an agent op that is listed in tools/list and passes gate() ONLY when the grant's `wf`
- *  names it (machine ops). `default` (or absent) = today's rule. */
-export const OPERATION_LISTINGS = ["default", "workflow"] as const;
+ *  names it (machine ops). `default` (or absent) = today's rule.
+ *  v0.1.76 (C330(1), M4b): `lazy` = a STATIC agent op that is visible and callable exactly as `default`, but the bridge leaves
+ *  it out of tools/list and serves it through the product's `<product>__tb_more_search` / `<product>__tb_more_call` pair
+ *  (BRIDGE §7.5). Display only: gate(), hooks, holds, receipts and idempotency are the direct call's (MANIFEST §5.5). */
+export const OPERATION_LISTINGS = ["default", "workflow", "lazy"] as const;
 export const CATEGORIES = ["memory", "connectivity", "communication", "automation", "governance", "operations", "productivity", "developer"] as const;
 export const HARNESS_KINDS = ["generic", "claude_desktop", "codex_desktop", "tbd", "claude_agent_sdk", "eve", "tealbrick_cli"] as const;
 /** Standard operations every SDK app serves automatically (MANIFEST.md §5.4): one agent op, the rest person ops. Manifest ids never start with `tb_`. */
@@ -262,7 +265,8 @@ export interface Operation {
   receipt: boolean;
   audience: OperationAudience;
   dynamic?: DynamicSpec;
-  /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on. */
+  /** v0.1.43 (LR-1): agent ops only; see OPERATION_LISTINGS. A manifest using it needs a validator from manifest 0.1.21 on.
+   *  v0.1.76: `lazy` needs a validator that pins spec ≥ 0.1.76 (MANIFEST §5.5, M-OP-13). */
   listing?: OperationListing;
   /** v0.1.68 (C336 RQ-3, S-8; MANIFEST M-OP-12): the output carries a secret (e.g. a short-lived credential). App callers
    *  only (agent callers refused, `secret_output_app_only`), not schedulable, no idempotency row, receipt with input digest +
