@@ -70,6 +70,8 @@ A single-app repo keeps the manifest at the repo root, so both bases are the sam
 | M-ID-1 | `source.license` is a valid SPDX expression; `NONE`/`NOASSERTION` refused → `license_invalid`. |
 | M-ID-2 | Intents unique after trim + lower-case → `intent_duplicate`. |
 
+- QA-SPEC55-1: `name` (1..40) has no control, format or other invisible character (`MANIFEST_NAME_PATTERN`, the persona rule's `INVISIBLE_CHAR_CLASS` without marker exceptions) → `manifest_invalid` otherwise.
+
 ## 4. Runtime
 
 The app container is always built from source: `runtime.build {context, dockerfile}` (repo-relative, §3). CI pins the result by digest in the release record.
@@ -171,14 +173,16 @@ A scope type is an app-declared sub-resource for grants (Connect: accounts; Know
 | `access[] {id, label, crud}` | Access levels for this type, each mapping to a CRUD set. `authorize()` maps an assignment's level → `crud`. |
 | `defaultGrants[] {kind, access}` | Assignments the SDK creates when an edge to a caller first appears (C1). `own` = the caller's own instance (the app creates it if absent); `shared` = instances the app marks shared (v0.1.13, Kanban QA S2: also applied when an instance BECOMES shared later — created shared or switched to shared — for every caller seen before; an existing assignment, i.e. an owner edit, always wins; re-saving an already shared instance never re-grants); `all` = every existing instance. An empty list = nothing until the owner assigns in Configure. |
 | `summaryTemplate` | Used by the SDK default scope-summary bridge op (`/tb/v1/bridge/scope-summary`); variables `{count}`, `{label}`, `{labelPlural}`, `{access.<id>}` (count per level). Apps may override the summary in code; output ≤ 80 chars. |
+| `summaryEmpty?` | v0.1.65 (C331 D5b): plain text (≤ 40 chars, no variables) the SDK default summary shows for an agent that has NO assignment of this type (Connect: "no account yet"), so the canvas line does not look ready when the agent can reach nothing. Absent = nothing for that type (the behaviour before v0.1.65). |
 
 | Rule | Check |
 |---|---|
 | M-SC-1 | Types unique; access ids unique within a type → `scope_duplicate`. |
 | M-SC-2 | `defaultGrants[].access` names an access id of the same scope; kinds unique within a scope → `default_grant_invalid`. |
 | M-SC-3 | `summaryTemplate` uses only the listed variables with declared access ids → `template_invalid`. |
-| M-SC-5 | v0.1.68 (RQ-4): an app MAY declare several scope types. The canvas edge to the app carries the FIRST declared type (primary; Core keeps one `scope_type` per edge); grants on the other types are set on the app's own scope page (`ui.configurePath`). |
+| M-SC-6 | v0.1.68 (RQ-4): an app MAY declare several scope types. The canvas edge to the app carries the FIRST declared type (primary; Core keeps one `scope_type` per edge); grants on the other types are set on the app's own scope page (`ui.configurePath`). |
 | M-SC-4 | `scopes` non-empty ⇒ `ui.configurePath` present (scopes are edited in the app) → `configure_ui_required`. |
+| M-SC-5 | v0.1.65: `summaryEmpty` is 1–40 chars and holds no `{` or `}` (no variables) → `template_invalid`. |
 
 ## 7. Settings and key requirements
 

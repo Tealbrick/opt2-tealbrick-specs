@@ -327,6 +327,9 @@ export interface Scope {
   defaultGrants: DefaultGrant[];
   /** Variables: `{count}`, `{label}`, `{labelPlural}`, `{access.<id>}`. Rendered output ≤ 80 chars. */
   summaryTemplate: string;
+  /** v0.1.65 (C331 D5b): plain text (≤ 40, no variables) the summary shows for an agent with NO assignment of this type, e.g.
+   *  Connect "no account yet". Absent = the type adds nothing for that agent (before v0.1.65: always). M-SC-5. */
+  summaryEmpty?: string;
 }
 
 // ---------- Settings and keys ----------
