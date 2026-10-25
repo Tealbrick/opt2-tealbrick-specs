@@ -131,7 +131,7 @@ test("portal.info: public, read-only, no audit", () => {
   assert.equal(r.audit, null);
 });
 
-// v0.1.69 (QA-SPEC43-4, -6): pin the shapes and constants a reviewer must see change.
+// v0.1.70 (QA-SPEC43-4, -6): pin the shapes and constants a reviewer must see change.
 type ExactKeys<T, K extends PropertyKey> = [keyof T] extends [K] ? ([K] extends [keyof T] ? true : false) : false;
 const callResultKeys: ExactKeys<import("../src/routes.ts").PersonOpCallResult, "status" | "body"> = true;
 const bridgeResultKeys: ExactKeys<import("../src/routes.ts").BridgePersonOpResultInput, "pop" | "status" | "body"> = true;
@@ -142,7 +142,7 @@ type IdkRequired = undefined extends import("../src/routes.ts").PersonOpCallInpu
 const idkRequired: IdkRequired = true;
 void [callResultKeys, bridgeResultKeys, newSignInKeys, idkRequired];
 
-test("v0.1.69: push texts, allow-list and new-sign-in constants are exact (QA-SPEC43-4)", async () => {
+test("v0.1.70: push texts, allow-list and new-sign-in constants are exact (QA-SPEC43-4)", async () => {
   assert.deepEqual({ ...PUSH.kinds }, {
     decisions: "A decision is waiting",
     session_added: "New TBM sign-in on your account. Not you? Open TBM.",
@@ -155,7 +155,7 @@ test("v0.1.69: push texts, allow-list and new-sign-in constants are exact (QA-SP
   assert.ok(NEW_SIGN_IN.max > 0 && NEW_SIGN_IN.windowDays > 0);
 });
 
-test("v0.1.69: only the browser acknowledges new sign-ins (a K3 can never silence the notice)", () => {
+test("v0.1.70: only the browser acknowledges new sign-ins (a K3 can never silence the notice)", () => {
   const r = row("owner_sessions.ack_new_sign_ins");
   assert.deepEqual([...r.auth], ["browser"]);
   assert.equal(r.method, "POST");
@@ -165,19 +165,19 @@ test("v0.1.69: only the browser acknowledges new sign-ins (a K3 can never silenc
   assert.ok(AUDIT_ACTIONS.includes("owner_session.sign_in_ack"));
 });
 
-test("v0.1.69: new-sign-in bounds are exact; machine labels are bounded (QA-SPEC51 S4)", async () => {
+test("v0.1.70: new-sign-in bounds are exact; machine labels are bounded (QA-SPEC51 S4)", async () => {
   const { NEW_SIGN_IN } = await import("../src/routes.ts");
   assert.equal(NEW_SIGN_IN.max, 5);
   assert.equal(NEW_SIGN_IN.windowDays, 30);
   assert.equal(DEVICE_FLOW.machineLabelMax, 64);
 });
 
-test("v0.1.69 (C354): app capabilities are a closed list; person_op is declared by the app, not inferred from a version", async () => {
+test("v0.1.70 (C354): app capabilities are a closed list; person_op is declared by the app, not inferred from a version", async () => {
   const { APP_CAPS } = await import("../src/bridge.ts");
   assert.deepEqual([...APP_CAPS], ["person_op"]);
 });
 
-test("v0.1.69 (C354): the bridge's refusals are exact; cap bounds are fixed (fail closed, routing hint only)", async () => {
+test("v0.1.70 (C354): the bridge's refusals are exact; cap bounds are fixed (fail closed, routing hint only)", async () => {
   const { APP_CAPS, APP_CAPS_LIMITS, PERSON_OP_BRIDGE_REFUSALS } = await import("../src/bridge.ts");
   assert.deepEqual({ ...PERSON_OP_BRIDGE_REFUSALS }, { instanceUnknown: "instance_unknown", appUnsupported: "person_op_unsupported" });
   assert.deepEqual({ ...APP_CAPS_LIMITS }, { maxEntries: 16, maxLength: 32 });
