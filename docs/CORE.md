@@ -2,8 +2,26 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
-## Changelog → v0.1.70 (QA-SPEC49-26: scheduled ops after an edge delete; number taken at merge time, C340)
+## Changelog → v0.1.72 (QA-SPEC49-26: scheduled ops after an edge delete; `bad_request` in BridgeErrorCode; number taken at merge time, C340)
+- `BridgeErrorCode` gains `bad_request` (BRIDGE §9.4 / §15.4 malformed percent-encoding, specs#55 text; the type was missed in #55).
 - Slice `agents[].edge?: false` in `needsAgentDirectory` slices for agents without an edge; SDK scheduled ops refuse such an agent with `agent_removed` at fire time; CREDENTIALS §14 gains the edge-delete row; RM-24.
+
+## Changelog → v0.1.71 (QA-SPEC49-30/-31 + prepended marks; number taken at merge time, C340)
+- QA-SPEC49-30: Core's worst-case slice includes `prd` and `provider` (known to Core; measured from the real serialized slice, never estimated; a host move re-mints, re-measures and is refusable; `prd` never changes — RM-27, RM-28); caller `name` cut to and counted at 80 serialized JSON bytes (CALLER_NAME_MAX_JSON_BYTES; manifest names refuse invisible characters, MANIFEST_NAME_PATTERN) and the companion `revoked.jtis` of live grants are measured too (QA-SPEC55-1/-5); the reserve covers only external growth, measured from the smallest valid mint at 11,343 chars by `test/slice-reserve.test.ts`, which reads every maximum from the schemas (RM-26, QA-SPEC55-2/-3); `SLICE_CORE_MAX_CHARS` stays 52,000 (margin 2,193). Malformed percent → 400 after authentication (401 first).
+- QA-SPEC49-31: expected results for "a requirement key never satisfies a binding"; malformed percent-encoding → `400 bad_request` in BRIDGE §9.4 / §15.4; RM-25 checks the status report and Portal.
+- Coordinator decision: the prepended concatenation marks U+070F, U+0890–0891, U+08E2 (and U+110BD, U+110CD, same class) are PERSONA_MARKERS (label PCM).
+
+## Changelog → v0.1.70 (QA-SPEC43-6, -7, -4; additive)
+- `AccountMe.newSignIns` + `NEW_SIGN_IN` + browser row `owner_sessions.ack_new_sign_ins {osns}` (per-session acknowledgement of exactly the shown ids, QA-SPEC51-1; audit `owner_session.sign_in_ack`): a Portal banner for every new `tbm` sign-in with Revoke / It was me (QA-SPEC43-6).
+- CREDENTIALS §3: K14 leeway exception written into the common token rule; S-PO-7 / S-PO-9 sharpened (QA-SPEC43-7).
+- Relay: untaken rows → 502 `not_delivered`; the bridge cuts oversize answers itself (findings from the Core and bridge builds).
+- Tests pin the relay result shapes, push texts, the allow-list snapshot and the required idempotency key (QA-SPEC43-4).
+- App capabilities `APP_CAPS` (`person_op`) on `ClaimRequest` / `AppStatus` (C354: gates by capability, never by version).
+
+## Changelog → v0.1.69 (C356: model-role follow-up after specs#49; number taken at merge time, C340)
+- QA-SPEC49-27: slice URLs (`bridge.publicUrl`, `bridge.viewUrl`, `portalUrl`) are `httpsOrigin` (no path, ≤ 267); `portalKeySet` ≤ 4,096; `SLICE_CORE_MAX_CHARS` 52,000 (reserve 13.5k ≥ the measured worst automatic growth).
+- QA-SPEC49-28/-29: persona — no variation selector directly after a marker (closes `VS ZWJ VS` payloads); test rows U+0008/U+001B, a full Cc sweep (allowed ⇔ TAB/LF), printable ASCII + NBSP accepted.
+- C356: Arabic number signs U+0600–0605 and U+06DD are PERSONA_MARKERS (allowed, shown as ⟨ANS⟩), not refused.
 
 ## Changelog → v0.1.68 (model-role follow-up after specs#42 QA; number taken at merge time, C340)
 - BRIDGE §15: resolve order (paused first, retryable 503 mid-update), https-only base URL outside the own network, roles ticket claim needs the manifest verifier; `local` = listed hosts only for tailnet names/IPs (owner "Own hosts" list, `NEVER_LOCAL` incl. 100.100.100.200), Node's bracketed hex IPv4-mapped form; `zdr` shown as owner-attested, gateway attestation names the host and a model change re-asks (`ModelProvider.gateway`). PORTAL-API: cap recomputed per report (no latch), gate residuals QA-SPEC42-10, persona limit in UTF-16 units. SDK-API: one attention slot, faults outrank model codes. RM-14b, RM-16 (no latch), RM-18.

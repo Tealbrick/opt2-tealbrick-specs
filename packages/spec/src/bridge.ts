@@ -98,6 +98,8 @@ export type BridgeErrorCode =
   | "manifest_mismatch"
   | "key_not_declared"
   | "key_not_set"
+  /** malformed percent-encoding in a key or role path, after authentication (BRIDGE §9.4 / §15.4, QA-SPEC49-31) */
+  | "bad_request"
   /** v0.1.63 (C330(4), BRIDGE §15.4): model-role resolve refusals */
   | "role_not_declared"
   | "role_not_set"
@@ -338,10 +340,15 @@ export const CONFIG_KILLPATH_MAX_BYTES = 4_000_000;
  *  requires EVERY re-minted slice to stay at or under it; slices add no bytes on pause (`agents[].status`), so the check is
  *  about the slice's normal content (edge-agent directory, companion grants). */
 export const SLICE_JWS_MAX_CHARS = 65_536;
-/** QA-SPEC49-22: owner changes keep every worst-case slice at or under this, so the ~9.5k chars of automatic, never-refused
- *  growth (Portal key-set rotation ≤ 8 keys + KSS, bridge key rotation, tb-views URL, bridge caps ≤ 16, app callers) always
- *  fit under SLICE_JWS_MAX_CHARS and pause/revoke stay deliverable. */
-export const SLICE_CORE_MAX_CHARS = 56_000;
+/** QA-SPEC49-22, C356 / QA-SPEC49-27: owner changes keep every worst-case slice at or under this, so the automatic,
+ *  never-refused growth always fits under SLICE_JWS_MAX_CHARS even at the schema maxima: Portal key set (`portalKeys` ≤ 8,
+ *  `portalKeySet` ≤ 4,096), bridge key rotation (`bridge.keys` ≤ 4), the origins `bridge.publicUrl` / `bridge.viewUrl` /
+ *  `portalUrl` (≤ 267 each, no path), `bridge.caps` ≤ 16, `appCallers`. QA-SPEC49-30: `prd` on every companion grant and
+ *  `provider` on every caller are known to Core and part of its worst case, and so are every caller `name` at its schema
+ *  maximum (QA-SPEC55-1) and the companion `revoked.jtis` of every live grant (QA-SPEC55-5) — not of this reserve. Measured
+ *  external growth (smallest valid mint → schema maxima incl. `standalone`, bridge issuer, largest `rev`): 11,343 chars
+ *  (test/slice-reserve.test.ts) → margin 2,193 under 65,536. Pause/revoke stay deliverable. */
+export const SLICE_CORE_MAX_CHARS = 52_000;
 export type BridgeCap = (typeof BRIDGE_CAPS)[number];
 export interface StatusReport {
   rev: number;
@@ -770,11 +777,27 @@ export interface ClaimRequest {
   internalUrl?: InternalUrl;
   /** v0.1.52 (C268b): optional call-proof claims this app's verifier accepts (miniapp-sdk 0.1.36+: `["bd"]`). Absent = none. */
   proofClaims?: ProofClaimCap[];
+  /** v0.1.70 (C354): capabilities this app serves (APP_CAPS). Absent = none. */
+  caps?: AppCap[];
 }
 /** v0.1.52 (C268b): optional call-proof claims a verifier can declare it accepts. The bridge adds such a claim to proofs for an
  *  app ONLY when the app's current claim or status lists it (capability, never inferred from a version number). */
 export const PROOF_CLAIM_CAPS = ["bd"] as const;
 export type ProofClaimCap = (typeof PROOF_CLAIM_CAPS)[number];
+/** v0.1.70 (C354): what an app SERVES, declared by the app (claim + every status push). A ROUTING HINT ONLY, never an authority:
+ *  the owner's grant and the app's own checks still decide every call. Gates (bridge, conformance) read it, never a version number.
+ *  Readers ignore unknown entries (forward-compatible) and treat a value that is not an array of strings within APP_CAPS_LIMITS
+ *  as NO caps (fail closed). `person_op` = the app serves `POST /tb/v1/person-op` (SDK-API §21). */
+export const APP_CAPS = ["person_op"] as const;
+export type AppCap = (typeof APP_CAPS)[number];
+export const APP_CAPS_LIMITS = { maxEntries: 16, maxLength: 32 } as const;
+/** v0.1.70 (C354): the bridge's fixed refusals in a person-op result (status 409, body `{error: {code}}`), nothing forwarded. */
+export const PERSON_OP_BRIDGE_REFUSALS = {
+  /** `ins` is not an instance of the bridge's current config */
+  instanceUnknown: "instance_unknown",
+  /** the target app's latest claim/status does not declare `person_op` (or its caps are malformed) — fail closed */
+  appUnsupported: "person_op_unsupported",
+} as const;
 export interface ClaimResponse {
   ins: InstanceId;
   bridge: { id: BridgeId; publicKey: Ed25519PublicJwk; internalUrl: InternalUrl };
@@ -808,6 +831,8 @@ export interface AppStatus {
   /** v0.1.52 (C268b/C268c): as ClaimRequest.proofClaims; every push states the current set (absent, non-array or unknown entries
    *  = none). Only an app-instance push (no service) sets the bridge's stored capability (BRIDGE hooks step 6). */
   proofClaims?: ProofClaimCap[];
+  /** v0.1.70 (C354): as ClaimRequest.caps; every push states the current set */
+  caps?: AppCap[];
 }
 /** v0.1.39 (US-1): highest applied migration per scope (0 = none). */
 export interface SchemaVersion {

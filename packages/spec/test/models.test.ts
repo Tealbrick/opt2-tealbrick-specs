@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { BRIDGE_CAPS, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
-import { DATA_POLICIES, DATA_POLICY_RANK, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
+import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -288,15 +288,17 @@ test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed c
   for (const good of ["😀 emoji pairs pass", "字", "tab\there"]) assert.equal(agent({ ...base, persona: good }), true, good);
   // C353 / QA-SPEC49-21/-23: refuse by property (Cc/Cf/Cs/Default_Ignorable, U+2028/2029) except the markers; edges both sides
   const refused = ["\u0001", "\u000b", "\u000c", "\u001f", "\u0080", "\u009f", "\u115f", "\u1160", "\u3164", "\uffa0",
-    "\u17b4", "\u17b5", "\u0600", "\u06dd", "\u2028", "\u2029", "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
+    "\u17b4", "\u17b5", "\u0008", "\u001b", "\u2028", "\u2029", "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
     "\u2060", "\u2061", "\u2064", "\u2065", "\u2066", "\u2067", "\u2068", "\u2069", "\u206a", "\u206f", "\ufeff",
     "\ufff0", "\ufff8", "\ufff9", "\ufffb", "\udbff", "\udfff", "\u{e0000}", "\u{e0041}", "\u{e007f}", "\u{e0080}",
-    "\u{1bca0}", "\ufe0f\ufe0f", "\ufe00\ufe01", "\u{e0100}\u{e0101}", `😀${"\ufe0f".repeat(54)}`];
+    "\u{1bca0}", "\ufe0f\ufe0f", "\ufe00\ufe01", "\u{e0100}\u{e0101}", "\ufe0f\u200d\ufe0f", "x\u200d\ufe0f", "\u200c\ufe00",
+    "\u0600\ufe0f", "\u00ad\u{e0100}", `😀${"\ufe0f".repeat(54)}`];
   for (const bad of refused) assert.equal(agent({ ...base, persona: `a${bad}b` }), false, JSON.stringify(bad));
   const allowed = ["\t", "\n", "\u00ad", "\u034f", "\u061c", "\u180b", "\u180d", "\u180e", "\u180f", "\u200a", "\u200b",
     "\u200c", "\u200d", "\u200e", "\u200f", "\u2027", "\u202f", "\u205f", "\u2070", "\u115e", "\u1161", "\u3163",
     "\u3165", "\uff9f", "\uffa1", "\ufdff", "\ufe00", "\ufe0f", "\ufffc", "\u{e0100}", "\u{e01ef}", "\u{1f600}",
-    "👨\u200d👩\u200d👧", "❤\ufe0f", "1\ufe0f\u20e3", "\u0628\u200c\u0627", "\u05d0\u200f\u05d1"];
+    "👨\u200d👩\u200d👧", "❤\ufe0f", "1\ufe0f\u20e3", "\u0628\u200c\u0627", "\u05d0\u200f\u05d1", "\u0600", "\u0605", "\u06dd", "\u070f", "\u0890", "\u0891", "\u08e2", "\u{110bd}", "\u{110cd}", " \ufe0f", "a\ufe00",
+    "\u0661\u0600\u0662", "🏳\ufe0f\u200d🌈", "❤\ufe0f\u200d🔥", "👁\ufe0f\u200d🗨\ufe0f", "\u00a0", " !~"];
   for (const ok of allowed) assert.equal(agent({ ...base, persona: `a${ok}b` }), true, JSON.stringify(ok));
   assert.equal(PAIRING_CODES_OPEN_MAX, 100);
   assert.equal(schema.$defs.agentEntry.properties.persona.pattern, PERSONA_PATTERN);
@@ -310,10 +312,19 @@ test("C353: persona markers are exactly the allowed invisible script characters;
   }
   assert.deepEqual(
     PERSONA_MARKERS.map((m) => m.label),
-    ["SHY", "CGJ", "ALM", "FVS", "MVS", "FVS", "ZWSP", "ZWNJ", "ZWJ", "LRM", "RLM", "VS", "VS"],
+    ["SHY", "CGJ", "ANS", "ALM", "ANS", "PCM", "PCM", "PCM", "FVS", "MVS", "FVS", "ZWSP", "ZWNJ", "ZWJ", "LRM", "RLM", "VS", "VS", "PCM", "PCM"],
   );
   assert.equal(load("workspace-config.schema.json").$defs.compactJws.maxLength, SLICE_JWS_MAX_CHARS);
-  assert.ok(SLICE_CORE_MAX_CHARS <= SLICE_JWS_MAX_CHARS - 9_000, "reserve for automatic slice growth (QA-SPEC49-22)");
+  assert.ok(SLICE_CORE_MAX_CHARS <= SLICE_JWS_MAX_CHARS - 13_000, "reserve for automatic slice growth (QA-SPEC49-22/-27)");
+  // C356 / QA-SPEC49-27: slice URLs are origins, the key-set statement is bounded
+  const cfg = load("workspace-config.schema.json");
+  assert.equal(cfg.$defs.portalKeySet.maxLength, 4096);
+  const origin = new Ajv2020({ strict: false }).compile({ $defs: cfg.$defs, $ref: "#/$defs/httpsOrigin" });
+  for (const ok of ["https://bridge.example.com", "https://views.example.com:8443"]) assert.equal(origin(ok), true, ok);
+  for (const bad of ["https://bridge.example.com/", "https://x.example/path", "http://x.example", `https://${"a".repeat(260)}.example`]) assert.equal(origin(bad), false, bad);
+  const slice = load("instance-slice.schema.json");
+  for (const ref of [slice.properties.bridge.properties.publicUrl.$ref, slice.properties.portalUrl.$ref, slice.properties.bridge.properties.viewUrl.oneOf[0].$ref])
+    assert.equal(ref, "workspace-config.schema.json#/$defs/httpsOrigin");
   // both directions (QA-SPEC49-23): every allowed invisible / format character is a marker, every marker is allowed
   const invisible = /[\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
   const isMarker = (cp: number) => PERSONA_MARKERS.some((m) => cp >= m.from && cp <= m.to);
@@ -323,6 +334,19 @@ test("C353: persona markers are exactly the allowed invisible script characters;
     if (!invisible.test(ch)) continue;
     assert.equal(re.test(`a${ch}b`), isMarker(cp), `U+${cp.toString(16)}: allowed must equal marker`);
   }
+  // QA-SPEC49-28: every control character is refused except TAB and LF; printable ASCII and NBSP pass
+  for (let cp = 0; cp <= 0x9f; cp++) {
+    const ch = String.fromCodePoint(cp);
+    if (!/\p{Cc}/u.test(ch)) continue;
+    assert.equal(re.test(`a${ch}b`), cp === 0x09 || cp === 0x0a, `U+${cp.toString(16)}`);
+  }
+  for (let cp = 0x20; cp <= 0x7e; cp++) assert.ok(re.test(`a${String.fromCodePoint(cp)}b`), `U+${cp.toString(16)}`);
+  assert.ok(re.test("a\u00a0b"));
+});
+
+test("QA-SPEC55-1: MANIFEST_NAME_PATTERN equals the manifest schema pattern and reuses INVISIBLE_CHAR_CLASS", () => {
+  assert.equal(load("manifest.schema.json").properties.name.pattern, MANIFEST_NAME_PATTERN);
+  assert.ok(MANIFEST_NAME_PATTERN.includes(INVISIBLE_CHAR_CLASS));
 });
 
 test("QA-SPEC49-26: a directory slice may mark an agent without an edge as edge: false (only false)", () => {

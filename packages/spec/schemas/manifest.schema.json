@@ -10,7 +10,7 @@
     "$schema": { "type": "string", "maxLength": 256 },
     "schema": { "const": "tealbrick.miniapp/2" },
     "id": { "$ref": "#/$defs/productId" },
-    "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 40, "pattern": "^[^\\p{Cc}\\p{Cf}\\p{Cs}\\p{Default_Ignorable_Code_Point}\\u2028\\u2029]+$", "description": "QA-SPEC55-1: no control, format or invisible character (MANIFEST_NAME_PATTERN)." },
     "summary": { "type": "string", "minLength": 1, "maxLength": 160 },
     "description": { "type": "string", "maxLength": 4000 },
     "version": { "$ref": "#/$defs/semver" },
