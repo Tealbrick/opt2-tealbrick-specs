@@ -31,6 +31,9 @@ function worstSize(s: State): number {
 }
 /** The rule QA-SPEC57-1 broke: measure the current state only. */
 const naiveWorst = (s: State) => realSize(s);
+/** A mutant that forgets AGENT pauses (counts paused agents' grants as gone): it must break too (QA-SPEC57 S3). */
+const ignoresAgentPause = (s: State) =>
+  s.edges.filter((e) => e.enabled && !s.agentPaused[e.agent]).reduce((n, e) => n + grant(e.ops ?? Math.min(s.apps[e.app], OPS_MAX), HELD_ALL), 0);
 
 type Change = { exempt: boolean; apply: (s: State) => void };
 function rng(seed: number) {
@@ -64,31 +67,51 @@ function randomChange(s: State, r: (n: number) => number): Change {
 }
 const clone = (s: State): State => ({ apps: [...s.apps], agentPaused: [...s.agentPaused], wsPaused: s.wsPaused, edges: s.edges.map((e) => ({ ...e })) });
 
-/** Runs `steps` random owner changes through the size rule with `measure`; returns the first broken step or null. */
-function run(seed: number, steps: number, limit: number, measure: (s: State) => number): string | null {
+/** Runs `steps` random owner changes through the size rule with `measure`; returns the first broken step (or null) and
+ *  how often the rule refused a change and how close the true worst case came to the limit (non-vacuous: QA-SPEC57 S3). */
+function run(seed: number, steps: number, limit: number, measure: (s: State) => number): { broken: string | null; refused: number; peak: number } {
   const r = rng(seed);
   const s: State = { apps: Array.from({ length: 8 }, () => 20 + r(200)), agentPaused: Array.from({ length: 40 }, () => false), wsPaused: false, edges: [] };
+  let refused = 0;
+  let peak = 0;
   for (let i = 0; i < steps; i++) {
     const c = randomChange(s, r);
     const next = clone(s);
     c.apply(next);
     const accepted = c.exempt || measure(next) <= limit || measure(next) <= measure(s);
     if (accepted) Object.assign(s, next);
-    if (realSize(s) > worstSize(s)) return `step ${i}: real ${realSize(s)} > worst ${worstSize(s)}`;
-    if (realSize(s) > limit) return `step ${i}: real ${realSize(s)} > limit ${limit}`;
+    else refused++;
+    peak = Math.max(peak, worstSize(s));
+    if (realSize(s) > worstSize(s)) return { broken: `step ${i}: real ${realSize(s)} > worst ${worstSize(s)}`, refused, peak };
+    // the TRUE worst case (every exempt change at its maximum) must stay under the limit: otherwise a later exempt change
+    // (resume, narrowing, held additions) can take the real config past it with no check left to stop it
+    if (worstSize(s) > limit) return { broken: `step ${i}: true worst ${worstSize(s)} > limit ${limit}`, refused, peak };
   }
-  return null;
+  return { broken: null, refused, peak };
 }
 
 test("RM-24c: with the C359c/C359d worst case, no sequence of accepted changes (incl. pause → changes → resume) passes the limit", () => {
   const limit = 40_000;
-  for (let seed = 1; seed <= 300; seed++) assert.equal(run(seed, 400, limit, worstSize), null, `seed ${seed}`);
+  let refused = 0;
+  let nearLimit = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const out = run(seed, 400, limit, worstSize);
+    assert.equal(out.broken, null, `seed ${seed}`);
+    refused += out.refused;
+    if (out.peak >= 0.9 * limit) nearLimit++;
+  }
+  // non-vacuous: the rule really refuses changes, and many sequences push the true worst case close to the limit
+  assert.ok(refused > 1_000, `only ${refused} refusals`);
+  assert.ok(nearLimit > 30, `only ${nearLimit} sequences came near the limit`);
 });
 
 test("RM-24c: the earlier rule (measure the current state) breaks — the spec rule must not be weakened", () => {
   const limit = 40_000;
-  const broken = Array.from({ length: 300 }, (_, i) => run(i + 1, 400, limit, naiveWorst)).filter(Boolean);
+  const broken = Array.from({ length: 300 }, (_, i) => run(i + 1, 400, limit, naiveWorst).broken).filter(Boolean);
   assert.ok(broken.length > 0, "the naive measure should break in some sequence");
+  // QA-SPEC57 S3: a measure that forgets AGENT pauses must break as well (the model sees agent pause, not only workspace pause)
+  const brokenAgent = Array.from({ length: 300 }, (_, i) => run(i + 1, 400, limit, ignoresAgentPause).broken).filter(Boolean);
+  assert.ok(brokenAgent.length > 0, "a measure that ignores agent pauses should break in some sequence");
 });
 
 test("RM-24c: exempt changes never raise the measured worst case", () => {

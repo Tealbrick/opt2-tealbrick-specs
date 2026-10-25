@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { BRIDGE_CAPS, type BridgeErrorCode, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { BRIDGE_CAPS, type BridgeErrorCode, CONFIG_CORE_MAX_BYTES, CONFIG_KILLPATH_MAX_BYTES, CONFIG_SIGNER_MAX_BYTES, type ModelRoleStatus, PAIRING_CODES_OPEN_MAX, SLICE_AUTO_GROWTH_CHARS, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS, WORKSPACE_INSTANCES_MAX } from "../src/bridge.ts";
 import { ENV_NAME_PATTERN } from "../src/manifest.ts";
 import { DATA_POLICIES, DATA_POLICY_RANK, INVISIBLE_CHAR_CLASS, isDeniedRoleEnv, MANIFEST_NAME_PATTERN, MODEL_ID_PATTERN, MODEL_PROVIDERS, MODEL_ROLE_ATTENTION, MODEL_ROLE_HINTS_MAX, MODEL_ROLES, NEVER_LOCAL, NEVER_LOCAL_HOSTNAMES, OWN_HOSTS_MAX, PERSONA_MARKERS, PERSONA_MAX_CHARS, PERSONA_PATTERN, PERSONA_WORKSPACE_MAX_CHARS, POLICY_BASES, PROVIDER_ID_PATTERN } from "../src/models.ts";
 import type { AgentCard, CatalogEntry, Instance, KeyStatus, KeyStatusRole, ModelRoleHint } from "../src/routes.ts";
@@ -279,6 +279,12 @@ test("spec follow-up (QA-SPEC49-11): the persona budget cannot push the signed c
   }
   assert.ok(CONFIG_CORE_MAX_BYTES + 1_000_000 <= 4 * 1024 * 1024, "1 MB headroom to the bridge limit");
   assert.ok(CONFIG_CORE_MAX_BYTES < CONFIG_KILLPATH_MAX_BYTES && CONFIG_KILLPATH_MAX_BYTES < 4 * 1024 * 1024);
+  // QA-SPEC57 S3: derived, never hand-set — one automatic growth event per slice + the config itself still signs
+  assert.equal(CONFIG_SIGNER_MAX_BYTES, 4 * 1024 * 1024);
+  assert.equal(WORKSPACE_INSTANCES_MAX, load("workspace-config.schema.json").$defs.pause.properties.instances.maxItems);
+  assert.equal(CONFIG_KILLPATH_MAX_BYTES, 3_197_000);
+  assert.ok(CONFIG_KILLPATH_MAX_BYTES + (WORKSPACE_INSTANCES_MAX + 1) * Math.ceil((SLICE_AUTO_GROWTH_CHARS * 4) / 3) <= CONFIG_SIGNER_MAX_BYTES);
+  assert.ok(CONFIG_KILLPATH_MAX_BYTES <= 4 * 1024 * 1024 - WORKSPACE_INSTANCES_MAX * 11_343, "the Coordinator's bound");
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   const schema = load("workspace-config.schema.json");
   const agent = ajv.compile({ $defs: schema.$defs, $ref: "#/$defs/agentEntry" });

@@ -4,6 +4,7 @@ Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG
 
 ## Changelog → v0.1.75 (recipe follow-up: C359c, QA-BRIDGE22-6, QA-SPEC54 S4, RM-15; number taken at merge time, C340)
 - C359c / C359d (QA-CORE63-13, QA-SPEC57-1): a change may skip the size check only if the measured worst case already covers its result; the worst case counts every verb-level edge at its full op list (≤ 128 ids), `held` at 8, and every paused grant as if resumed; limits named (slice 65,536, signed config 4 MiB). RM-24c + an executable sequence model `test/killpath-model.test.ts`.
+- QA-SPEC57 S3: `CONFIG_KILLPATH_MAX_BYTES` is DERIVED (signer limit − 65 × ceil(SLICE_AUTO_GROWTH_CHARS × 4/3), rounded down: 3,197,000, was 4,000,000) with `CONFIG_SIGNER_MAX_BYTES`, `WORKSPACE_INSTANCES_MAX`, `SLICE_AUTO_GROWTH_CHARS` (11,500 ≥ measured 11,343); pinned by tests.
 - `isDeniedRoleEnv()` moved into the package (`models.ts`) so the manifest package and `tb-exec` import one matcher (QA-SPEC57 S4).
 - `ENV_NAME_PATTERN` (manifest envName = config keyName); the bridge keeps only matching key-requirement names (BRIDGE §9.4).
 - `Instance.updatePolicyLowered[] {role, from, to, notice}` typed (RM-15; Core already sends it).

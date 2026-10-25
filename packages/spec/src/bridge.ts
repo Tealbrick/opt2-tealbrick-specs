@@ -331,11 +331,21 @@ export const CONFIG_CORE_MAX_BYTES = 3_000_000;
  *  in `revoked.jtis` until `exp`). Core refuses a new code at this count, so cancellations cannot grow the config past the
  *  kill-path budget. */
 export const PAIRING_CODES_OPEN_MAX = 100;
-/** Spec follow-up (QA-SPEC49-15, C349): before it signs an owner change, Core also builds the WORST-CASE kill-path config of
- *  the result — workspace + every agent + every instance paused, every connection revoked, PAIRING_CODES_OPEN_MAX cancelled
- *  codes, with every app slice re-minted — and refuses the change (`config_too_large`) when that JWS is larger than this.
- *  Margin to the bridge's 4 MiB (4,194,304) limit. */
-export const CONFIG_KILLPATH_MAX_BYTES = 4_000_000;
+/** The bridge's / signer's hard limit for a signed config (compact JWS bytes, BRIDGE §1.2 S2: 4 MiB). */
+export const CONFIG_SIGNER_MAX_BYTES = 4 * 1024 * 1024;
+/** Instances in a workspace (schema `pause.instances` maxItems): the number of slices a config can carry. */
+export const WORKSPACE_INSTANCES_MAX = 64;
+/** QA-SPEC57 S3: the largest EXTERNAL automatic growth of one slice (key rotations, origins, caps, app callers, standalone,
+ *  bridge issuer, rev), measured at the schema maxima by test/slice-reserve.test.ts (11,343 today) plus headroom; that test
+ *  fails if the measured growth ever passes this. */
+export const SLICE_AUTO_GROWTH_CHARS = 11_500;
+/** Spec follow-up (QA-SPEC49-15, C349; derived per QA-SPEC57 S3): before it signs an owner change, Core also builds the
+ *  WORST-CASE kill-path config of the result (PORTAL-API "Config size") and refuses the change when that JWS is larger than
+ *  this. Derived, never hand-set: the signer limit minus one automatic growth event for every slice AND for the config's
+ *  own external fields (WORKSPACE_INSTANCES_MAX + 1), each base64-encoded once more inside the config JWS (× 4/3), rounded
+ *  down to a thousand. So one key rotation at the worst case still signs. */
+export const CONFIG_KILLPATH_MAX_BYTES =
+  Math.floor((CONFIG_SIGNER_MAX_BYTES - (WORKSPACE_INSTANCES_MAX + 1) * Math.ceil((SLICE_AUTO_GROWTH_CHARS * 4) / 3)) / 1000) * 1000;
 /** C353 (QA-SPEC49-18): the per-slice limit (schema `compactJws` maxLength). Core's worst-case kill-path check (above) also
  *  requires EVERY re-minted slice to stay at or under it; slices add no bytes on pause (`agents[].status`), so the check is
  *  about the slice's normal content (edge-agent directory, companion grants). */

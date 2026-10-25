@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
+import { SLICE_AUTO_GROWTH_CHARS, SLICE_CORE_MAX_CHARS, SLICE_JWS_MAX_CHARS } from "../src/bridge.ts";
 import { CALLER_NAME_MAX_JSON_BYTES } from "../src/models.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
@@ -155,6 +155,7 @@ test("QA-SPEC55: every accepted slice shape keeps ≥ 1,000 chars to the 65,536 
     const margin = SLICE_JWS_MAX_CHARS - (SLICE_CORE_MAX_CHARS + worst.growth);
     assert.ok(worst.growth > 10_000, `${s}: growth ${worst.growth} looks too small: is a field missing?`);
     assert.ok(margin >= 1_000, `${s}: worst shape ${JSON.stringify(worst)}: margin ${margin} < 1,000`);
+    assert.ok(worst.growth <= SLICE_AUTO_GROWTH_CHARS, `${s}: measured growth ${worst.growth} > SLICE_AUTO_GROWTH_CHARS (the config budget assumes it)`);
   }
   script = "ascii";
 });
