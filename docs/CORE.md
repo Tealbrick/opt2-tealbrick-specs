@@ -3,7 +3,7 @@
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
 ## Changelog → v0.1.69 (QA-SPEC43-6, -7, -4; additive)
-- `AccountMe.newSignIns` + `NEW_SIGN_IN` + browser row `owner_sessions.ack_new_sign_ins`: a Portal banner for every new `tbm` sign-in with Revoke / It was me (QA-SPEC43-6).
+- `AccountMe.newSignIns` + `NEW_SIGN_IN` + browser row `owner_sessions.ack_new_sign_ins {osns}` (per-session acknowledgement of exactly the shown ids, QA-SPEC51-1; audit `owner_session.sign_in_ack`): a Portal banner for every new `tbm` sign-in with Revoke / It was me (QA-SPEC43-6).
 - CREDENTIALS §3: K14 leeway exception written into the common token rule; S-PO-7 / S-PO-9 sharpened (QA-SPEC43-7).
 - Relay: untaken rows → 502 `not_delivered`; the bridge cuts oversize answers itself (findings from the Core and bridge builds).
 - Tests pin the relay result shapes, push texts, the allow-list snapshot and the required idempotency key (QA-SPEC43-4).

@@ -136,6 +136,8 @@ type ExactKeys<T, K extends PropertyKey> = [keyof T] extends [K] ? ([K] extends 
 const callResultKeys: ExactKeys<import("../src/routes.ts").PersonOpCallResult, "status" | "body"> = true;
 const bridgeResultKeys: ExactKeys<import("../src/routes.ts").BridgePersonOpResultInput, "pop" | "status" | "body"> = true;
 const newSignInKeys: ExactKeys<import("../src/routes.ts").NewSignIn, "osn" | "client" | "machineLabel" | "createdAt"> = true;
+const ackInputKeys: ExactKeys<import("../src/routes.ts").NewSignInsAckInput, "osns"> = true;
+void ackInputKeys;
 type IdkRequired = undefined extends import("../src/routes.ts").PersonOpCallInput["idempotencyKey"] ? false : true;
 const idkRequired: IdkRequired = true;
 void [callResultKeys, bridgeResultKeys, newSignInKeys, idkRequired];
@@ -157,5 +159,15 @@ test("v0.1.69: only the browser acknowledges new sign-ins (a K3 can never silenc
   const r = row("owner_sessions.ack_new_sign_ins");
   assert.deepEqual([...r.auth], ["browser"]);
   assert.equal(r.method, "POST");
-  assert.equal(r.input, "Empty");
+  assert.equal(r.input, "NewSignInsAckInput");
+  // QA-SPEC51-1 / S4: per-session ack of the shown ids, audited
+  assert.equal(r.audit, "owner_session.sign_in_ack");
+  assert.ok(AUDIT_ACTIONS.includes("owner_session.sign_in_ack"));
+});
+
+test("v0.1.69: new-sign-in bounds are exact; machine labels are bounded (QA-SPEC51 S4)", async () => {
+  const { NEW_SIGN_IN } = await import("../src/routes.ts");
+  assert.equal(NEW_SIGN_IN.max, 5);
+  assert.equal(NEW_SIGN_IN.windowDays, 30);
+  assert.equal(DEVICE_FLOW.machineLabelMax, 64);
 });
