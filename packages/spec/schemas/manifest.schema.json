@@ -473,7 +473,7 @@
       "required": ["product", "operations", "crud", "purpose"],
       "properties": {
         "product": { "anyOf": [{ "$ref": "#/$defs/productId" }, { "const": "*" }] },
-        "operations": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "anyOf": [{ "$ref": "#/$defs/snakeId" }, { "const": "tb.holds_pending" }] } },
+        "operations": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "anyOf": [{ "$ref": "#/$defs/snakeId" }, { "const": "tb.holds_pending" }, { "const": "tb.hold_status" }] } },
         "crud": { "$ref": "#/$defs/crudSet" },
         "purpose": { "type": "string", "minLength": 1, "maxLength": 160 }
       }

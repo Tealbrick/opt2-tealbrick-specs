@@ -337,3 +337,6 @@ Bridge key store (sealed, bridge volume) holds workspace default keys (manifest 
 
 ## v0.1.43 — the workspace views service (LA-1, C232)
 Core creates `tb-views` (the bridge image with `TB_ROLE=views`, same digest as the bridge) only when the workspace deploys an app whose release manifest has a `viewer` public route; order: empty service → env (`TB_ROLE`, `TB_VIEWS_UPSTREAM` = bridge private URL, `TB_VIEWS_KEY` generated + sealed, also set on the bridge) → one generated domain → image → one deploy (L5, L40). The next signed config carries `bridge.viewUrl`. A bridge update also updates tb-views (after the bridge is healthy). Removal: when the last viewer app is removed, and always with the bridge; tb-views has no volume, so nothing is kept (no kept-data item). The cost estimate shows a "Page viewer service" line. Own-infra bridges: the operator runs a second container with `TB_ROLE=views`.
+
+## v0.1.77 (C367 P3) — companion `tb.hold_status`
+- MANIFEST M-CP-3 lets a companion entry for one product list `tb.hold_status` next to an op of that product. Core's `companionErrors` calls the manifest package, so Core has no new rule. Core mints the op into that companion grant's `wf` like any declared op. CORE I4 is unchanged: a valid grant suffices, no CRUD check. SDK-API §4.7 says what the app caller sees.

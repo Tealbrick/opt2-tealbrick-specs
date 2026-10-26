@@ -48,6 +48,10 @@ export const HARNESS_KINDS = ["generic", "claude_desktop", "codex_desktop", "tbd
 export const STANDARD_OPERATIONS = ["tb.hold_status", "tb.holds_list", "tb.holds_decide", "tb.receipts_list", "tb.agents_list", "tb.scopes_set", "tb.keys_status", "tb.key_set", "tb.key_delete", "tb.export", "tb.holds_pending"] as const;
 /** v0.1.13 (G4): the ONE op a wildcard companion (`product: "*"`) may name (MANIFEST M-CP-3); needs owner consent at deploy (C82). */
 export const WILDCARD_COMPANION_OPS = ["tb.holds_pending"] as const;
+/** v0.1.77 (C367, P3; MANIFEST M-CP-3): the ONE other standard op a companion entry may name. Only in an entry for ONE product
+ *  (never `"*"`), and only together with at least one op of that product. It lets an app caller read the status of the holds it
+ *  raised (cap `app_hold_status`). Any other standard op in a companion (except the wildcard rule above) → `companion_invalid`. */
+export const COMPANION_HOLD_STATUS_OP = "tb.hold_status" as const;
 /** v0.1.42 (C230): shared app-to-app contracts, `<name>/<major>`; each has a JSON Schema in this package at
  *  `schemas/contracts/<name>.<major>.schema.json` and a fixture at `examples/contracts/<name>.<major>.json`. */
 export const CONTRACT_IDS = ["messages/1", "fleet.directory_feed/1"] as const;
@@ -481,7 +485,9 @@ export interface ManifestRequires {
 
 export interface Companion {
   /** v0.1.13 (G4): `"*"` = every deployed app of the workspace, ONLY with operations ["tb.holds_pending"] and crud ["read"]
-   *  (M-CP-3); Core mints the per-app grants only after the owner's explicit consent (C82, PORTAL-API `instances.consent`). */
+   *  (M-CP-3); Core mints the per-app grants only after the owner's explicit consent (C82, PORTAL-API `instances.consent`).
+   *  v0.1.77 (C367): an entry for one product may also list `COMPANION_HOLD_STATUS_OP` (`tb.hold_status`) next to at least one
+   *  op of that product (M-CP-3). */
   product: ProductId | "*";
   operations: SnakeId[];
   crud: CrudAction[];

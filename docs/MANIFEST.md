@@ -152,7 +152,7 @@ Some apps expose tool sets that are not known at build time: an engine with ~100
 ### 5.4 Standard operations (every SDK app, automatic) and reserved names
 | Id | Audience | CRUD / effect | Surface |
 |---|---|---|---|
-| `tb.hold_status` | agent | read / read | MCP `<product>__tb_hold_status` (poll a held call by `holdId`) |
+| `tb.hold_status` | agent | read / read | MCP `<product>__tb_hold_status` (poll a held call by `holdId`). v0.1.77 (C367): an app caller may use it too, when a companion entry lists it (M-CP-3; SDK-API §4.7) |
 | `tb.holds_list` | person | read / read | app UI (hold popup) |
 | `tb.holds_decide` | person | update / write | app UI: approve or reject one hold, once (no standing grants, C8) |
 | `tb.receipts_list` | person | read / read | app UI |
@@ -252,7 +252,7 @@ Hooks match only `agent`-audience manifest operations reached through the bridge
 |---|---|
 | M-CP-1 | Companion products unique and ≠ own id → `companion_invalid`. |
 | M-CP-2 | `validateCompanions(m, targets)` (Core at deploy, conformance): target ops exist with audience `agent`; each `op.crud ⊆ crud`; `crud ⊆ ∪ op.crud` → `companion_op_invalid`. |
-| M-CP-3 | v0.1.13 (G4, C82): `product: "*"` (wildcard companion) only with `operations` exactly `["tb.holds_pending"]` and `crud` exactly `["read"]`; the standard op `tb.holds_pending` is the only standard op a companion may name (also for one product) → `companion_invalid`. A wildcard companion is never granted by the manifest alone: Core mints one grant per deployed, licensed app (and for apps deployed later) only after the owner's explicit consent (PORTAL-API `instances.consent`), and deletes them all on revoke. |
+| M-CP-3 | v0.1.13 (G4, C82): `product: "*"` (wildcard companion) only with `operations` exactly `["tb.holds_pending"]` and `crud` exactly `["read"]`; the standard op `tb.holds_pending` is the only standard op a companion may name (also for one product) → `companion_invalid`. **v0.1.77 (C367, P3):** one more standard op is allowed. An entry for ONE product (not `"*"`) may list `tb.hold_status` (`COMPANION_HOLD_STATUS_OP`) among its `operations`, if the same entry also lists at least one op of that product. It needs no crud: CORE I4 says a valid grant suffices, and the op is read/read. M-CP-2 ignores it (it does not need `read` in `crud` and adds nothing to the union). `tb.hold_status` in a wildcard entry, as the only op of an entry, or any other standard op in a companion (except the wildcard `tb.holds_pending` rule) → `companion_invalid`. Core mints it into that companion grant's `wf` like any declared op; Core's `companionErrors` calls the manifest package, so Core gets no new rule. Effect: the app caller can read the status of the holds it raised (SDK-API §4.7, cap `app_hold_status`). A wildcard companion is never granted by the manifest alone: Core mints one grant per deployed, licensed app (and for apps deployed later) only after the owner's explicit consent (PORTAL-API `instances.consent`), and deletes them all on revoke. |
 | M-UL-1 | Unlock ids unique; `requires ∈ companions[].product`; `provides` names own operations / skills → `unlock_invalid`. |
 
 ## 10. Skills and harness hints
@@ -465,7 +465,8 @@ their summary (every detail read is authorized per call).
 ### 16.3 Platform events and compatibility
 - `tb.hold.decided` (types/bridge.ts `PLATFORM_EVENTS`): emitted by the SDK for every app when a hold is approved, denied
   or expires; `to` = the hold's AGENT caller only (app callers receive no events in v1); visibility = `tb.hold_status`
-  (any valid grant to the app, CORE I4); data `{holdId, op, decision: "approved"|"denied"|"expired"}`.
+  (any valid grant to the app, CORE I4); data `{holdId, op, decision: "approved"|"denied"|"expired"}`. v0.1.77 (C367): app callers
+  still get no `tb.hold.decided` event; they poll `tb.hold_status` (M-CP-3, SDK-API §4.7).
 - A manifest with `events` needs manifest ≥ 0.1.30 (strict schema) in EVERY reader: Core's catalog sync validates each
   release manifest with its pinned validator and SKIPS a release it refuses, and each bridge validates at claim. So Core
   re-pins manifest ≥ 0.1.30 before any app release with `events` is published, and `requiredBridgeVersion` gains the row
