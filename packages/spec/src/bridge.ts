@@ -112,7 +112,9 @@ export type BridgeErrorCode =
 
 /** One envelope everywhere. App-side codes (e.g. `scope_denied`, `idempotency_conflict`) pass through, hence `string`. */
 export interface ErrorEnvelope<C extends string = BridgeErrorCode | (string & {})> {
-  error: { code: C; message: string; requestId: string };
+  /** `details` is the CORE §8 optional member (v0.1.77: typed here). `details.pointer` = a JSON pointer (RFC 6901) into the
+   *  request for `input_invalid` refusals that name a place, e.g. `/context/evolution.step` (BRIDGE §8.5, C367). */
+  error: { code: C; message: string; requestId: string; details?: { [k: string]: JsonValue } };
 }
 
 // ── Workspace config payload (`tb-config+jws`) — workspace-config.schema.json ─
@@ -324,7 +326,13 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.74 (C354a, QA-SPEC56-1): + `hold_families` = the bridge reads `DynamicResolution.holdFamilies` (held when any member is
  *  held), passes it in `HookCallInfo.target.holdFamilies`, and refuses a variant resolution broader than its base
  *  (`variantNarrowerOrEqual`, `dynamic_resolve_failed`). */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families"] as const;
+/** v0.1.77 (C367, P3): + `app_hold_status` = the bridge routes the standard op `tb.hold_status` on the companion path when the
+ *  presented companion grant's `wf` lists it (BRIDGE §8.3; the I4 CRUD skip applies). The target app answers an app caller only for
+ *  holds that caller raised (SDK-API §4.7). Without the cap nothing changes.
+ *  v0.1.77 (C367, P4): + `app_call_context` = the bridge accepts `CallEnvelope.context` on the companion path, validates it
+ *  (BRIDGE §8.5; `CALLER_CONTEXT_*`), and puts the keys into the op body `context` before the before-hook chain. Without the cap
+ *  the SDK never sends `context` (it refuses locally, SDK-API §18.6). */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -931,6 +939,24 @@ export interface CallEnvelope<I = JsonValue> {
   /** set by the SDK to the current call id; used for hook re-entry and depth limits. v0.1.13 (C85): ABSENT for
    *  app-initiated calls (StartContext / events ctx / timers): the bridge audits them `call.app_initiated`. */
   parentCall?: CallId;
+  /** v0.1.77 (C367, P4; cap `app_call_context`, BRIDGE §8.5, SDK-API §18.6): context keys the caller adds to this call. Allowed
+   *  with or without `parentCall`. Every key matches `callerContextKeyPattern(<the caller's verified product>)`; a `tb.` key is
+   *  always refused; no verified product → a non-empty object is refused; JCS size ≤ `CALLER_CONTEXT_MAX_BYTES`, depth ≤
+   *  `CALLER_CONTEXT_MAX_DEPTH`. A refusal is `400 input_invalid` with `details.pointer` = `/context` or `/context/<key>`. */
+  context?: Record<string, JsonValue>;
+}
+
+// ── Caller context on app-initiated calls (v0.1.77, C367 P4) ────────────────
+/** Largest JCS serialization of a whole `CallEnvelope.context` object, in UTF-8 bytes. */
+export const CALLER_CONTEXT_MAX_BYTES = 2048;
+/** Deepest value under one context key. A scalar is depth 0, `[1]` depth 1, `{"a":[1]}` depth 2. */
+export const CALLER_CONTEXT_MAX_DEPTH = 3;
+/** The key rule after `<callerProduct>.`: 1 to 4 segments of `[a-z0-9_]{1,40}`. */
+export const CALLER_CONTEXT_KEY_TAIL = "[a-z0-9_]{1,40}(\\.[a-z0-9_]{1,40}){0,3}";
+/** `^<product>\.<CALLER_CONTEXT_KEY_TAIL>$`. `product` is an already validated product id (it holds only `[a-z0-9-]`, so it needs
+ *  no escaping). The full validator lives once in the manifest package (L1); this is only the key rule. */
+export function callerContextKeyPattern(product: string): RegExp {
+  return new RegExp(`^${product}\\.${CALLER_CONTEXT_KEY_TAIL}$`);
 }
 
 /** v0.1.18 (C106a) */

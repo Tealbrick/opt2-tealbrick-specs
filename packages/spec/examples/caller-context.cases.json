@@ -1,0 +1,318 @@
+{
+  "description": "v0.1.77 (C367, P4): CallEnvelope.context rules (BRIDGE §8.5, SDK-API §18.6). `cases`: for the caller's verified product (`callerProduct`, null = the grant has no `prd`), does the bridge accept `context` (`ok`) or refuse it `400 input_invalid` with `details.pointer` = `pointer`? Check order (the first failure wins): (1) not an object, or no product and not empty → `/context`; (2) JCS size > 2048 UTF-8 bytes → `/context`; (3) keys in sorted order: a `tb.` key or a key that fails the key pattern → `/context/<key>`; (4) depth > 3 under a key → `/context/<key>` (JSON pointer escapes: `~` → `~0`, `/` → `~1`). `summaryCases`: `HoldsPendingItem.callerContext` for a context (SDK-API §18.6 rule 6). The manifest package implements the validator once (L1) and runs these rows; this package's test checks the rows against a reference checker.",
+  "limits": {
+    "maxBytes": 2048,
+    "maxDepth": 3,
+    "summaryMaxChars": 256,
+    "summaryValueMaxChars": 64
+  },
+  "cases": [
+    {
+      "name": "evolution_fixture",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.workflow": "wf_01J9X",
+        "evolution.version": 3,
+        "evolution.run": "run_01J9Y",
+        "evolution.step": "step_2"
+      },
+      "ok": true
+    },
+    {
+      "name": "empty_object",
+      "callerProduct": "evolution",
+      "context": {},
+      "ok": true
+    },
+    {
+      "name": "key_of_another_product",
+      "callerProduct": "evolution",
+      "context": {
+        "kanban.card": "c1"
+      },
+      "ok": false,
+      "pointer": "/context/kanban.card"
+    },
+    {
+      "name": "product_prefix_lookalike",
+      "callerProduct": "evolution",
+      "context": {
+        "evolutionx.run": "r"
+      },
+      "ok": false,
+      "pointer": "/context/evolutionx.run"
+    },
+    {
+      "name": "bare_product_no_tail",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution": "r"
+      },
+      "ok": false,
+      "pointer": "/context/evolution"
+    },
+    {
+      "name": "tb_namespace",
+      "callerProduct": "evolution",
+      "context": {
+        "tb.onBehalfOf": {
+          "claim": "x"
+        }
+      },
+      "ok": false,
+      "pointer": "/context/tb.onBehalfOf"
+    },
+    {
+      "name": "uppercase_segment",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.Workflow": "w"
+      },
+      "ok": false,
+      "pointer": "/context/evolution.Workflow"
+    },
+    {
+      "name": "four_segments_ok",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a.b.c.d": 1
+      },
+      "ok": true
+    },
+    {
+      "name": "five_segments",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a.b.c.d.e": 1
+      },
+      "ok": false,
+      "pointer": "/context/evolution.a.b.c.d.e"
+    },
+    {
+      "name": "segment_40_chars_ok",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": 1
+      },
+      "ok": true
+    },
+    {
+      "name": "segment_41_chars",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": 1
+      },
+      "ok": false,
+      "pointer": "/context/evolution.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "hyphen_product_ok",
+      "callerProduct": "my-app",
+      "context": {
+        "my-app.run": "r"
+      },
+      "ok": true
+    },
+    {
+      "name": "depth_3_ok",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a": {
+          "b": {
+            "c": [
+              1
+            ]
+          }
+        }
+      },
+      "ok": true
+    },
+    {
+      "name": "depth_4",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a": {
+          "b": {
+            "c": {
+              "d": [
+                1
+              ]
+            }
+          }
+        }
+      },
+      "ok": false,
+      "pointer": "/context/evolution.a"
+    },
+    {
+      "name": "jcs_exactly_2048_bytes",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "ok": true
+    },
+    {
+      "name": "jcs_2049_bytes",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "multibyte_2048_bytes_ok",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.note": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééx"
+      },
+      "ok": true
+    },
+    {
+      "name": "multibyte_2049_bytes_fewer_chars",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.note": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      },
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "non_prd_caller_nonempty",
+      "callerProduct": null,
+      "context": {
+        "evolution.run": "r"
+      },
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "non_prd_caller_empty",
+      "callerProduct": null,
+      "context": {},
+      "ok": true
+    }
+  ],
+  "summaryCases": [
+    {
+      "name": "evolution_fixture",
+      "context": {
+        "evolution.workflow": "wf_01J9X",
+        "evolution.version": 3,
+        "evolution.run": "run_01J9Y",
+        "evolution.step": "step_2"
+      },
+      "summary": "evolution.run=\"run_01J9Y\"; evolution.step; evolution.version=3; evolution.workflow=\"wf_01J9X\""
+    },
+    {
+      "name": "non_scalar_and_other_segments",
+      "context": {
+        "evolution.workflow": {
+          "id": "x"
+        },
+        "evolution.run.step": "s",
+        "evolution.version": 7,
+        "evolution.x.run": true,
+        "evolution.note": null
+      },
+      "summary": "evolution.note; evolution.run.step; evolution.version=7; evolution.workflow; evolution.x.run=true"
+    },
+    {
+      "name": "value_cut_at_64_code_points",
+      "context": {
+        "evolution.run": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+      },
+      "summary": "evolution.run=\"rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+      "name": "value_cut_counts_code_points",
+      "context": {
+        "evolution.run": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "summary": "evolution.run=\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+    },
+    {
+      "name": "whole_exactly_256_not_cut",
+      "context": {
+        "evolution.k00": 1,
+        "evolution.k01": 1,
+        "evolution.k02": 1,
+        "evolution.k03": 1,
+        "evolution.k04": 1,
+        "evolution.k05": 1,
+        "evolution.k06": 1,
+        "evolution.k07": 1,
+        "evolution.k08": 1,
+        "evolution.k09": 1,
+        "evolution.k10": 1,
+        "evolution.k11": 1,
+        "evolution.k12": 1,
+        "evolution.k13": 1,
+        "evolution.k14": 1,
+        "evolution.k15": 1,
+        "evolution.zzzzzz": 1
+      },
+      "summary": "evolution.k00; evolution.k01; evolution.k02; evolution.k03; evolution.k04; evolution.k05; evolution.k06; evolution.k07; evolution.k08; evolution.k09; evolution.k10; evolution.k11; evolution.k12; evolution.k13; evolution.k14; evolution.k15; evolution.zzzzzz"
+    },
+    {
+      "name": "whole_257_cut_to_255_plus_ellipsis",
+      "context": {
+        "evolution.k00": 1,
+        "evolution.k01": 1,
+        "evolution.k02": 1,
+        "evolution.k03": 1,
+        "evolution.k04": 1,
+        "evolution.k05": 1,
+        "evolution.k06": 1,
+        "evolution.k07": 1,
+        "evolution.k08": 1,
+        "evolution.k09": 1,
+        "evolution.k10": 1,
+        "evolution.k11": 1,
+        "evolution.k12": 1,
+        "evolution.k13": 1,
+        "evolution.k14": 1,
+        "evolution.k15": 1,
+        "evolution.zzzzzzz": 1
+      },
+      "summary": "evolution.k00; evolution.k01; evolution.k02; evolution.k03; evolution.k04; evolution.k05; evolution.k06; evolution.k07; evolution.k08; evolution.k09; evolution.k10; evolution.k11; evolution.k12; evolution.k13; evolution.k14; evolution.k15; evolution.zzzzz…"
+    },
+    {
+      "name": "many_keys_cut_at_256",
+      "context": {
+        "evolution.key00": 0,
+        "evolution.key01": 1,
+        "evolution.key02": 2,
+        "evolution.key03": 3,
+        "evolution.key04": 4,
+        "evolution.key05": 5,
+        "evolution.key06": 6,
+        "evolution.key07": 7,
+        "evolution.key08": 8,
+        "evolution.key09": 9,
+        "evolution.key10": 10,
+        "evolution.key11": 11,
+        "evolution.key12": 12,
+        "evolution.key13": 13,
+        "evolution.key14": 14,
+        "evolution.key15": 15,
+        "evolution.key16": 16,
+        "evolution.key17": 17,
+        "evolution.key18": 18,
+        "evolution.key19": 19,
+        "evolution.key20": 20,
+        "evolution.key21": 21,
+        "evolution.key22": 22,
+        "evolution.key23": 23,
+        "evolution.key24": 24,
+        "evolution.key25": 25,
+        "evolution.key26": 26,
+        "evolution.key27": 27,
+        "evolution.key28": 28,
+        "evolution.key29": 29
+      },
+      "summary": "evolution.key00; evolution.key01; evolution.key02; evolution.key03; evolution.key04; evolution.key05; evolution.key06; evolution.key07; evolution.key08; evolution.key09; evolution.key10; evolution.key11; evolution.key12; evolution.key13; evolution.key14; …"
+    }
+  ]
+}

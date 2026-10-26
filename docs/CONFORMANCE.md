@@ -314,3 +314,17 @@ Source plan: coordination `leads/recipe/PLAN.md` §4. Target per row in brackets
 - `D-CAP-1` — Core refuses to deploy a release whose `requires.bridgeCaps` lists a cap the workspace bridge does not declare (`bridge_cap_missing`, `details.cap`); a bridge refuses to register such an app the same way.
 - `A11.deep_datasets_noneof_unnamed` — under `deepDatasets.noneOf` only, a data read naming no dataset is refused (`narrowing_unsupported`) unless the op enumerates and excludes the listed datasets (SDK-API §18.5 rules 3–4).
 
+## v0.1.77 rows (C367 P3, P4; the conformance PR adds them; B30 is reserved by the lazy-tools rows, specs#48)
+Both groups are gated by the bridge's reported cap, never by version: B31 by `app_hold_status`, B32 by `app_call_context`. A bridge without the cap skips its group (noted, not failed).
+- B31 (P3, BRIDGE v0.1.77 §8.3, SDK-API §4.7). Fixture: app X (target) with an op that holds; app caller A with a companion entry for X that lists the op and `tb.hold_status`; a second app caller B; an agent caller. Fake bridge flag `app_hold_status`.
+  - `B31.hold_status_own`: A's call is held; A calls `tb.hold_status` with that `holdId` through the companion path → `pending`, then `approved` after the owner decides. The output is the usual `tb.hold_status` output.
+  - `B31.hold_status_other_not_found`: B asks for A's hold, A asks for an agent's hold, A asks for an unknown id → all three answer `404 not_found` with the same envelope (status, code and message equal; `requestId` aside).
+  - `B31.hold_status_undeclared`: a companion entry without `tb.hold_status` → `callApp` throws `companion_undeclared`; a direct bridge call with that grant → refused (`not_in_workflow`); the app never sees it.
+  - `B31.hold_approved_repeat_once`: after `approved`, the same call (same op, input and idempotency key) runs exactly once; a second repeat is not run again.
+  - `B31.hold_denied_repeat_blocked`: after `denied` (and after `expired`), the same repeat does not run; the handler is not called.
+- B32 (P4, BRIDGE v0.1.77 §8.5, SDK-API §18.6). Fixture: app caller A (verified product `evolution`) calls target X. Fake bridge flag `app_call_context`. Context: `{ "evolution.workflow": "wf_1", "evolution.version": 3, "evolution.run": "run_1", "evolution.step": "step_1" }`.
+  - `B32.context_reaches_target`: X's `ctx.context` has the four keys; the receipt has `meta.callerContext` with the same keys; `tb.receipts_list` and (for a held call) `tb.holds_list` return it; `tb.holds_pending` has the summary `evolution.run="run_1"; evolution.step; evolution.version=3; evolution.workflow="wf_1"`.
+  - `B32.context_foreign_key`: a key of another product (`kanban.card`) → `400 input_invalid`, `details.pointer` `/context/kanban.card`; X is not called.
+  - `B32.context_tb_key`: a `tb.` key from an app (`tb.onBehalfOf`) → `400 input_invalid`, pointer `/context/tb.onBehalfOf`; X is not called.
+  - `B32.context_too_large`: JCS of 2049 bytes → `400 input_invalid`, pointer `/context`; exactly 2048 bytes is accepted. Rows from `examples/caller-context.cases.json` run in the same group.
+  - `B32.context_tampered`: the context in the op body is changed after the bridge signed the proof → the app refuses `call_proof_invalid`.
