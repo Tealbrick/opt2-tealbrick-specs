@@ -1,5 +1,5 @@
 {
-  "description": "v0.1.77 (C367, P4): CallEnvelope.context rules (BRIDGE §8.5, SDK-API §18.6). `cases`: for the caller's verified product (`callerProduct`, null = the grant has no `prd`), does the bridge accept `context` (`ok`) or refuse it `400 input_invalid` with `details.pointer` = `pointer`? Check order (the first failure wins): (1) not an object, or no product and not empty → `/context`; (2) JCS size > 2048 UTF-8 bytes → `/context`; (3) keys in sorted order: a `tb.` key or a key that fails the key pattern → `/context/<key>`; (4) depth > 3 under a key → `/context/<key>` (JSON pointer escapes: `~` → `~0`, `/` → `~1`). `summaryCases`: `HoldsPendingItem.callerContext` for a context (SDK-API §18.6 rule 6). The manifest package implements the validator once (L1) and runs these rows; this package's test checks the rows against a reference checker.",
+  "description": "v0.1.77 (C367, P4): CallEnvelope.context rules (BRIDGE §8.5, SDK-API §18.6). `cases`: for the caller's verified product (`callerProduct`, null = the grant has no `prd`), does the bridge accept `context` (`ok`) or refuse it `400 input_invalid` with `details.pointer` = `pointer`? Check order (the first failure wins): (1) not an object, or no product and not empty → `/context`; (2) JCS size > 2048 UTF-8 bytes → `/context`; (3) keys in sorted order: a `tb.` key or a key that fails the key pattern → `/context/<key>`; (4) depth > 3 under a key → `/context/<key>`; rule 3 runs over ALL keys before rule 4; a scalar and an EMPTY container are depth 0, a non-empty container is 1 + its deepest member (JSON pointer escapes: `~` → `~0`, `/` → `~1`). `summaryCases`: `HoldsPendingItem.callerContext` for a context (SDK-API §18.6 rule 7). The manifest package implements the validator once (L1) and runs these rows; this package's test checks the rows against a reference checker.",
   "limits": {
     "maxBytes": 2048,
     "maxDepth": 3,
@@ -191,6 +191,105 @@
       "name": "non_prd_caller_empty",
       "callerProduct": null,
       "context": {},
+      "ok": true
+    },
+    {
+      "name": "not_an_object_array",
+      "callerProduct": "evolution",
+      "context": [
+        "evolution.run"
+      ],
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "not_an_object_string",
+      "callerProduct": "evolution",
+      "context": "evolution.run=r",
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "not_an_object_null",
+      "callerProduct": "evolution",
+      "context": null,
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "precedence_size_before_key",
+      "callerProduct": "evolution",
+      "context": {
+        "Evolution.note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "ok": false,
+      "pointer": "/context"
+    },
+    {
+      "name": "precedence_key_rule_before_depth",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a": {
+          "b": {
+            "c": {
+              "d": [
+                1
+              ]
+            }
+          }
+        },
+        "evolution.b/x": 1
+      },
+      "ok": false,
+      "pointer": "/context/evolution.b~1x"
+    },
+    {
+      "name": "slash_in_key",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a/b": 1
+      },
+      "ok": false,
+      "pointer": "/context/evolution.a~1b"
+    },
+    {
+      "name": "tilde_in_key",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a~b": 1
+      },
+      "ok": false,
+      "pointer": "/context/evolution.a~0b"
+    },
+    {
+      "name": "trailing_newline_in_key",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.run\n": "r"
+      },
+      "ok": false,
+      "pointer": "/context/evolution.run\n"
+    },
+    {
+      "name": "empty_containers_depth_0_ok",
+      "callerProduct": "evolution",
+      "context": {
+        "evolution.a": {
+          "b": {
+            "c": {
+              "d": []
+            }
+          }
+        },
+        "evolution.b": [
+          [
+            [
+              []
+            ]
+          ]
+        ],
+        "evolution.c": {}
+      },
       "ok": true
     }
   ],

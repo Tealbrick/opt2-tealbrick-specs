@@ -114,7 +114,7 @@ export type BridgeErrorCode =
 export interface ErrorEnvelope<C extends string = BridgeErrorCode | (string & {})> {
   /** `details` is the CORE §8 optional member (v0.1.77: typed here). `details.pointer` = a JSON pointer (RFC 6901) into the
    *  request for `input_invalid` refusals that name a place, e.g. `/context/evolution.step` (BRIDGE §8.5, C367). */
-  error: { code: C; message: string; requestId: string; details?: { [k: string]: JsonValue } };
+  error: { code: C; message: string; requestId: string; details?: Record<string, unknown> };
 }
 
 // ── Workspace config payload (`tb-config+jws`) — workspace-config.schema.json ─

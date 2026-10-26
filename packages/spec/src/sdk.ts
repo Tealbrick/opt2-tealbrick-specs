@@ -404,7 +404,9 @@ export type CompanionResult<O = Json> = OpResult<O>;
 
 /** v0.1.77 (C367, P4): options of `callApp` (every ctx). `context` is sent as `CallEnvelope.context` only when
  *  `ctx.bridgeCaps()` includes `app_call_context`; otherwise `callApp` throws `bridge_cap_missing` before any network call
- *  (`TbError`, 409, the message names the cap: the same code Core uses for `requires.bridgeCaps`, C354). SDK-API §18.6. */
+ *  (`TbError`, 409, `details: { cap: "app_call_context" }`, like Core's `requires.bridgeCaps` refusal, C354). `context` absent or `{}` = no
+ *  context: not sent, never throws. Order: `companion_undeclared`, then `bridge_cap_missing`, then local `input_invalid`
+ *  (`details.pointer`). Context is informational only: never part of authorization, the approval match or idempotency. SDK-API §18.6. */
 export interface CallAppOptions {
   idempotencyKey?: string;
   context?: Record<string, Json>;
@@ -483,6 +485,9 @@ export interface StartContext {
   /** v0.1.13 (C85): app-initiated companion call (timers, background refresh): no parentCall, own companion grant; same
    *  hooks, holds, rate limits as any caller; audited `call.app_initiated` by the bridge. Usable for the app's lifetime. */
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
+  /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
+   *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
+  bridgeCaps?: () => readonly string[];
   /** v0.1.13 (C86) */
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
@@ -497,6 +502,9 @@ export interface EventContext {
   log: Logger;
   scopes: ScopeStore;
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
+  /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
+   *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
+  bridgeCaps?: () => readonly string[];
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
   ownerLink(path: string): string | null;
@@ -688,7 +696,8 @@ export interface Receipt {
   inputDigest: Sha256Digest;
   summary: string;
   /** free JSON ≤ 4 KB. v0.1.77 (C367, P4): `callerContext` = the final op `context` keys under `<caller product>.` (an object), set
-   *  only when `caller.type === "app"` and the call carried any (SDK-API §18.6); `tb.receipts_list` and `tb.holds_list` return it. */
+   *  only when `caller.type === "app"` and the call carried any (SDK-API §18.6); `tb.receipts_list` and `tb.holds_list` return it.
+   *  On an approved repeat that reports other caller keys, they go to `callerContextRun` (the hold's `callerContext` stays). */
   meta: Json;
   idempotencyKey: string | null;
   /** hold view; present only while held/approved, person reads only */
