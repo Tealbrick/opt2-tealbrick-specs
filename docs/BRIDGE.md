@@ -608,7 +608,7 @@ RM-2 resolve: declared + set → binding; undeclared → `role_not_declared`; un
 ### 8.3 — `tb.hold_status` on the companion path (P3, cap `app_hold_status`)
 - The bridge routes `tb.hold_status` for an app caller on the companion path when the presented companion grant's `wf` lists it (MANIFEST M-CP-3). This is the normal gate (§8.1 step 5). The I4 CRUD skip applies: a valid grant suffices.
 - **Target gate (PK-D6, QA-SPEC58-3).** The bridge routes it only to a target whose last reported `sdkVersion` (claim / `AppStatus`) is at least `APP_HOLD_STATUS_MIN_SDK`, a bridge constant = the first miniapp-sdk release that implements SDK-API §4.7 (recorded in RELEASES.md at that release; the bridge PR merges after it). A lower or unknown `sdkVersion` → refused `not_in_workflow`, and the target is not called. Agent calls are unchanged.
-- The bridge does nothing else for this op. The target app answers only for holds the caller raised, and any other `holdId` answers `404 not_found` like an unknown id (SDK-API §4.7).
+- The bridge does nothing else for this op. The target app answers only for holds the caller raised, and any other `holdId` answers `404 hold_not_found` like an unknown id (SDK-API §4.7; v0.1.78 erratum: 0.1.77 said `not_found`). The bridge passes the app's answer through unchanged.
 - A companion grant without `tb.hold_status` in `wf` is refused as for any op not in `wf` (`not_in_workflow`). The SDK refuses it first (`companion_undeclared`).
 ### 8.5 — caller context (P4, cap `app_call_context`)
 - **Where.** On the companion path (§8.3) a `CallEnvelope` may carry `context`, an object of JSON values. It is allowed with or without `parentCall`. A bridge without the cap need not accept the field; the SDK never sends it then (SDK-API §18.6).
