@@ -324,8 +324,9 @@ export interface InstanceSlice extends SliceClaims {
    *  requires `needsAgentDirectory: true`) AND the owner granted the consent `topology` at deploy or update (the review names
    *  it: "This app can see which agents and apps have access to what in this workspace"). An update that adds the flag needs
    *  a new consent; without it Core leaves the field out. DISPLAY ONLY: the bridge and the SDK never read it to authorize, and
-   *  apps MUST NOT use it to authorize; it is stale until the next slice revision. Core counts its worst case in the slice
-   *  size. SDK: `ctx.topology()`. */
+   *  apps MUST NOT use it to authorize; it is stale until the next slice revision. Size is ELASTIC (CORE "v0.1.80" rules 7-8): Core
+   *  sizes it last with the budget left, may cut rows (connections, then companions, then edges) and then sets `truncated`;
+   *  it never makes an owner change or a consent refusable. SDK: `ctx.topology()`. */
   topology?: SliceTopology;
 }
 

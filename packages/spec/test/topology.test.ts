@@ -163,7 +163,9 @@ test("worst case at the bounds, measured (CORE v0.1.80 rule 7)", () => {
   // the CORE text quotes these numbers (41,119 JSON chars, 54,826 base64 chars); fail loudly when the shape changes
   assert.equal(chars, 41_119);
   assert.equal(b64, 54_826);
-  assert.ok(b64 > SLICE_CORE_MAX_CHARS, "OQ-C373-1: at the full bounds the topology alone passes SLICE_CORE_MAX_CHARS");
+  // OQ-C373-1 decided ELASTIC (CORE "v0.1.80" rules 7-8): at the full bounds the topology alone passes the slice limit, so
+  // Core must be able to cut it (truncated) instead of refusing a change
+  assert.ok(b64 > SLICE_CORE_MAX_CHARS, "at the full bounds the topology alone passes SLICE_CORE_MAX_CHARS: Core cuts it (elastic)");
 });
 
 test("manifest needsTopology: boolean, default false, next to needsAgentDirectory", () => {
