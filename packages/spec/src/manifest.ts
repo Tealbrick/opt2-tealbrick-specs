@@ -492,7 +492,19 @@ export interface Companion {
   operations: SnakeId[];
   crud: CrudAction[];
   purpose: string;
+  /** v0.1.82 (C373, P1; MANIFEST §9, M-CP-4): the CEILING for per-workflow grants (CREDENTIALS `WorkflowGrantClaims`). Its ops
+   *  are NOT in the base grant (`operations` / `crud` above = the app's own calls, minted as before). Only for one product
+   *  (never `"*"`); never a `tb.*` op; never an op that `operations` lists too (C5 S3-5: no "not narrowed" overlap). */
+  perWorkflow?: CompanionPerWorkflow;
 }
+/** v0.1.82 (C373, P1): `companions[].perWorkflow`. M-CP-4 checks it against the target like M-CP-2 checks `operations`/`crud`. */
+export interface CompanionPerWorkflow {
+  /** 1..PER_WORKFLOW_OPS_MAX unique op ids of the target; never a standard (`tb.*`) op */
+  operations: SnakeId[];
+  crud: CrudAction[];
+}
+/** v0.1.82 (C373, P1): most ops in one `perWorkflow.operations` (schema maxItems), and in one target of a workflow grant request. */
+export const PER_WORKFLOW_OPS_MAX = 64;
 
 export interface Unlock {
   id: SnakeId;

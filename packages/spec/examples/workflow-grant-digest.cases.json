@@ -1,0 +1,68 @@
+{
+  "description": "v0.1.82 (C373, P1; CORE v0.1.82): the bound payload digest of a workflow grant request. Normalise (targets sorted by product; ops sorted and unique; crud unique in the order create, read, update, delete; reason omitted when absent or empty), build {ins, wfl, title, targets, reason?}, serialize with JCS (RFC 8785), digest = 'sha256:' + lower-case hex SHA-256 of the UTF-8 bytes. Core, the GUI and conformance use these rows.",
+  "crudOrder": [
+    "create",
+    "read",
+    "update",
+    "delete"
+  ],
+  "cases": [
+    {
+      "name": "two targets, unsorted input",
+      "ins": "ins_01JA0000000000000000000001",
+      "request": {
+        "wfl": "triage-inbox",
+        "title": "Triage new issues",
+        "targets": [
+          {
+            "product": "kanban",
+            "ops": [
+              "issue_update",
+              "issue_create",
+              "issue_create"
+            ],
+            "crud": [
+              "update",
+              "create"
+            ]
+          },
+          {
+            "product": "inbox",
+            "ops": [
+              "item_create"
+            ],
+            "crud": [
+              "create"
+            ]
+          }
+        ],
+        "reason": "Moves new issues to the right column"
+      },
+      "canonical": "{\"ins\":\"ins_01JA0000000000000000000001\",\"reason\":\"Moves new issues to the right column\",\"targets\":[{\"crud\":[\"create\"],\"ops\":[\"item_create\"],\"product\":\"inbox\"},{\"crud\":[\"create\",\"update\"],\"ops\":[\"issue_create\",\"issue_update\"],\"product\":\"kanban\"}],\"title\":\"Triage new issues\",\"wfl\":\"triage-inbox\"}",
+      "digest": "sha256:43205f8dfe8199a5c20d1bf348acc6dc7ec158e6f2d6b63260ea2ddb104a14d7"
+    },
+    {
+      "name": "empty reason is omitted",
+      "ins": "ins_01JA0000000000000000000001",
+      "request": {
+        "wfl": "weekly-report",
+        "title": "Weekly report",
+        "targets": [
+          {
+            "product": "knowledge",
+            "ops": [
+              "document_create"
+            ],
+            "crud": [
+              "read",
+              "create"
+            ]
+          }
+        ],
+        "reason": ""
+      },
+      "canonical": "{\"ins\":\"ins_01JA0000000000000000000001\",\"targets\":[{\"crud\":[\"create\",\"read\"],\"ops\":[\"document_create\"],\"product\":\"knowledge\"}],\"title\":\"Weekly report\",\"wfl\":\"weekly-report\"}",
+      "digest": "sha256:1e10e63202393dee0ecd86fe4c8219e76d7b727f0ddbea0d48b87769fcd2c652"
+    }
+  ]
+}
