@@ -126,3 +126,72 @@ test("RM-24c: exempt changes never raise the measured worst case", () => {
     assert.ok(worstSize(s) <= before, `exempt change raised the worst case at ${i}`);
   }
 });
+
+// ── RM-24c P1 rows (v0.1.82, C373; C5 S3-6): per-workflow withdrawal records, the epoch fallback, workflowGrantEdges and the
+// gate-off fallback base grant. Withdrawals, epoch bumps and edge removals are kill path (never size-checked), so Core's worst
+// case must already hold, per caller: WORKFLOW_WITHDRAWN_MAX records at their largest size + one epoch entry + every possible
+// edge, and every base grant at operations ∪ perWorkflow.operations. A widening apply (owner change) is size-checked.
+const WF_RECORDS_MAX = 64; // WORKFLOW_WITHDRAWN_MAX
+const WF_RECORD = 140; // largest serialized record: sub + 40-char wfl + aud + at
+const WF_EPOCH = 70;
+const WF_EDGE = 50;
+interface Caller { records: number; epoch: boolean; edges: number; baseOps: number; perWorkflowOps: number; appliedOps: number; gateOn: boolean }
+const wfReal = (cs: Caller[]) =>
+  cs.reduce((n, c) => n + c.records * WF_RECORD + (c.epoch ? WF_EPOCH : 0) + c.edges * WF_EDGE + grant(c.baseOps + (c.gateOn ? 0 : c.appliedOps), HELD_ALL), 0);
+const wfWorst = (cs: Caller[], targets: number) =>
+  cs.reduce((n, c) => n + WF_RECORDS_MAX * WF_RECORD + WF_EPOCH + targets * WF_EDGE + grant(c.baseOps + c.perWorkflowOps, HELD_ALL), 0);
+/** The earlier rule applied to P1: measure the records that exist now (and the current base grant). */
+const wfNaive = (cs: Caller[]) => wfReal(cs);
+/** S1-1 mutant: a fallback that restores the CEILING when the gate turns off (a self-report). */
+const wfCeilingFallback = (c: Caller) => grant(c.baseOps + c.perWorkflowOps, HELD_ALL);
+
+function wfRun(seed: number, steps: number, limit: number, measure: (cs: Caller[]) => number): string | null {
+  const r = rng(seed);
+  const targets = 6;
+  const cs: Caller[] = Array.from({ length: 5 }, () => ({ records: 0, epoch: false, edges: 0, baseOps: 1 + r(20), perWorkflowOps: 1 + r(60), appliedOps: 0, gateOn: false }));
+  for (let i = 0; i < steps; i++) {
+    const c = cs[r(cs.length)] as Caller;
+    const next = cs.map((x) => ({ ...x }));
+    const n = next[cs.indexOf(c)] as Caller;
+    let exempt = true;
+    switch (r(7)) {
+      case 0: // withdrawal (record; above 64 → epoch, records dropped)
+        if (n.records + 1 > WF_RECORDS_MAX) { n.records = 0; n.epoch = true; } else n.records++;
+        n.appliedOps = Math.max(0, n.appliedOps - 1);
+        break;
+      case 1: n.epoch = true; break; // base re-mint epoch (S2-1) / workspace kill
+      case 2: n.edges = Math.max(0, n.edges - 1); break; // edge disabled
+      case 3: n.records = 0; n.epoch = false; break; // prune after TTL
+      case 4: n.gateOn = true; break; // gate on (sticky): base back to operations
+      case 5: exempt = false; n.appliedOps = Math.min(n.perWorkflowOps, n.appliedOps + 1 + r(5)); break; // owner applies a widening
+      default: exempt = false; n.edges = Math.min(targets, n.edges + 1); // edge enabled
+    }
+    if (exempt || measure(next) <= limit || measure(next) <= measure(cs)) cs.splice(0, cs.length, ...next);
+    if (wfReal(cs) > wfWorst(cs, targets)) return `step ${i}: real ${wfReal(cs)} > worst ${wfWorst(cs, targets)}`;
+    if (wfWorst(cs, targets) > limit) return `step ${i}: worst ${wfWorst(cs, targets)} > limit ${limit}`;
+  }
+  return null;
+}
+
+test("RM-24c P1: with records, epoch, edges and the base upper bound in the worst case, kill-path withdrawals never pass the limit", () => {
+  // the worst case is fixed per caller, so a limit that admits it admits every sequence; a smaller limit would refuse setup
+  const limit = 5 * (WF_RECORDS_MAX * WF_RECORD + WF_EPOCH + 6 * WF_EDGE + grant(80, HELD_ALL));
+  for (let seed = 1; seed <= 200; seed++) assert.equal(wfRun(seed, 600, limit, (cs) => wfWorst(cs, 6)), null, `seed ${seed}`);
+});
+
+test("RM-24c P1: measuring only the records that exist now breaks (withdrawals are never size-checked)", () => {
+  const limit = 9_000;
+  const broken = Array.from({ length: 200 }, (_, i) => wfRun(i + 1, 600, limit, wfNaive)).filter(Boolean);
+  assert.ok(broken.length > 0, "the naive P1 measure should break in some sequence");
+});
+
+test("RM-24c P1 (C5 S1-1): the gate-off fallback stays within operations ∪ applied ops, never the ceiling", () => {
+  const r = rng(11);
+  for (let i = 0; i < 500; i++) {
+    const c: Caller = { records: 0, epoch: false, edges: 0, baseOps: 1 + r(20), perWorkflowOps: 2 + r(60), appliedOps: 0, gateOn: false };
+    c.appliedOps = r(c.perWorkflowOps); // strictly below the ceiling
+    const fallback = grant(c.baseOps + c.appliedOps, HELD_ALL);
+    assert.ok(fallback < wfCeilingFallback(c), "a fallback at the ceiling would widen on a self-report");
+    assert.ok(fallback <= grant(c.baseOps + c.perWorkflowOps, HELD_ALL), "still inside the measured worst case");
+  }
+});
