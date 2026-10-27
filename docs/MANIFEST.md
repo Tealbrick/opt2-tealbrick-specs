@@ -122,7 +122,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | `audience` | `agent` → reachable through the bridge (MCP, relay, app→app), becomes an MCP tool. `person` → only from the app UI in a person session (launch ticket); never an MCP tool, never hooked, never a companion target. |
 | `dynamic?` | Dynamic tool family (§5.3). |
 | `secretOutput?` | v0.1.68 (C336 RQ-3, S-8): `true` = the output carries a secret (e.g. a short-lived credential). See M-OP-12. |
-| `recipients?` | Unreleased (label 0.1.81; C373, G-6): `RecipientSpec[]` = `{pointer, kind}` pairs that say WHERE the recipients of a call are in its input, so hooks see who an outward call talks to (BRIDGE §8.2, `target.recipients`). `pointer` = RFC 6901 into the op input; `kind` ∈ `buzz`, `slack`, `telegram`, `email` (`RECIPIENT_KINDS`). The value at a place is a string or an array of strings, each a bare value of `kind` or a handle prefixed with `<kind>:`. See M-OP-13. Dynamic ops name places per tool in `DynamicResolution.recipients` instead (§5.3). |
+| `recipients?` | Unreleased (label 0.1.81; C373, G-6): `RecipientSpec[]` = `{pointer, kind}` pairs that say WHERE the recipients of a call are in its input, so hooks see who an outward call talks to (BRIDGE §8.2, `target.recipients`). `pointer` = RFC 6901 into the op input; `kind` ∈ `buzz`, `slack`, `telegram`, `email` (`RECIPIENT_KINDS`). The value at a place is a string or an array of strings, each a bare value of `kind` or a handle prefixed with the same `<kind>:`; a place that resolves to nothing is no value (not incomplete). See M-OP-13. Dynamic ops name places per tool in `DynamicResolution.recipients` instead (§5.3). |
 
 ### 5.2 Rules
 | Rule | Check |
