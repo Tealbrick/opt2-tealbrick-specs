@@ -296,7 +296,8 @@ export const WORKFLOW_ID_PATTERN = "^[a-z][a-z0-9-]{2,39}$";
  *  lists it); `crud` = approved ∩ edge crud ∩ current `perWorkflow.crud`; `held` = `appsPolicy.held`; `prd` always present.
  *  The grant claim set is CLOSED (manifest jws.ts): verifiers that do not know `wfl` refuse the whole grant, so Core mints it
  *  only behind the gate of CORE v0.1.82. Withdrawal is by config records (`workflowGrantsWithdrawn`, `wflEpoch`), checked by
- *  the bridge only (like agent-grant revocations); a wfl grant is never in `revoked.jtis`. */
+ *  the bridge only (like agent-grant revocations); a wfl grant is never in `revoked.jtis`. The bridge also refuses one whose
+ *  `aud` is not in the config `workflowGrantEdges[sub]`, or whose `held` lacks a family of the current `appsPolicy.held` (C5). */
 export type WorkflowGrantClaims = CompanionGrantClaims & { wfl: WorkflowId; prd: ProductId };
 export type AgentGrantClaims = GrantClaims & { sub: AgentRef };
 
@@ -626,7 +627,7 @@ export const CREDENTIAL_REGISTRY = [
     storage: ["holder_memory"], maxLifetimeS: 43200, oneTime: false,
     audienceRule: "aud = tb:ins:<target>; cnf.brg = workspace bridge",
     verifier: "bridge verifyGrant before forwarding; app SDK verifyGrant again + call proof",
-    checks: ["ws = own workspace", "cnf.brg = workspace bridge", "jti ∉ revoked.jtis", "companion: sub = asserting instance", "app: call proof binds sub/aud/gjti/op/in/ctx", "v0.1.82 wfl grant: exp − iat ≤ WORKFLOW_GRANT_TTL_SEC", "v0.1.82 wfl grant (bridge): envelope workflow = wfl; not withdrawn (config workflowGrantsWithdrawn / wflEpoch); caller slice lists the target in companionTargets"],
+    checks: ["ws = own workspace", "cnf.brg = workspace bridge", "jti ∉ revoked.jtis", "companion: sub = asserting instance", "app: call proof binds sub/aud/gjti/op/in/ctx", "v0.1.82 wfl grant: exp − iat ≤ WORKFLOW_GRANT_TTL_SEC", "v0.1.82 wfl grant (bridge): envelope workflow = wfl; not withdrawn (config workflowGrantsWithdrawn / wflEpoch); config workflowGrantEdges[sub] lists aud; held ⊇ current appsPolicy.held"],
     acceptedAt: ["app /tb/v1/ops/<op> (Authorization: Bearer) with TB-Call", "bridge internal companion call"],
     revocation: "not re-minted + revoked.jtis (v0.1.82 wfl grants: config workflowGrantsWithdrawn / wflEpoch, bridge only)", revocationLatency: "≤ 60 s online; ≤ 12 h offline (wfl grants: ≤ 15 min offline)", pause: "not minted while paused; gate() step 1 refuses",
   },

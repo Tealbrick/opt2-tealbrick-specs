@@ -119,7 +119,8 @@ export type BridgeErrorCode =
   | "workflow_grant_withdrawn"
   /** 404 from Core: no applied workflow grant for (caller, workflow[, target]) */
   | "workflow_grant_missing"
-  /** 409: the gate is off for this target (bridge cap, caller SDK, target SDK; standalone); `details.product` names it */
+  /** 409: the gate is off for this target (bridge cap `app_workflow_grants`, caller app cap `app_workflow_grants`, target app cap
+   *  `grant_wfl`; standalone); `details.product` names it */
   | "workflow_grants_unsupported"
   /** 409 from Core: the caller has WORKFLOW_GRANTS_MAX requested + applied records */
   | "workflow_grants_full"
@@ -163,12 +164,18 @@ export interface ConfigCredentialFields {
    *  it only to a bridge that declares `app_workflow_grants` (an older bridge's schema refuses the field). Absent = none. */
   workflowGrantsWithdrawn?: WorkflowGrantWithdrawal[];
   /** v0.1.82: per caller instance ref (`tb:ins:<id>`): every wfl grant of that caller with `iat ≤` this value is withdrawn
-   *  (the overflow path when one instance has more than WORKFLOW_WITHDRAWN_MAX live records). Same gate. Absent = none. */
+   *  (the overflow path when one instance has more than WORKFLOW_WITHDRAWN_MAX live records, and C5 S2-1: every change that
+   *  re-mints the caller's base grant with other claims). Same gate. Absent = none. */
   wflEpoch?: Record<InstanceRef, EpochS>;
+  /** v0.1.82 (C5 S3-3): per caller instance ref, the target instance refs whose companion edge is enabled and licensed AND whose
+   *  companion entry has `perWorkflow`. The bridge refuses a wfl grant whose `aud` is not listed for its `sub`
+   *  (`workflow_grant_withdrawn`); `companionTargets` is not used for this (wildcard entries list targets too). Same gate. */
+  workflowGrantEdges?: Record<InstanceRef, InstanceRef[]>;
 }
 /** v0.1.82 (C373, P1): one withdrawal record. The bridge refuses a presented grant with `wfl` when `sub` and `wfl` equal the
- *  grant's, `aud` is absent or equals the grant's, and grant `iat ≤ at` (`workflow_grant_withdrawn`). Core keeps a record until
- *  `at + WORKFLOW_GRANT_TTL_SEC + LEEWAY_S` (every grant it covers has expired by then) and never mints a covered grant. */
+ *  grant's, `aud` is absent or equals the grant's, and grant `iat ≤ at` (`workflow_grant_withdrawn`). Core keeps a record (and an epoch)
+ *  until `at + WORKFLOW_GRANT_TTL_SEC + 2 × LEEWAY_S` (C5 S3-1: every grant it covers has expired by then, with clock skew on
+ *  both sides) and never mints or hands out a covered grant. */
 export interface WorkflowGrantWithdrawal {
   sub: InstanceRef;
   wfl: WorkflowId;
@@ -460,6 +467,9 @@ export interface StatusReport {
      *  `createdAt`, `from`, `to`); extra members of the app's ref are dropped, a malformed ref is omitted, `null` stays `null`
      *  (BRIDGE §10.3). Core shows it on the update record next to `lastUpdate.dataRestoredTo`. */
     preUpdateSnapshot?: PreUpdateSnapshotRef | null;
+    /** v0.1.82 (C373 P1): AppStatus.caps as the app instance last reported it (claim, then every push), normalised by the
+     *  APP_CAPS rules (unknown entries dropped; a malformed value → omitted = none). Core's workflow-grant gate reads it. */
+    caps?: AppCap[];
   }[];
   /** presence booleans only — never values */
   keys: { name: string; ins: InstanceId; set: boolean }[];
@@ -854,7 +864,12 @@ export type ProofClaimCap = (typeof PROOF_CLAIM_CAPS)[number];
  *  the owner's grant and the app's own checks still decide every call. Gates (bridge, conformance) read it, never a version number.
  *  Readers ignore unknown entries (forward-compatible) and treat a value that is not an array of strings within APP_CAPS_LIMITS
  *  as NO caps (fail closed). `person_op` = the app serves `POST /tb/v1/person-op` (SDK-API §21). */
-export const APP_CAPS = ["person_op"] as const;
+/** v0.1.82 (C373 P1, lead §11.2 — C354 capability gate, no min-SDK constants): `app_workflow_grants` = the app as a CALLER
+ *  can request, fetch and send workflow grants (`ctx.workflowGrants`, `CallAppOptions.workflow`, SDK-API §22); `grant_wfl` =
+ *  the app as a TARGET verifies the `wfl` claim (its verifier knows it, CREDENTIALS v0.1.82). Core mints a wfl grant only when
+ *  the bridge cap and BOTH app caps are present. A cap can only turn the gate ON: it never widens a grant (C5 S1-1, CORE
+ *  v0.1.82 sticky gate). */
+export const APP_CAPS = ["person_op", "app_workflow_grants", "grant_wfl"] as const;
 export type AppCap = (typeof APP_CAPS)[number];
 export const APP_CAPS_LIMITS = { maxEntries: 16, maxLength: 32 } as const;
 /** v0.1.70 (C354): the bridge's fixed refusals in a person-op result (status 409, body `{error: {code}}`), nothing forwarded. */

@@ -174,7 +174,7 @@ test("v0.1.70: new-sign-in bounds are exact; machine labels are bounded (QA-SPEC
 
 test("v0.1.70 (C354): app capabilities are a closed list; person_op is declared by the app, not inferred from a version", async () => {
   const { APP_CAPS } = await import("../src/bridge.ts");
-  assert.deepEqual([...APP_CAPS], ["person_op"]);
+  assert.deepEqual([...APP_CAPS], ["person_op", "app_workflow_grants", "grant_wfl"]); // v0.1.82 (C373 P1, lead §11.2): workflow-grant caps
 });
 
 test("v0.1.70 (C354): the bridge's refusals are exact; cap bounds are fixed (fail closed, routing hint only)", async () => {

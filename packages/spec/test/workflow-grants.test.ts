@@ -6,12 +6,15 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import {
+  APP_CAPS,
   BRIDGE_CAPS, type CallEnvelope, type HookCallInfo, WORKFLOW_GRANT_RELAY_LIMIT, WORKFLOW_GRANT_REQUEST_LIMITS, WORKFLOW_GRANTS_CAP,
   WORKFLOW_WITHDRAWN_MAX, WORKSPACE_INSTANCES_MAX, type WorkflowGrantRequestBody, type WorkspaceConfig,
 } from "../src/bridge.ts";
 import { type CompanionGrantClaims, LEEWAY_S, LIFETIME_S, WORKFLOW_GRANT_TTL_SEC, WORKFLOW_ID_PATTERN } from "../src/credentials.ts";
 import { type Companion, CRUD_ACTIONS, PER_WORKFLOW_OPS_MAX } from "../src/manifest.ts";
-import { AUDIT_ACTIONS, type Draft, ROUTES, WORKFLOW_GRANTS_MAX } from "../src/routes.ts";
+import {
+  type AppDraftOpId, AUDIT_ACTIONS, type Draft, type DraftableOpId, ROUTES, WORKFLOW_GRANT_DRAFTS, WORKFLOW_GRANT_TEXT_PATTERN, WORKFLOW_GRANTS_MAX,
+} from "../src/routes.ts";
 import type { CallAppOptions, Caller } from "../src/sdk.ts";
 
 const load = (f: string) => JSON.parse(readFileSync(new URL(`../schemas/${f}`, import.meta.url), "utf8"));
@@ -35,7 +38,8 @@ test("v0.1.82 (C373 P1): constants are exact and consistent", () => {
   assert.deepEqual({ ...WORKFLOW_GRANT_RELAY_LIMIT }, { perMinute: 240, burst: 60 });
   assert.equal(WORKFLOW_GRANTS_CAP, "app_workflow_grants");
   assert.ok((BRIDGE_CAPS as readonly string[]).includes(WORKFLOW_GRANTS_CAP));
-  assert.equal(LEEWAY_S, 30, "a withdrawal record lives WORKFLOW_GRANT_TTL_SEC + LEEWAY_S = 930 s");
+  assert.equal(LEEWAY_S, 30, "a withdrawal record lives WORKFLOW_GRANT_TTL_SEC + 2 × LEEWAY_S = 960 s (C5 S3-1)");
+  assert.deepEqual({ ...WORKFLOW_GRANT_DRAFTS }, { openMax: 10, perHour: 30 });
 });
 
 test("v0.1.82: WORKFLOW_ID_PATTERN (wfl) and the schemas agree", () => {
@@ -104,7 +108,6 @@ test("v0.1.82: route rows — app-created drafts only for workflow_grant_set; re
   };
   const set = row("companions.workflow_grant_set");
   assert.deepEqual([...set.auth], ["browser"]);
-  assert.equal(set.draftable, true);
   assert.equal(set.confirm, true);
   const revoke = row("companions.workflow_grant_revoke");
   assert.deepEqual([...revoke.auth], ["browser"]);
@@ -125,6 +128,33 @@ test("v0.1.82: route rows — app-created drafts only for workflow_grant_set; re
   }
   const by: Draft["createdBy"] = { kind: "app", ins: "ins_01JA0000000000000000000001", product: "evolution", name: "Evolving Workflows", digest: "sha256:00" };
   assert.equal(by.kind, "app");
+  // C5 S3-6: a distinct flag value; the op is an AppDraftOpId, never a DraftableOpId (a person's draft step cannot name it)
+  assert.equal(set.draftable, "app_only");
+  assert.deepEqual(ROUTES.filter((r) => r.draftable === "app_only").map((r) => r.opId), ["companions.workflow_grant_set"]);
+  const appOp: AppDraftOpId = "companions.workflow_grant_set";
+  type IsDraftable = AppDraftOpId extends DraftableOpId ? true : false;
+  const notDraftable: IsDraftable = false;
+  assert.equal(notDraftable, false);
+  assert.equal(appOp, set.opId);
+});
+
+test("v0.1.82 (C5 S3-4, lead §11.2): request text rule; app caps for the capability gate; config edges", () => {
+  const re = new RegExp(WORKFLOW_GRANT_TEXT_PATTERN, "u");
+  for (const ok of ["Triage new issues", "Rapport hebdo – équipe", "日本語の説明"]) assert.ok(re.test(ok), ok);
+  for (const bad of ["a\u202Eb", "a\u200Bb", "a\u0007b", "a\u2066b", "line\nbreak", ""]) assert.ok(!re.test(bad), JSON.stringify(bad));
+  assert.ok((APP_CAPS as readonly string[]).includes("app_workflow_grants"));
+  assert.ok((APP_CAPS as readonly string[]).includes("grant_wfl"));
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const cfg = load("workspace-config.schema.json");
+  const edges = ajv.compile({ $defs: cfg.$defs, ...cfg.properties.workflowGrantEdges });
+  const a = "tb:ins:ins_01JA0000000000000000000001";
+  const x = "tb:ins:ins_01JA0000000000000000000002";
+  const e: NonNullable<WorkspaceConfig["workflowGrantEdges"]> = { [a]: [x] };
+  assert.equal(edges(e), true, JSON.stringify(edges.errors));
+  assert.equal(edges({ [a]: [x, x] }), false);
+  assert.equal(edges({ [a]: ["kanban"] }), false);
+  assert.equal(edges({ ins_01JA0000000000000000000001: [x] }), false);
+  assert.ok(!cfg.required.includes("workflowGrantEdges"));
 });
 
 test("v0.1.82: the bound payload digest (examples/workflow-grant-digest.cases.json)", () => {

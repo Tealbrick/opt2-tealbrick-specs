@@ -494,7 +494,7 @@ export interface Companion {
   purpose: string;
   /** v0.1.82 (C373, P1; MANIFEST §9, M-CP-4): the CEILING for per-workflow grants (CREDENTIALS `WorkflowGrantClaims`). Its ops
    *  are NOT in the base grant (`operations` / `crud` above = the app's own calls, minted as before). Only for one product
-   *  (never `"*"`); never a `tb.*` op. An op listed in both is in the base grant too ("not narrowed"). */
+   *  (never `"*"`); never a `tb.*` op; never an op that `operations` lists too (C5 S3-5: no "not narrowed" overlap). */
   perWorkflow?: CompanionPerWorkflow;
 }
 /** v0.1.82 (C373, P1): `companions[].perWorkflow`. M-CP-4 checks it against the target like M-CP-2 checks `operations`/`crud`. */

@@ -236,7 +236,7 @@
     "workflowGrantsWithdrawn": {
       "type": "array",
       "maxItems": 4096,
-      "description": "v0.1.82 (C373, P1; CREDENTIALS §5.1, BRIDGE §8.6): withdrawn per-workflow grants, at most WORKFLOW_WITHDRAWN_MAX (64) per caller instance (64 instances x 64). Sent only to a bridge that declares app_workflow_grants. A grant with wfl is refused when sub and wfl match, aud is absent or matches, and iat <= at.",
+      "description": "v0.1.82 (C373, P1; CREDENTIALS §5.1, BRIDGE §8.6): withdrawn per-workflow grants, at most WORKFLOW_WITHDRAWN_MAX (64) per caller instance (64 instances x 64). Sent only to a bridge that declares app_workflow_grants. A grant with wfl is refused when sub and wfl match, aud is absent or matches, and iat <= at. Core keeps a record until at + WORKFLOW_GRANT_TTL_SEC + 2 x LEEWAY_S.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -270,6 +270,22 @@
       },
       "additionalProperties": {
         "$ref": "#/$defs/epochSeconds"
+      }
+    },
+    "workflowGrantEdges": {
+      "type": "object",
+      "maxProperties": 64,
+      "description": "v0.1.82 (C373 P1, C5 S3-3): per caller instance ref, the target instance refs whose companion edge is enabled and licensed and whose companion entry has perWorkflow. The bridge refuses a grant with wfl whose aud is not listed for its sub. Sent only to a bridge that declares app_workflow_grants.",
+      "propertyNames": {
+        "$ref": "#/$defs/insAudience"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "maxItems": 63,
+        "uniqueItems": true,
+        "items": {
+          "$ref": "#/$defs/insAudience"
+        }
       }
     }
   },

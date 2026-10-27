@@ -163,9 +163,9 @@ export const AUDIT_ACTIONS = [
   "person_op.relay",
   /** v0.1.70 (QA-SPEC51-1): the person acknowledged listed new sign-ins (details: count; the osns are the audit targets) */
   "owner_session.sign_in_ack",
-  /** v0.1.82 (C373, P1): an app requested a workflow grant set (details: ins, wfl, digest, outcome applied_narrower | draft | unchanged);
-   *  the owner applied one (draft step), revoked one, the app released one; Core withdrew or narrowed one on its own (app update,
-   *  edge disabled, consent revoke, uninstall of a target; details.reason) */
+  /** v0.1.82 (C373, P1): an app requested a workflow grant set (details: ins, wfl, digest, outcome applied_narrower | draft | unchanged
+   *  | refused); the owner applied one (draft step), revoked one, the app released one; Core withdrew or narrowed one on its own (app
+   *  update, edge disabled or removed, target removed, workspace kill, base re-mint epoch; details.reason) */
   "workflow_grant.request", "workflow_grant.set", "workflow_grant.revoke", "workflow_grant.release", "workflow_grant.withdraw",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -1338,6 +1338,12 @@ export interface BridgePersonOpResultInput {
 // ── v0.1.82 (C373, P1): per-workflow companion grants (CORE v0.1.82, PORTAL-API v0.1.82) ──────────────────────
 /** Requested + applied records per caller instance (rejected and withdrawn ones do not count); more → 409 `workflow_grants_full`. */
 export const WORKFLOW_GRANTS_MAX = 500;
+/** v0.1.82 (C5 S3-4): app-created drafts per caller instance: at most `openMax` open at once (more → 409 `conflict`,
+ *  details.reason "too_many_open_drafts") and `perHour` created in any 60 min (more → 429 `rate_limited` + Retry-After). */
+export const WORKFLOW_GRANT_DRAFTS = { openMax: 10, perHour: 30 } as const;
+/** v0.1.82 (C5 S3-4): `title` and `reason` of a request: no control, format (incl. bidi), surrogate or other invisible
+ *  character (INVISIBLE_CHAR_CLASS, the manifest name rule). Lengths: WORKFLOW_GRANT_REQUEST_LIMITS. */
+export const WORKFLOW_GRANT_TEXT_PATTERN = `^[^${INVISIBLE_CHAR_CLASS}]+$` as const;
 /** Draft step input of `companions.workflow_grant_set` (Core writes it from the app's request; never typed by a person). `ins` =
  *  the CALLER instance (the contract's `from_ins`). `digest` must equal the recomputed canonical digest of `{ins, wfl, title,
  *  targets, reason?}` AND the record's pending digest, else `draft_invalid`. */
@@ -1389,7 +1395,8 @@ export interface DraftStep { opId: DraftableOpId; input: Record<string, unknown>
 export type DraftState = "open" | "submitted" | "applying" | "applied" | "failed" | "rejected";
 export interface DraftStepView {
   n: number;
-  opId: DraftableOpId;
+  /** v0.1.82: or the app-only op of an app-created draft (`AppDraftOpId`, C5 S3-6) */
+  opId: DraftableOpId | AppDraftOpId;
   input: Record<string, unknown>;
   summary: string;
   effect: "write" | "destructive" | "money";
@@ -1398,7 +1405,7 @@ export interface DraftStepView {
 }
 export interface ApplyResult {
   state: "applied" | "failed";
-  steps: { n: number; opId: DraftableOpId; status: "ok" | "failed" | "skipped" | "handed_off"; output?: unknown; error?: { code: ErrorCode; message: string } }[];
+  steps: { n: number; opId: DraftableOpId | AppDraftOpId; status: "ok" | "failed" | "skipped" | "handed_off"; output?: unknown; error?: { code: ErrorCode; message: string } }[];
   checkout: { orderIds: OrderId[]; url: string } | null;
   receiptId: ReceiptId;
 }
@@ -1611,8 +1618,10 @@ export interface RouteOp {
   rate: RateClass;
   bodyLog: BodyLog;
   audit: AuditAction | null;
-  /** Owner CLI may put it in a draft (applied later in the browser). */
-  draftable: boolean;
+  /** Owner CLI may put it in a draft (applied later in the browser). v0.1.82 (C373 P1, C5 S3-6): `"app_only"` = only Core puts it
+   *  in a draft, as the single step of an app-created draft (`DraftCreatedByApp`); never a person's draft step (`DraftStep`), never
+   *  callable directly (403 `forbidden`, details.reason "apply_via_draft"). */
+  draftable: boolean | "app_only";
   /** Listed as a confirm item in draft review; covered by the one apply confirmation. */
   confirm: boolean;
   /** Idempotency-Key header required. */
@@ -1710,12 +1719,12 @@ export const ROUTES = [
   { opId: "instances.update", method: "POST", path: "/workspaces/{ws}/instances/{ins}/update", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "InstanceUpdateInput", output: "Instance", rate: "write", bodyLog: "meta", audit: "instance.update", draftable: true, confirm: true, idempotent: true, registry: "instance" },
   { opId: "instances.rollback", method: "POST", path: "/workspaces/{ws}/instances/{ins}/rollback", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "RollbackInput", output: "Instance", rate: "write", bodyLog: "meta", audit: "instance.rollback", draftable: true, confirm: true, idempotent: true, registry: "instance" },
   { opId: "instances.remove", method: "POST", path: "/workspaces/{ws}/instances/{ins}/remove", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "RemoveInput", output: "RemoveResult", rate: "write", bodyLog: "meta", audit: "instance.remove", draftable: true, confirm: true, idempotent: false, registry: "instance" },
-  /** v0.1.82 (C373, P1): per-workflow companion grants of one caller instance (`ins`). `workflow_grant_set` is applied ONLY as the one
-   *  step of an app-created draft (`DraftCreatedByApp`); a direct call → 403 `forbidden` (details.reason "apply_via_draft"), and
-   *  drafts.create / update / import refuse the op (`draft_op_not_draftable`). `workflow_grant_revoke` is the owner kill path:
+  /** v0.1.82 (C373, P1): per-workflow companion grants of one caller instance (`ins`). `workflow_grant_set` (`draftable: "app_only"`)
+   *  is applied ONLY as the one step of an app-created draft (`DraftCreatedByApp`); a direct call → 403 `forbidden` (details.reason
+   *  "apply_via_draft"), and drafts.create / update / import refuse the op (`draft_op_not_draftable`). `workflow_grant_revoke` is the owner kill path:
    *  immediate, never size-refused, not draftable. */
   { opId: "companions.workflow_grants_list", method: "GET", path: "/workspaces/{ws}/workflow-grants", auth: BO, exposure: "gateway", transport: "json", query: ["cursor", "limit", "ins", "state"], input: "WorkflowGrantListInput", output: "WorkflowGrantList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "consent" },
-  { opId: "companions.workflow_grant_set", method: "PUT", path: "/workspaces/{ws}/instances/{ins}/workflow-grants/{wfl}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "WorkflowGrantSetInput", output: "WorkflowGrantRecord", rate: "write", bodyLog: "meta", audit: "workflow_grant.set", draftable: true, confirm: true, idempotent: false, registry: "consent" },
+  { opId: "companions.workflow_grant_set", method: "PUT", path: "/workspaces/{ws}/instances/{ins}/workflow-grants/{wfl}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "WorkflowGrantSetInput", output: "WorkflowGrantRecord", rate: "write", bodyLog: "meta", audit: "workflow_grant.set", draftable: "app_only", confirm: true, idempotent: false, registry: "consent" },
   { opId: "companions.workflow_grant_revoke", method: "DELETE", path: "/workspaces/{ws}/instances/{ins}/workflow-grants/{wfl}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "WorkflowGrantRevokeInput", output: "WorkflowGrantRecord", rate: "write", bodyLog: "meta", audit: "workflow_grant.revoke", draftable: false, confirm: false, idempotent: false, registry: "consent" },
   { opId: "instances.consent", method: "POST", path: "/workspaces/{ws}/instances/{ins}/consent", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "InstanceConsentInput", output: "Instance", rate: "write", bodyLog: "meta", audit: "instance.consent", draftable: false, confirm: true, idempotent: true, registry: "instance" },
   { opId: "instances.register_own_infra", method: "POST", path: "/workspaces/{ws}/instances/own-infra", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "OwnInfraRegisterInput", output: "EnrolmentCode", rate: "sensitive", bodyLog: "none", audit: "instance.register_own_infra", draftable: false, confirm: false, idempotent: false, registry: "instance" },
@@ -1819,6 +1828,8 @@ export const ROUTES = [
 type Row = (typeof ROUTES)[number];
 export type OpId = Row["opId"];
 export type DraftableOpId = Extract<Row, { draftable: true }>["opId"];
+/** v0.1.82 (C5 S3-6): ops only Core puts into a draft (app-created drafts). Never a `DraftStep` of a person. */
+export type AppDraftOpId = Extract<Row, { draftable: "app_only" }>["opId"];
 export type ConfirmOpId = Extract<Row, { confirm: true }>["opId"];
 type WithAuth<R, A extends AuthClass> = R extends { auth: readonly (infer X)[] } ? (A extends X ? R : never) : never;
 export type OwnerCliOpId = WithAuth<Row, "owner-cli">["opId"];
@@ -1833,7 +1844,7 @@ export type InvariantOwnerCli = Check<
 >;
 /** RT2: draftable ops are browser-callable mutations (never GET, never public/bridge/device/webhook). */
 export type InvariantDraftable = Check<
-  [Exclude<Extract<Row, { draftable: true }>, { method: Exclude<HttpMethod, "GET">; auth: readonly ("browser" | "owner-cli")[] }>] extends [never] ? true : false
+  [Exclude<Extract<Row, { draftable: true | "app_only" }>, { method: Exclude<HttpMethod, "GET">; auth: readonly ("browser" | "owner-cli")[] }>] extends [never] ? true : false
 >;
 /** RT3: confirm ops are never callable by the owner CLI directly. */
 export type InvariantConfirm = Check<[Extract<OwnerCliRow, { confirm: true }>] extends [never] ? true : false>;
