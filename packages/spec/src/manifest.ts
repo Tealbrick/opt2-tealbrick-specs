@@ -294,7 +294,8 @@ export interface Operation {
 
 /** Unreleased (next; C373): one place in a call input that holds recipients. `pointer` = an RFC 6901 JSON pointer
  *  (non-empty, starts with `/`, `~` only as `~0` / `~1`, ≤ `RECIPIENT_POINTER_MAX` code points) into the op input (static op) or into the
- *  inner tool `arguments` (dynamic resolution). The value there is a string or an array of strings (nulls dropped); each is a
+ *  inner tool `arguments` (dynamic resolution). The value there is a string or an array of strings (nulls dropped; kind
+ *  `telegram` also takes a JSON safe integer); each is a
  *  bare value of `kind` (`npub1…`, `U012AB`, `123`, `a@b.com`) or a handle prefixed with the SAME `<kind>:`. A pointer that
  *  resolves to nothing is no value (not incomplete); any other failure sets `recipientsIncomplete`. The kinds are the
  *  manifest package's `normalizeHandle` kinds; a new kind is a spec change. The bridge builds the canonical
