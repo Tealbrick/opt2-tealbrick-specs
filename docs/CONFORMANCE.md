@@ -332,10 +332,10 @@ Both groups are gated by the bridge's reported cap, never by version: B31 by `ap
   - `B32.sdk_local_refusal` (SDK side, fake bridge without `app_call_context`): `callApp` with a non-empty context → `bridge_cap_missing` with `details.cap = "app_call_context"`, no network call; with `{}` → sent without `context`, no throw; an op outside `wf` with a context → `companion_undeclared` (it wins over the cap check); with the cap, a bad key → local `input_invalid` with `details.pointer`.
   - `B32.context_tampered`: the context in the op body is changed after the bridge signed the proof → the app refuses `call_proof_invalid`.
 
-## Unreleased rows (label 0.1.81; C373, G-6; the conformance PR adds them)
+## Unreleased rows (next; C373, G-6; the conformance PR adds them)
 Gated by the bridge's reported cap `hook_recipients`, never by version. A bridge without the cap skips the group (noted, not failed). Fixture: app X with a static outward op `send` (`recipients: [{pointer: "/to", kind: "email"}, {pointer: "/cc", kind: "email"}]`), a static outward op `post` without `recipients`, a read op, and a dynamic op whose outward tool `chat_send` resolves `recipients: [{pointer: "/channel", kind: "slack"}]`; a before hook on X that records `call.target`; an agent caller and an app caller.
-- `B33.static_op`: `send {to: ["B@Example.com", "a@example.com"], cc: null}` → `target.recipients = ["email:a@example.com", "email:b@example.com"]`, no `recipientsIncomplete`; agent and app caller see the same.
-- `B33.dynamic_op`: `chat_send {channel: "u012abcdef"}` → `["slack:U012ABCDEF"]`.
-- `B33.known_none`: `send {to: []}` → `[]`.
-- `B33.incomplete`: `send {to: ["Name <a@example.com>"]}`, `{to: 42}`, `{to: "telegram:123"}` → `recipientsIncomplete: true`, the bad value not listed; 65 distinct addresses → 64 listed and `recipientsIncomplete: true`.
-- `B33.absent`: the read op, `post` (no places) → no `recipients` member. No value appears in any bridge log line.
+- `B34.static_op`: `send {to: ["B@Example.com", "a@example.com"], cc: null}` → `target.recipients = ["email:a@example.com", "email:b@example.com"]`, no `recipientsIncomplete`; agent and app caller see the same.
+- `B34.dynamic_op`: `chat_send {channel: "u012abcdef"}` → `["slack:U012ABCDEF"]`.
+- `B34.known_none`: `send {to: []}` → `[]`.
+- `B34.incomplete`: `send {to: ["Name <a@example.com>"]}`, `{to: 42}`, `{to: "telegram:123"}` → `recipientsIncomplete: true`, the bad value not listed; 65 distinct addresses → 64 listed and `recipientsIncomplete: true`.
+- `B34.absent`: the read op, `post` (no places) → no `recipients` member. No value appears in any bridge log line.

@@ -1,4 +1,4 @@
-// Unreleased (label 0.1.81; C373, G-6): recipients of an outward call — Operation.recipients, DynamicResolution.recipients,
+// Unreleased (next; C373, G-6): recipients of an outward call — Operation.recipients, DynamicResolution.recipients,
 // HookCallInfo.target.recipients / recipientsIncomplete, cap hook_recipients. The extraction rule is NOT in this package (the
 // manifest package implements `extractRecipients` once, L1); these tests pin the constants, the types and the schema.
 import assert from "node:assert/strict";
@@ -74,4 +74,13 @@ test("C373 M-OP-14 (schema part): recipients on an outward op validate; quiet on
   const others = ex.operations.filter((o) => o.id !== write.id);
   assert.equal(validate({ ...ex, operations: [...others, { ...write, recipients: [{ pointer: "/to", kind: "email" }] }] }), false, "write op");
   assert.equal(validate({ ...ex, operations: [...others, write] }), true, "control: the write op alone validates");
+  // QA-RCP-7: agent audience only; holdFamily outward is enough at the schema level (the validator's M-OP-4 still pairs families
+  // with effects)
+  assert.equal(validate(withSend({ ...good, audience: "person" })), false, "person op");
+  assert.equal(validate({ ...ex, operations: [...others, { ...write, holdFamily: "outward", receipt: true, recipients: [{ pointer: "/to", kind: "email" }] }] }), true, "holdFamily outward");
+  assert.equal(validate({ ...ex, operations: [...others, { ...write, holdFamily: "first_contact", receipt: true, recipients: [{ pointer: "/to", kind: "email" }] }] }), false, "another family on a write op");
+  // QA-RCP-6: the pointer limit counts code points (JSON Schema maxLength), the unit RECIPIENT_POINTER_MAX documents
+  const astral = String.fromCodePoint(0x1f600);
+  assert.equal(validate(withSend({ ...send, recipients: [{ pointer: `/${astral.repeat(RECIPIENT_POINTER_MAX - 1)}`, kind: "email" }] })), true, "256 code points (511 UTF-16 units)");
+  assert.equal(validate(withSend({ ...send, recipients: [{ pointer: `/${astral.repeat(RECIPIENT_POINTER_MAX)}`, kind: "email" }] })), false, "257 code points");
 });
