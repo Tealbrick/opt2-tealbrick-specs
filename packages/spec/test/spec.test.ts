@@ -302,6 +302,41 @@ test("v0.1.42 (C230, owners' review): shared app-to-app contracts — schema + f
   const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
   assert.equal(validate({ ...ex, contracts: { produces: ["messages/1"], consumes: ["fleet.directory_feed/1"] } }), true, JSON.stringify(validate.errors));
   assert.equal(validate({ ...ex, contracts: { produces: ["messages/2"] } }), false);
+  // v0.1.83 (C373): documents/1 — connect produces, observer consumes; the id is in CONTRACT_IDS and in the manifest schema enum
+  assert.deepEqual([...CONTRACT_IDS], ["messages/1", "fleet.directory_feed/1", "documents/1"]);
+  assert.equal(validate({ ...ex, contracts: { produces: ["documents/1"] } }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ ...ex, contracts: { consumes: ["documents/1"] } }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ ...ex, contracts: { produces: ["documents/2"] } }), false);
+});
+
+test("v0.1.83 (C373): documents/1 — text cap, deleted rows, page cap, https-only url, text mimes only", () => {
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  const validate = ajv.compile(load("contracts/documents.1.schema.json"));
+  const row = {
+    id: "file:///acme/notes.md",
+    collection: "Acme LLC/Notes",
+    title: "Notes",
+    mime: "text/markdown",
+    updatedAt: "2026-10-20T09:30:00Z",
+    rev: "r1",
+    text: "x".repeat(262144),
+    untrusted: true,
+  };
+  const page = (rows: unknown[]) => ({ rows, nextCursor: null, exhausted: true });
+  assert.equal(validate(page([row])), true, JSON.stringify(validate.errors));
+  assert.equal(validate(page([{ ...row, text: `${row.text}x` }])), false, "262,145 code points refused");
+  assert.equal(validate(page(Array.from({ length: 50 }, () => row))), true);
+  assert.equal(validate(page(Array.from({ length: 51 }, () => row))), false, "51 rows refused");
+  // a deleted row: empty text; the title may be "" or the last title
+  assert.equal(validate(page([{ ...row, deleted: true, title: "", text: "" }])), true, JSON.stringify(validate.errors));
+  assert.equal(validate(page([{ ...row, deleted: true, text: "" }])), true, JSON.stringify(validate.errors));
+  assert.equal(validate(page([{ ...row, deleted: true }])), false, "deleted with text refused");
+  assert.equal(validate(page([{ ...row, title: "" }])), false, "empty title on a live row refused");
+  for (const mime of ["text/plain", "text/markdown", "text/csv"]) assert.equal(validate(page([{ ...row, mime, text: "a" }])), true, mime);
+  for (const mime of ["text/html", "application/json", "application/pdf"]) assert.equal(validate(page([{ ...row, mime, text: "a" }])), false, mime);
+  assert.equal(validate(page([{ ...row, text: "a", url: "https://docs.example.com/a" }])), true);
+  assert.equal(validate(page([{ ...row, text: "a", url: "http://docs.example.com/a" }])), false);
+  assert.equal(validate(page([{ ...row, text: "a", untrusted: false }])), false);
 });
 
 test("v0.1.43 (LA-1, LR-1): viewer route purpose, workflow listing, slice viewUrl, StatusReport.views", async () => {
