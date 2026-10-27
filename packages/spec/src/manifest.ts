@@ -61,12 +61,24 @@ export const EVENT_AUDIENCES = ["target", "granted"] as const;
 /** v0.1.57 (C274d ruling 4): the platform event namespace. Event types starting with it are declared in this spec
  *  (`PLATFORM_EVENTS`, bridge.ts) and emitted by the SDK; a manifest never declares one (M-EV-1). */
 export const RESERVED_EVENT_PREFIX = "tb." as const;
+/** Unreleased (label 0.1.81; C373, G-6): the handle kinds of a `RecipientSpec`. Equal to the manifest package's
+ *  `HANDLE_CHANNELS` (`normalizeHandle`), which adds `email` in the same release pair. */
+export const RECIPIENT_KINDS = ["buzz", "slack", "telegram", "email"] as const;
+/** Unreleased (label 0.1.81; C373): 1..this many `RecipientSpec`s per op (`Operation.recipients`) or resolution
+ *  (`DynamicResolution.recipients`). */
+export const RECIPIENT_SPECS_MAX = 8;
+/** Unreleased (label 0.1.81; C373): the most canonical handles a hook sees in `HookCallInfo.target.recipients`; more found →
+ *  `recipientsIncomplete`. */
+export const RECIPIENTS_MAX = 64;
+/** Unreleased (label 0.1.81; C373): longest `RecipientSpec.pointer`, in UTF-16 code units. */
+export const RECIPIENT_POINTER_MAX = 256;
 
 
 export type CrudAction = (typeof CRUD_ACTIONS)[number];
 export type Effect = (typeof EFFECTS)[number];
 export type HoldFamily = (typeof HOLD_FAMILIES)[number];
 export type HookHoldFamily = (typeof HOOK_HOLD_FAMILIES)[number];
+export type RecipientKind = (typeof RECIPIENT_KINDS)[number];
 export type AgentMode = (typeof AGENT_MODES)[number];
 export type HookPhase = (typeof HOOK_PHASES)[number];
 export type IdempotencyMode = (typeof IDEMPOTENCY_MODES)[number];
@@ -273,6 +285,20 @@ export interface Operation {
    *  summary only, never logged or given to an `after` hook; errors carry a code and a fixed message. Needs a bridge with the
    *  `secret_output` cap. */
   secretOutput?: true;
+  /** Unreleased (label 0.1.81; C373, G-6, MANIFEST M-OP-13): where the RECIPIENTS of a call are in its input, so hooks see who
+   *  the call talks to (`HookCallInfo.target.recipients`, cap `hook_recipients`). Only on `effect: "outward"` ops; 1..
+   *  `RECIPIENT_SPECS_MAX` entries, unique. Absent = the recipients are unknown (a policy fails closed). */
+  recipients?: RecipientSpec[];
+}
+
+/** Unreleased (label 0.1.81; C373): one place in a call input that holds recipients. `pointer` = an RFC 6901 JSON pointer
+ *  (non-empty, starts with `/`, `~` only as `~0` / `~1`, ≤ `RECIPIENT_POINTER_MAX`) into the op input (static op) or into the
+ *  inner tool `arguments` (dynamic resolution). The value there is a string or an array of strings; each is a bare value of
+ *  `kind` (`npub1…`, `U012AB`, `123`, `a@b.com`) or a handle already prefixed with `<kind>:`. The bridge builds the canonical
+ *  handle with the manifest package (`extractRecipients`, one implementation, L1). */
+export interface RecipientSpec {
+  pointer: string;
+  kind: RecipientKind;
 }
 
 /** C354a (QA-C354-1): a catalog entry name — `^[a-z][a-z0-9_]{1,47}$`, never contains `__` and never ends in `_`, so a
@@ -355,6 +381,11 @@ export interface DynamicResolution {
    *  ANY member is held for the caller. When present it contains `holdFamily`, and `holdFamily` = the family a bridge without
    *  the cap applies (put the one held by default first, e.g. `first_contact`). A variant's set ⊇ its base's. */
   holdFamilies?: HoldFamily[];
+  /** Unreleased (label 0.1.81; C373, G-6; bridge cap `hook_recipients`): where the recipients are in the INNER tool `arguments`
+   *  of a call of this tool (`DynamicCallInput.arguments`), same shape and limits as `Operation.recipients`. Only on an
+   *  `outward` resolution. A resolution is per tool and cached, so it names places, never values: the bridge reads the values
+   *  of each call. Absent = unknown. */
+  recipients?: RecipientSpec[];
 }
 
 // ---------- Scopes ----------

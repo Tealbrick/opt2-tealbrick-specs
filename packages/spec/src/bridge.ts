@@ -332,7 +332,10 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  v0.1.77 (C367, P4): + `app_call_context` = the bridge accepts `CallEnvelope.context` on the companion path, validates it
  *  (BRIDGE §8.5; `CALLER_CONTEXT_*`), and puts the keys into the op body `context` before the before-hook chain. Without the cap
  *  the SDK never sends `context` (it refuses locally, SDK-API §18.6). */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context"] as const;
+/** Unreleased (label 0.1.81; C373, G-6): + `hook_recipients` = for an `outward` call the bridge sets `HookCallInfo.target.recipients`
+ *  (and `recipientsIncomplete`) from `Operation.recipients` (static op) or `DynamicResolution.recipients` (dynamic op) with the
+ *  manifest package's `extractRecipients`, for agent and app callers, in every hook phase; values are never logged. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "hook_recipients"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -482,7 +485,14 @@ export interface HookCallInfo {
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId };
   /** v0.1.68 (C336 RQ-2, cap `hook_tool`): `tool` = `DynamicResolution.tool` of a dynamic call (`crud`/`effect`/`holdFamily` are then
    *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
-  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; /** v0.1.74 (cap `hold_families`) */ holdFamilies?: HoldFamily[] };
+  /** Unreleased (label 0.1.81; C373, G-6; cap `hook_recipients`, BRIDGE §8.2): `recipients` = the canonical handles
+   *  (`normalizeHandle`) at the op's `recipients` places (static op) or the resolution's (dynamic op) in THIS call's input;
+   *  de-duplicated, sorted by code unit, ≤ `RECIPIENTS_MAX`; only for an `outward` call; the same for agent and app callers;
+   *  never logged. Absent = unknown (no cap, no places declared, not outward); `[]` = known: the input names nobody.
+   *  `recipientsIncomplete` (with `recipients` only) = a value could not be read as a handle of its kind, a place holds another
+   *  shape, or more than `RECIPIENTS_MAX` were found: deny and hold rules on recipients apply, allow rules never match. */
+  target: { instance: InstanceId; product: ProductId; op: SnakeId; tool?: string; crud: CrudAction[]; effect: Effect; holdFamily?: HoldFamily; /** v0.1.74 (cap `hold_families`) */ holdFamilies?: HoldFamily[]; recipients?: string[]; recipientsIncomplete?: true };
+
   input?: JsonValue;
 }
 export interface HookRequestBase<P extends HookPhase> {

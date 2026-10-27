@@ -122,6 +122,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | `audience` | `agent` → reachable through the bridge (MCP, relay, app→app), becomes an MCP tool. `person` → only from the app UI in a person session (launch ticket); never an MCP tool, never hooked, never a companion target. |
 | `dynamic?` | Dynamic tool family (§5.3). |
 | `secretOutput?` | v0.1.68 (C336 RQ-3, S-8): `true` = the output carries a secret (e.g. a short-lived credential). See M-OP-12. |
+| `recipients?` | Unreleased (label 0.1.81; C373, G-6): `RecipientSpec[]` = `{pointer, kind}` pairs that say WHERE the recipients of a call are in its input, so hooks see who an outward call talks to (BRIDGE §8.2, `target.recipients`). `pointer` = RFC 6901 into the op input; `kind` ∈ `buzz`, `slack`, `telegram`, `email` (`RECIPIENT_KINDS`). The value at a place is a string or an array of strings, each a bare value of `kind` or a handle prefixed with `<kind>:`. See M-OP-13. Dynamic ops name places per tool in `DynamicResolution.recipients` instead (§5.3). |
 
 ### 5.2 Rules
 | Rule | Check |
@@ -136,6 +137,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-OP-8 | Non-dynamic `agent` ops declare `input` and `output`. Embedded schemas: no remote `$ref`, no `$id`, no `contentEncoding`/`contentMediaType` → `io_schema_invalid`. |
 | M-OP-9 | `audience = person` ⇒ no `dynamic` → `person_dynamic`. |
 | M-OP-12 | v0.1.68: `secretOutput: true` ⇒ `audience = agent` (reached by APP callers through the bridge; agent callers are refused, SDK-API v0.1.68), no `dynamic`, `idempotency = none`, `receipt = true` (input digest + `redact` summary only) → `secret_output_invalid`. The manifest declares `requires.bridgeCaps: ["secret_output"]`. `effect` is the op's own; a credential lease is `read`, so default policy gating does not hold it — its audit is the receipt. |
+| M-OP-13 | Unreleased (label 0.1.81; C373): `recipients` ⇒ `effect = outward`; 1..`RECIPIENT_SPECS_MAX` (8) entries; each exactly `{pointer, kind}` with `pointer` a non-empty RFC 6901 pointer (starts with `/`, `~` only as `~0` / `~1`, ≤ 256 chars) and `kind` ∈ `RECIPIENT_KINDS`; no two entries with the same pointer and kind → `recipients_invalid`. The validator does not check that the pointer names a field of `input` (an absent place reads as no recipients). A manifest with `recipients` needs the manifest release that carries M-OP-13 in EVERY reader (strict schema: Core's catalog sync and a bridge's claim refuse it otherwise, as for `events`, §16.3), so its release states `requires.bridge`. |
 | M-OP-10 | `dynamic` ⇒ `crud = ["read"]`, `effect = read`, no `holdFamily`, `idempotency = supported`, `receipt = false`, `audience = agent`, no `input`/`output`; `crudCeiling = ["read"]` ⇒ `effectCeiling = read` → `dynamic_invalid`. |
 
 ### 5.3 Dynamic operations (the engine-tool gap)
@@ -147,6 +149,7 @@ Some apps expose tool sets that are not known at build time: an engine with ~100
 - `mode: "list"` (≤ 256 entries): the bridge shows each entry as its own MCP tool `<product>__<entry.name>` (names unique within the app, not colliding with static op ids).
 - `mode: "search"`: the bridge shows `<product>__<op>_search` (input `{query, limit?}`, returns entries) and `<product>__<op>_call` (input `{tool, arguments}`).
 - Every call goes to `POST /tb/v1/ops/<op>` with input `DynamicCallInput {tool, arguments}`. Before `gate()` and hooks the bridge resolves the concrete tool's `{crud, effect, holdFamily}` via the bridge op `POST /tb/v1/bridge/resolve` (cacheable 5 min) and gates, hooks, authorizes and receipts with the resolved values. The effect never comes from the agent. A resolution outside the ceilings → refuse `dynamic_ceiling_exceeded`; a resolved non-read call always gets a receipt.
+- Unreleased (label 0.1.81; C373): a `DynamicResolution` of an `outward` tool may carry `recipients` (`RecipientSpec[]`, 1..8, same shape and rules as M-OP-13), pointers into the INNER tool `arguments` of a call (`DynamicCallInput.arguments`). A resolution is per tool and cached (5 min), so it names places, never values; the bridge reads the values of each call. The SDK passes a valid list through and drops a malformed one (absent = unknown).
 - Wire details: BRIDGE.md and SDK-API.md.
 
 ### 5.4 Standard operations (every SDK app, automatic) and reserved names

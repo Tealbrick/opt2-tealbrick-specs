@@ -340,3 +340,7 @@ Core creates `tb-views` (the bridge image with `TB_ROLE=views`, same digest as t
 
 ## v0.1.77 (C367 P3) — companion `tb.hold_status`
 - MANIFEST M-CP-3 lets a companion entry for one product list `tb.hold_status` next to an op of that product. Core's `companionErrors` calls the manifest package, so Core has no new rule. Core mints the op into that companion grant's `wf` like any declared op. CORE I4 is unchanged: a valid grant suffices, no CRUD check. SDK-API §4.7 says what the app caller sees.
+
+## Unreleased (label 0.1.81; C373, G-6) — recipients of an outward call
+- Changelog: `Operation.recipients` (MANIFEST M-OP-13), `DynamicResolution.recipients` (MANIFEST §5.3), `RecipientSpec`, `RECIPIENT_KINDS`, `RECIPIENT_SPECS_MAX`, `RECIPIENTS_MAX`, `RECIPIENT_POINTER_MAX` (types/manifest.ts); `HookCallInfo.target.recipients` / `recipientsIncomplete` and cap `hook_recipients` (BRIDGE "hook recipients"); handle kind `email` (SDK-API §18). Additive. The version number is assigned at merge (label 0.1.81; 0.1.79 = P5, 0.1.80 = G-2).
+- Core has no new rule: its catalog sync validates release manifests with the pinned manifest package (M-OP-13 there). Core re-pins the manifest release that carries M-OP-13 before any app release with `recipients` is published (strict schema, as for `events`).
