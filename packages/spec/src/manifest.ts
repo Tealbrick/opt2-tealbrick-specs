@@ -132,6 +132,9 @@ export interface Manifest {
   /** v0.1.15 (C104) */
   requires?: ManifestRequires;
   needsAgentDirectory?: boolean;
+  /** v0.1.80 (C373, G-2): the app asks for the workspace grant picture (slice `topology`, display only). Core sends it only
+   *  after the owner accepted it at deploy or update (MANIFEST §9). Default false. */
+  needsTopology?: boolean;
   skills?: Skill[];
   harnessHints?: HarnessHint[];
   unlocks?: Unlock[];

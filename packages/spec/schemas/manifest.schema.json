@@ -60,6 +60,7 @@
     "companions": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/companion" } },
     "requires": { "type": "object", "additionalProperties": false, "properties": { "bridge": { "$ref": "#/$defs/semver" }, "bridgeCaps": { "type": "array", "uniqueItems": true, "maxItems": 16, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,31}$" }, "description": "v0.1.68 (C354): bridge capabilities the release needs; Core refuses a bridge without each (bridge_cap_missing). Never inferred from a version." } } },
     "needsAgentDirectory": { "type": "boolean", "default": false },
+    "needsTopology": { "type": "boolean", "default": false, "description": "v0.1.80 (C373, G-2): the app asks for the workspace grant picture (instance slice topology, display only); Core sends it only after the owner accepted it at deploy or update." },
     "skills": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/skill" } },
     "harnessHints": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/harnessHint" } },
     "unlocks": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/unlock" } },

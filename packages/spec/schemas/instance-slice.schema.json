@@ -308,6 +308,196 @@
     "portalUrl": {
       "$ref": "workspace-config.schema.json#/$defs/httpsOrigin",
       "description": "v0.1.13 (C86): the Portal GUI origin (no path); apps build owner links `<portalUrl>/w/<ws>/open?product=<p>&path=<path>`."
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instances",
+        "edges",
+        "companions",
+        "connections"
+      ],
+      "description": "v0.1.80 (C373, G-2; number set at merge): a DISPLAY copy of the workspace grant picture. Present ONLY when the manifest declares needsTopology: true AND the owner accepted it at deploy or update (an update that adds the flag needs a new acceptance). The bridge and the SDK never read it to authorize; apps MUST NOT use it to authorize; stale until the next slice revision. Core counts its worst case in the slice size. No labels beyond instance name/version; no key names, persona, endpoints, secrets or token data. Bounds = TOPOLOGY_MAX.",
+      "properties": {
+        "instances": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ins",
+              "product",
+              "name",
+              "version"
+            ],
+            "properties": {
+              "ins": {
+                "$ref": "workspace-config.schema.json#/$defs/insId"
+              },
+              "product": {
+                "$ref": "workspace-config.schema.json#/$defs/productId"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "version": {
+                "$ref": "workspace-config.schema.json#/$defs/semver"
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "agt",
+              "ins",
+              "product",
+              "crud",
+              "mode",
+              "held"
+            ],
+            "properties": {
+              "agt": {
+                "$ref": "workspace-config.schema.json#/$defs/agtId"
+              },
+              "ins": {
+                "$ref": "workspace-config.schema.json#/$defs/insId"
+              },
+              "product": {
+                "$ref": "workspace-config.schema.json#/$defs/productId"
+              },
+              "crud": {
+                "type": "array",
+                "maxItems": 4,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "workspace-config.schema.json#/$defs/crudAction"
+                }
+              },
+              "mode": {
+                "$ref": "workspace-config.schema.json#/$defs/agentMode"
+              },
+              "held": {
+                "type": "array",
+                "maxItems": 8,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "first_contact",
+                    "profile_change",
+                    "live_call",
+                    "destructive",
+                    "money",
+                    "outward",
+                    "identity",
+                    "public_link"
+                  ]
+                }
+              },
+              "wf": {
+                "type": "array",
+                "maxItems": 128,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^(tb\\.)?[a-z][a-z0-9_]{1,39}$"
+                }
+              },
+              "paused": {
+                "const": true
+              }
+            }
+          }
+        },
+        "companions": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "product",
+              "crud"
+            ],
+            "properties": {
+              "from": {
+                "$ref": "workspace-config.schema.json#/$defs/insId"
+              },
+              "to": {
+                "$ref": "workspace-config.schema.json#/$defs/insId"
+              },
+              "product": {
+                "$ref": "workspace-config.schema.json#/$defs/productId"
+              },
+              "crud": {
+                "type": "array",
+                "maxItems": 4,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "workspace-config.schema.json#/$defs/crudAction"
+                }
+              },
+              "ops": {
+                "type": "array",
+                "maxItems": 128,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^(tb\\.)?[a-z][a-z0-9_]{1,39}$"
+                }
+              }
+            }
+          }
+        },
+        "connections": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "con",
+              "agt",
+              "method",
+              "status"
+            ],
+            "properties": {
+              "con": {
+                "$ref": "workspace-config.schema.json#/$defs/conId"
+              },
+              "agt": {
+                "$ref": "workspace-config.schema.json#/$defs/agtId"
+              },
+              "method": {
+                "enum": [
+                  "key",
+                  "pairing"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "revoked"
+                ]
+              }
+            }
+          }
+        },
+        "truncated": {
+          "const": true,
+          "description": "Core cut at least one list at its bound."
+        }
+      }
     }
   }
 }

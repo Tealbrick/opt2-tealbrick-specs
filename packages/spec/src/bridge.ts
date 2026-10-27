@@ -279,6 +279,34 @@ export interface InstanceSlice extends SliceClaims {
    *  the SDK REFUSES an app call (or a resumed held app call) whose caller has no verified product (no `prd` and no
    *  `companionCallers` entry): 403 `caller_unverified`, nothing runs, audited. Absent = the earlier lenient rule. */
   appCallers?: "verified";
+  /** v0.1.80 (C373, G-2; number set at merge): a DISPLAY copy of the workspace grant picture (SliceTopology). Normative:
+   *  present ONLY when the app's manifest declares `needsTopology: true` AND the owner accepted it at deploy or update (the
+   *  deploy review names it: "This app can see which agents and apps have access to what in this workspace"). An update that
+   *  adds the flag needs a new acceptance; without acceptance Core leaves the field out. DISPLAY ONLY: the bridge and the SDK
+   *  never read it to authorize, and apps MUST NOT use it to authorize; it is stale until the next slice revision. Core counts
+   *  its worst case in the slice size (SLICE_CORE_MAX_CHARS, CONFIG_CORE_MAX_BYTES). SDK: `ctx.topology()`. */
+  topology?: SliceTopology;
+}
+
+/** v0.1.80 (C373, G-2): the list bounds of `InstanceSlice.topology` (= instance-slice.schema.json maxItems). Core cuts a list
+ *  at its bound and then sets `truncated: true`. */
+export const TOPOLOGY_MAX = { instances: 200, edges: 2000, companions: 500, connections: 500 } as const;
+
+/** v0.1.80 (C373, G-2): the workspace grant picture an app with `needsTopology` (owner-accepted) gets in its slice. DISPLAY
+ *  ONLY (see `InstanceSlice.topology`). No labels beyond instance `name` / `version`; no key names, persona, endpoints,
+ *  secrets or token data. */
+export interface SliceTopology {
+  /** the workspace's app instances; `name` = the manifest name (display copy, ≤ 80), `version` = the deployed release. ≤ TOPOLOGY_MAX.instances */
+  instances: { ins: InstanceId; product: ProductId; name: string; version: SemVer }[];
+  /** agent → app grants (one per edge): the grant ceiling `crud`, `mode`, the held families, the workflow op list `wf` when the
+   *  edge is op-level, `paused: true` when the agent, the instance or the workspace is paused. ≤ TOPOLOGY_MAX.edges */
+  edges: { agt: AgentId; ins: InstanceId; product: ProductId; crud: CrudAction[]; mode: AgentMode; held: HoldFamily[]; wf?: string[]; paused?: true }[];
+  /** app → app companion grants: caller `from`, target `to` (of product `product`), `crud`, the op list `ops`. ≤ TOPOLOGY_MAX.companions */
+  companions: { from: InstanceId; to: InstanceId; product: ProductId; crud: CrudAction[]; ops?: string[] }[];
+  /** agent connections (CREDENTIALS K2/K2b): how they were made and their status; never key or token data. ≤ TOPOLOGY_MAX.connections */
+  connections: { con: ConnectionId; agt: AgentId; method: "key" | "pairing"; status: "active" | "revoked" }[];
+  /** Core cut at least one list at its bound */
+  truncated?: true;
 }
 
 // ── Enrolment (BRIDGE §4) — op `bridge_api.enrol` ───────────────────────────

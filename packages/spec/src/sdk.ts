@@ -24,6 +24,7 @@ import type {
   SchemaVersion,
   ScopeSourceItem,
   ScopeSummaryResult,
+  SliceTopology,
 } from "./bridge.ts";
 import type {
   AgentId,
@@ -450,6 +451,12 @@ export interface OpContext {
    *  the slice is absent, expired or has none). Decide by capability (e.g. "owner_rows"), never by bridge version. Advisory: a cap
    *  never widens access (the SDK authorizes every call). Optional in this type (hand-built contexts); the SDK always sets it. */
   bridgeCaps?: () => readonly string[];
+  /** v0.1.80 (C373, G-2; number set at merge): the workspace grant picture from the CURRENT verified slice (`slice.topology`) as a
+   *  frozen deep copy; null when the slice is absent, expired (older than 12 h), has none, or its topology is malformed (the SDK
+   *  checks the shape and never throws). Present only for an app whose manifest declares `needsTopology` and whose owner accepted
+   *  it. DISPLAY ONLY: never authorize with it (the SDK authorizes every call from the grant); stale until the next slice revision.
+   *  Optional in this type (hand-built contexts); SDKs that implement SDK-API v0.1.80 always set it. */
+  topology?: () => SliceTopology | null;
   /** v0.1.57 (C274c/C274d): emit one declared app event (SDK-API §20). Optional in this type (hand-built contexts); SDKs from
    *  0.1.38 always set it. */
   emit?: EmitFn;
@@ -488,6 +495,9 @@ export interface StartContext {
   /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
    *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
   bridgeCaps?: () => readonly string[];
+  /** v0.1.80 (C373, G-2): the same as `OpContext.topology` (frozen deep copy of `slice.topology`; null when absent, expired or
+   *  malformed). Display only. Optional in this type (hand-built contexts). */
+  topology?: () => SliceTopology | null;
   /** v0.1.13 (C86) */
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
@@ -505,6 +515,9 @@ export interface EventContext {
   /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
    *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
   bridgeCaps?: () => readonly string[];
+  /** v0.1.80 (C373, G-2): the same as `OpContext.topology` (frozen deep copy of `slice.topology`; null when absent, expired or
+   *  malformed). Display only. Optional in this type (hand-built contexts). */
+  topology?: () => SliceTopology | null;
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
   ownerLink(path: string): string | null;

@@ -2,6 +2,12 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.80 (C373, G-2: slice topology for display; label 0.1.80, number set at merge)
+- Manifest `needsTopology?: boolean` (default false), next to `needsAgentDirectory` (MANIFEST §9; schema, `Manifest` type).
+- Slice `topology?: SliceTopology` = `{instances, edges, companions, connections, truncated?}` with `TOPOLOGY_MAX` = 200 / 2000 / 500 / 500 (instance-slice.schema.json, `bridge.ts`). Present only for an owner-accepted `needsTopology` app; DISPLAY ONLY (bridge, SDK and apps never authorize with it). Rules: "v0.1.80" below.
+- SDK `ctx.topology(): SliceTopology | null` on op, start and event contexts (SDK-API "v0.1.80"; `sdk.ts`).
+- Test: `test/topology.test.ts`.
+
 ## Changelog → v0.1.75 (recipe follow-up: C359c, QA-BRIDGE22-6, QA-SPEC54 S4, RM-15; number taken at merge time, C340)
 - C359c / C359d (QA-CORE63-13, QA-SPEC57-1): a change may skip the size check only if the measured worst case already covers its result; the worst case counts every verb-level edge at its full op list (≤ 128 ids), `held` at 8, and every paused grant as if resumed; limits named (slice 65,536, signed config 4 MiB). RM-24c + an executable sequence model `test/killpath-model.test.ts`.
 - QA-SPEC57 S3: `CONFIG_KILLPATH_MAX_BYTES` is DERIVED (signer limit − 65 × ceil(SLICE_AUTO_GROWTH_CHARS × 4/3), rounded down: 3,197,000, was 4,000,000) with `CONFIG_SIGNER_MAX_BYTES`, `WORKSPACE_INSTANCES_MAX`, `SLICE_AUTO_GROWTH_CHARS` (11,500 ≥ measured 11,343); pinned by tests.
@@ -340,3 +346,13 @@ Core creates `tb-views` (the bridge image with `TB_ROLE=views`, same digest as t
 
 ## v0.1.77 (C367 P3) — companion `tb.hold_status`
 - MANIFEST M-CP-3 lets a companion entry for one product list `tb.hold_status` next to an op of that product. Core's `companionErrors` calls the manifest package, so Core has no new rule. Core mints the op into that companion grant's `wf` like any declared op. CORE I4 is unchanged: a valid grant suffices, no CRUD check. SDK-API §4.7 says what the app caller sees.
+
+## v0.1.80 (C373, G-2) — slice `topology` (display only; label 0.1.80, number set at merge)
+Normative.
+1. **What.** `InstanceSlice.topology?: SliceTopology` is a DISPLAY copy of the workspace grant picture: `instances[] {ins, product, name, version}` (≤ 200), `edges[] {agt, ins, product, crud, mode, held, wf?, paused?: true}` (≤ 2000, one per agent → app grant; `wf` only on an op-level edge; `paused` when the agent, the instance or the workspace is paused), `companions[] {from, to, product, crud, ops?}` (≤ 500, app → app grants), `connections[] {con, agt, method: "key" | "pairing", status: "active" | "revoked"}` (≤ 500), `truncated?: true` (Core cut a list at its bound). The bounds are `TOPOLOGY_MAX` and the schema `maxItems`.
+2. **Consent.** Core puts `topology` into a slice ONLY when the app's manifest declares `needsTopology: true` AND the owner accepted it at deploy or update. The deploy review names it: "This app can see which agents and apps have access to what in this workspace". An update whose target manifest adds the flag needs a new acceptance. Without acceptance the field is absent (not empty).
+3. **Never authorize.** The bridge and the SDK never read `topology` to authorize. Apps MUST NOT use it to authorize; access comes only from the verified grant (§6, §7). It is stale until the next slice revision; Core re-mints the slice when the picture changes, like any other slice change.
+4. **Content.** No labels beyond instance `name` (display copy, ≤ 80) and `version`. No key names, persona, endpoints, secrets, jtis or other token data.
+5. **Size.** Core counts the topology's worst case in its measured slice and config sizes (`SLICE_CORE_MAX_CHARS`, `CONFIG_CORE_MAX_BYTES`, PORTAL-API "Config size"), with every edge `paused: true` and every connection `revoked` (kill-path changes grow it and are never refused).
+6. **Open question (OQ-C373-1, packages lead).** At the list bounds the worst case is far above the slice limit: ≈ 800,000 JSON chars (≈ 1,066,000 base64) without `wf`, and up to ≈ 5,800 chars more per edge with a 128-op `wf`, against `SLICE_JWS_MAX_CHARS` 65,536 (`SLICE_CORE_MAX_CHARS` 52,000). Rule 5 alone would refuse ordinary owner changes in a large workspace. A follow-up decides: smaller bounds, Core cuts lists below the bounds to fit (`truncated: true`), or a separate carrier for the picture.
+

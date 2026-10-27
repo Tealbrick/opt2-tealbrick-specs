@@ -632,3 +632,11 @@ OpContext, EventContext and StartContext (types: `EmitFn`, `EmitOptions`, `Purge
      - A receipt without `meta.callerContext` has no `callerContext` on the item. The item never carries the whole context.
   8. **Evolution's fixture.** `{ "evolution.workflow": "<id>", "evolution.version": 3, "evolution.run": "<runId>", "evolution.step": "<stepId>" }`. Its summary is `evolution.run="<runId>"; evolution.step; evolution.version=3; evolution.workflow="<id>"`.
   9. **Storage.** The spec fixes the output, not the storage. The SDK PR may add a column for the summary (a migration; precedent `sdk_receipt_caller_product`).
+
+## v0.1.80 — `ctx.topology()` (C373, G-2; label 0.1.80, number set at merge)
+- **API.** `ctx.topology(): SliceTopology | null` on OpContext, StartContext and EventContext (and job-handler contexts). It reads the CURRENT verified slice on every call, like `ctx.bridgeCaps()` (§ v0.1.54), and returns a frozen deep copy of `slice.topology` (CORE "v0.1.80").
+- **null.** When the slice is absent, expired (older than 12 h), has no `topology`, or its `topology` is malformed. The SDK checks the shape defensively (the four lists are arrays of objects with the required string members; the bounds of `TOPOLOGY_MAX`); a malformed member makes the whole value null. It never throws.
+- **Copy.** Changing the returned object is impossible (frozen) and could not change SDK state (a copy). A later call returns a new copy.
+- **Display only.** Nothing in the SDK reads the topology for authorization. Apps MUST NOT authorize with it; the grant decides (§9). It is present only when the manifest declares `needsTopology` and the owner accepted it (MANIFEST §9).
+- **Manifest package.** `validateManifest` accepts `needsTopology` as a boolean and refuses any other value (`schema_invalid`).
+
