@@ -472,11 +472,23 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["product", "operations", "crud", "purpose"],
+      "if": { "properties": { "product": { "const": "*" } } },
+      "then": { "not": { "required": ["perWorkflow"] } },
       "properties": {
         "product": { "anyOf": [{ "$ref": "#/$defs/productId" }, { "const": "*" }] },
         "operations": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "anyOf": [{ "$ref": "#/$defs/snakeId" }, { "const": "tb.holds_pending" }, { "const": "tb.hold_status" }] } },
         "crud": { "$ref": "#/$defs/crudSet" },
-        "purpose": { "type": "string", "minLength": 1, "maxLength": 160 }
+        "purpose": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "perWorkflow": {
+          "description": "v0.1.82 (C373, P1, M-CP-4): ceiling for per-workflow grants; its ops are not in the base grant. One product only (not \"*\"); never a tb.* op.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operations", "crud"],
+          "properties": {
+            "operations": { "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": { "$ref": "#/$defs/snakeId" } },
+            "crud": { "$ref": "#/$defs/crudSet" }
+          }
+        }
       }
     },
     "skill": {
