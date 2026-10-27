@@ -51,7 +51,7 @@ test("C373: typed samples (op, resolution, hook target)", () => {
   assert.deepEqual(target.recipients, ["slack:U012ABCDEF"]);
 });
 
-test("C373 M-OP-13 (schema part): recipients on an outward op validate; quiet on good, fires on bad", () => {
+test("C373 M-OP-14 (schema part): recipients on an outward op validate; quiet on good, fires on bad", () => {
   const validate = manifestValidator();
   const good = { ...send, recipients: [{ pointer: "/to", kind: "email" }, { pointer: "/people/0/npub", kind: "buzz" }, { pointer: "/a~1b/~0c", kind: "slack" }] };
   assert.equal(validate(withSend(good)), true, JSON.stringify(validate.errors));

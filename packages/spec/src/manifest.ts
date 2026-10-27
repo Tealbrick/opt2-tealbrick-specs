@@ -285,7 +285,7 @@ export interface Operation {
    *  summary only, never logged or given to an `after` hook; errors carry a code and a fixed message. Needs a bridge with the
    *  `secret_output` cap. */
   secretOutput?: true;
-  /** Unreleased (label 0.1.81; C373, G-6, MANIFEST M-OP-13): where the RECIPIENTS of a call are in its input, so hooks see who
+  /** Unreleased (label 0.1.81; C373, G-6, MANIFEST M-OP-14): where the RECIPIENTS of a call are in its input, so hooks see who
    *  the call talks to (`HookCallInfo.target.recipients`, cap `hook_recipients`). Only on `effect: "outward"` ops; 1..
    *  `RECIPIENT_SPECS_MAX` entries, unique. Absent = the recipients are unknown (a policy fails closed). */
   recipients?: RecipientSpec[];
