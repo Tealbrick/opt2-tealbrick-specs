@@ -54,7 +54,7 @@ export const WILDCARD_COMPANION_OPS = ["tb.holds_pending"] as const;
 export const COMPANION_HOLD_STATUS_OP = "tb.hold_status" as const;
 /** v0.1.42 (C230): shared app-to-app contracts, `<name>/<major>`; each has a JSON Schema in this package at
  *  `schemas/contracts/<name>.<major>.schema.json` and a fixture at `examples/contracts/<name>.<major>.json`. */
-export const CONTRACT_IDS = ["messages/1", "fleet.directory_feed/1"] as const;
+export const CONTRACT_IDS = ["messages/1", "fleet.directory_feed/1", "documents/1"] as const;
 /** v0.1.57 (C274c/C274d): who an app event goes to. `target` = only the agents the emit names (`to`); `granted` = every agent
  *  that passes the `visibleWith` rule. Either way the bridge delivers only to agents that pass it (MANIFEST §16). */
 export const EVENT_AUDIENCES = ["target", "granted"] as const;
@@ -492,7 +492,19 @@ export interface Companion {
   operations: SnakeId[];
   crud: CrudAction[];
   purpose: string;
+  /** v0.1.82 (C373, P1; MANIFEST §9, M-CP-4): the CEILING for per-workflow grants (CREDENTIALS `WorkflowGrantClaims`). Its ops
+   *  are NOT in the base grant (`operations` / `crud` above = the app's own calls, minted as before). Only for one product
+   *  (never `"*"`); never a `tb.*` op; never an op that `operations` lists too (C5 S3-5: no "not narrowed" overlap). */
+  perWorkflow?: CompanionPerWorkflow;
 }
+/** v0.1.82 (C373, P1): `companions[].perWorkflow`. M-CP-4 checks it against the target like M-CP-2 checks `operations`/`crud`. */
+export interface CompanionPerWorkflow {
+  /** 1..PER_WORKFLOW_OPS_MAX unique op ids of the target; never a standard (`tb.*`) op */
+  operations: SnakeId[];
+  crud: CrudAction[];
+}
+/** v0.1.82 (C373, P1): most ops in one `perWorkflow.operations` (schema maxItems), and in one target of a workflow grant request. */
+export const PER_WORKFLOW_OPS_MAX = 64;
 
 export interface Unlock {
   id: SnakeId;
