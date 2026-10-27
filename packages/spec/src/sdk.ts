@@ -692,6 +692,9 @@ export interface Receipt {
   admittedBy?: AdmittedBy;
   /** v0.1.13 (G1): `<product>/<hookId>` of the before hook whose verdict held this call, else null */
   heldBy: string | null;
+  /** v0.1.84 (C369 D3): hold rows (`hld_` ids) only — why the call was held: the hook verdict reason (e.g. the Rules rule text) or
+   *  the SDK hold reason code, ≤ 280; the same value `tb.holds_pending` gives as `reason`. Absent on receipts that are not holds. */
+  holdReason?: string;
   status: ReceiptStatus;
   inputDigest: Sha256Digest;
   summary: string;
@@ -751,6 +754,77 @@ export interface HoldsPendingItem {
    *  by `"; "`, ≤ `CALLER_CONTEXT_SUMMARY_MAX_CHARS`). Never the whole context. */
   callerContext?: string;
 }
+// ── Readable hold cards (v0.1.84, C369; SDK-API §4.8 default view, §4.9 tb.hold_details) ──
+/** Every hold view is at most this many UTF-16 code units (SDK-API §4.1; unchanged). */
+export const HOLD_VIEW_MAX_CHARS = 16_000;
+/** v0.1.84 (C369 D1, SDK-API §4.8): limits of the default hold view. Counts are code points, except `summaryMaxChars` (UTF-16 code
+ *  units, like every receipt summary) and the view cap `HOLD_VIEW_MAX_CHARS`. Rows: `examples/hold-view.cases.json`. */
+export const HOLD_VIEW_LIMITS = {
+  /** line 1 (op title) */
+  titleMaxChars: 200,
+  /** one segment of a field label (schema `title` or humanized key) */
+  labelMaxChars: 80,
+  /** a string up to this long without a line break stays on its label's line; longer → a block */
+  valueMaxChars: 200,
+  /** a block shows at most this many code points */
+  blockMaxChars: 1000,
+  /** a list shows at most this many items */
+  listMaxItems: 10,
+  /** label paths have at most this many segments; a non-empty object or list there is counted, not shown */
+  depthMax: 3,
+  /** the default summary (`renderHoldView().summary`) */
+  summaryMaxChars: 280,
+  /** the default summary names at most this many fields */
+  summaryFields: 2,
+} as const;
+/** v0.1.84 (C369 D4/D1): a key is SECRET when one of its words (the humanized key split at spaces, ASCII lower case) is in this list.
+ *  Secret members are replaced by `HOLD_INPUT_REDACTED` in the kept input and left out of the default summary. */
+export const HOLD_SECRET_KEY_WORDS = ["key", "apikey", "token", "secret", "password", "passwd", "passphrase", "authorization", "cookie", "credential", "credentials"] as const;
+export const HOLD_INPUT_REDACTED = "[redacted]";
+/** v0.1.84 (C369 D4): the kept input = JCS text of the redacted input; more UTF-8 bytes than this → not kept (`too_large`). */
+export const HOLD_INPUT_MAX_BYTES = 60_000;
+/** v0.1.84 (C369 D4, Coordinator 2026-10-27): the sealed input stays this many days after the hold's terminal status, then it is wiped. */
+export const HOLD_INPUT_KEEP_DAYS = 7;
+/** v0.1.84 (C369 D4): the standard person op that gives the owner one hold's details (SDK-API §4.9). */
+export const HOLD_DETAILS_OP = "tb.hold_details" as const;
+/** v0.1.84 (C369 D4): what `tb.hold_details` says about the kept input. `kept` = `input` is present; `too_large` = over
+ *  `HOLD_INPUT_MAX_BYTES`, never kept; `wiped` = kept, then wiped `HOLD_INPUT_KEEP_DAYS` after the terminal status; `unreadable` =
+ *  kept but it cannot be unsealed (restored under another TB_KEK); `none` = a hold made by an SDK before this version. */
+export const HOLD_INPUT_STATES = ["kept", "too_large", "wiped", "unreadable", "none"] as const;
+export type HoldInputState = (typeof HOLD_INPUT_STATES)[number];
+export interface HoldDetailsInput {
+  holdId: `hld_${Ulid}`;
+}
+/** v0.1.84 (C369 D4): output of `tb.hold_details` (person, owner only). Times are UTC ISO 8601 (D6). Never sent to agents or apps. */
+export interface HoldDetails {
+  holdId: `hld_${Ulid}`;
+  /** the same row: a hold's id stays its receipt id (§4.1) */
+  receiptId: `hld_${Ulid}`;
+  status: ReceiptStatus;
+  op: string;
+  /** the op's manifest title (the op id when the op is gone) */
+  opTitle: string;
+  /** dynamic ops: the tool name of the call (`meta.tool`) */
+  tool?: string;
+  family: HoldFamily | "caps" | "policy";
+  /** = `Receipt.holdReason` */
+  reason?: string;
+  heldBy?: string;
+  caller: Receipt["caller"];
+  callId: CallId | null;
+  inputDigest: Sha256Digest;
+  /** the redacted input as JSON (secret members = `HOLD_INPUT_REDACTED`); null unless `inputState` is `kept` */
+  input: Json | null;
+  inputState: HoldInputState;
+  /** when the kept input is wiped (terminal status + `HOLD_INPUT_KEEP_DAYS`); null while the hold is not terminal, and for `too_large` / `none` */
+  inputWipeAt: IsoTime | null;
+  createdAt: IsoTime;
+  expiresAt: IsoTime | null;
+  decidedAt: IsoTime | null;
+  /** `sha256:` hex of the view the owner saw (D2); null for a hold made before v0.1.84 */
+  viewSha256: string | null;
+}
+
 /** v0.1.77 (C367, P4): limits of the `HoldsPendingItem.callerContext` summary, in code points. */
 export const CALLER_CONTEXT_SUMMARY_MAX_CHARS = 256;
 export const CALLER_CONTEXT_SUMMARY_VALUE_MAX_CHARS = 64;

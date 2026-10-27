@@ -44,8 +44,9 @@ export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as 
 export const OPERATION_LISTINGS = ["default", "workflow"] as const;
 export const CATEGORIES = ["memory", "connectivity", "communication", "automation", "governance", "operations", "productivity", "developer"] as const;
 export const HARNESS_KINDS = ["generic", "claude_desktop", "codex_desktop", "tbd", "claude_agent_sdk", "eve", "tealbrick_cli"] as const;
-/** Standard operations every SDK app serves automatically (MANIFEST.md §5.4): one agent op, the rest person ops. Manifest ids never start with `tb_`. */
-export const STANDARD_OPERATIONS = ["tb.hold_status", "tb.holds_list", "tb.holds_decide", "tb.receipts_list", "tb.agents_list", "tb.scopes_set", "tb.keys_status", "tb.key_set", "tb.key_delete", "tb.export", "tb.holds_pending"] as const;
+/** Standard operations every SDK app serves automatically (MANIFEST.md §5.4): two agent ops (`tb.hold_status`, `tb.holds_pending`), the
+ *  rest person ops. Manifest ids never start with `tb_`. v0.1.84 (C369 D4): + `tb.hold_details` (person, owner only, SDK-API §4.9). */
+export const STANDARD_OPERATIONS = ["tb.hold_status", "tb.holds_list", "tb.holds_decide", "tb.receipts_list", "tb.agents_list", "tb.scopes_set", "tb.keys_status", "tb.key_set", "tb.key_delete", "tb.export", "tb.holds_pending", "tb.hold_details"] as const;
 /** v0.1.13 (G4): the ONE op a wildcard companion (`product: "*"`) may name (MANIFEST M-CP-3); needs owner consent at deploy (C82). */
 export const WILDCARD_COMPANION_OPS = ["tb.holds_pending"] as const;
 /** v0.1.77 (C367, P3; MANIFEST M-CP-3): the ONE other standard op a companion entry may name. Only in an entry for ONE product
