@@ -24,7 +24,7 @@ import type {
   SchemaVersion,
   ScopeSourceItem,
   ScopeSummaryResult,
-  SliceTopology,
+  SliceTopologyView,
   WorkflowGrantRequestBody,
   WorkflowGrantStatus,
 } from "./bridge.ts";
@@ -478,10 +478,11 @@ export interface OpContext {
   /** v0.1.80 (C373, G-2; number set at merge): the workspace grant picture from the CURRENT verified slice (`slice.topology`, tuple
    *  form) as a frozen deep copy; null when the slice is absent, expired (older than 12 h), has none, or its topology is malformed
    *  (the SDK checks the shape and never throws). A row with an index out of range is dropped and the copy says `truncated: true`.
+   *  `agentIds` = the agent ids of the SAME slice in slice order (one read): resolve `agentIdx` as `agentIds[agentIdx]`.
    *  Present only for an app whose manifest declares `needsTopology` and whose owner granted the consent `topology`. DISPLAY ONLY:
    *  never authorize with it (the SDK authorizes every call from the grant); stale until the next slice revision.
    *  Optional in this type (hand-built contexts); SDKs that implement SDK-API v0.1.80 always set it. */
-  topology?: () => SliceTopology | null;
+  topology?: () => SliceTopologyView | null;
   /** v0.1.57 (C274c/C274d): emit one declared app event (SDK-API §20). Optional in this type (hand-built contexts); SDKs from
    *  0.1.38 always set it. */
   emit?: EmitFn;
@@ -524,7 +525,7 @@ export interface StartContext {
   bridgeCaps?: () => readonly string[];
   /** v0.1.80 (C373, G-2): the same as `OpContext.topology` (frozen deep copy of `slice.topology`; null when absent, expired or
    *  malformed; out-of-range rows dropped). Display only. Optional in this type (hand-built contexts). */
-  topology?: () => SliceTopology | null;
+  topology?: () => SliceTopologyView | null;
   /** v0.1.13 (C86) */
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
@@ -546,7 +547,7 @@ export interface EventContext {
   bridgeCaps?: () => readonly string[];
   /** v0.1.80 (C373, G-2): the same as `OpContext.topology` (frozen deep copy of `slice.topology`; null when absent, expired or
    *  malformed; out-of-range rows dropped). Display only. Optional in this type (hand-built contexts). */
-  topology?: () => SliceTopology | null;
+  topology?: () => SliceTopologyView | null;
   statusChanged(): void;
   /** v0.1.13 (C86): `<portalUrl>/w/<ws>/open?product=<own>&path=<path>`; null until the slice has portalUrl */
   ownerLink(path: string): string | null;

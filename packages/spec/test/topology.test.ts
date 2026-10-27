@@ -8,6 +8,7 @@ import {
   type InstanceSlice,
   SLICE_CORE_MAX_CHARS,
   type SliceTopology,
+  type SliceTopologyView,
   TOPOLOGY_CRUD_PATTERN,
   TOPOLOGY_HELD_MASK_MAX,
   TOPOLOGY_MAX,
@@ -189,8 +190,10 @@ test("consent kind topology; catalog and update name the consents they ask for",
   assert.equal(kinds.length, 2);
 });
 
-test("ctx.topology is declared on op, start and event contexts", () => {
-  const fn = (): SliceTopology | null => null;
+test("ctx.topology is declared on op, start and event contexts and returns agentIds of the same slice", () => {
+  const view: SliceTopologyView = { ...sample(), agentIds: ["agt_01M53BAEQSGKVVY4PRM2VE6FBF" as never, "agt_01M53BAEQSGKVVY4PRM2VE6FBG" as never] };
+  assert.equal(view.agentIds[view.edges[0][0]], "agt_01M53BAEQSGKVVY4PRM2VE6FBF", "agentIdx resolves through agentIds");
+  const fn = (): SliceTopologyView | null => null;
   const a: Pick<OpContext, "topology"> = { topology: fn };
   const b: Pick<StartContext, "topology"> = { topology: fn };
   const c: Pick<EventContext, "topology"> = { topology: fn };

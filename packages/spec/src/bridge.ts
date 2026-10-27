@@ -368,6 +368,11 @@ export interface SliceTopology {
   truncated?: true;
 }
 
+/** v0.1.80 (C373, G-2): what the SDK returns from `ctx.topology()`: the topology AND the agent ids of the SAME verified slice in
+ *  slice order (`agentIds[i]` = `slice.agents[i].id`), read together, so `agentIdx` resolves as `agentIds[agentIdx]` without a
+ *  second read that a newer slice could reorder. */
+export type SliceTopologyView = SliceTopology & { agentIds: readonly AgentId[] };
+
 const TOPOLOGY_CRUD_ORDER = [
   ["c", "create"],
   ["r", "read"],
