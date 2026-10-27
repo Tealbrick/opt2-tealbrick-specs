@@ -54,7 +54,7 @@ export const WILDCARD_COMPANION_OPS = ["tb.holds_pending"] as const;
 export const COMPANION_HOLD_STATUS_OP = "tb.hold_status" as const;
 /** v0.1.42 (C230): shared app-to-app contracts, `<name>/<major>`; each has a JSON Schema in this package at
  *  `schemas/contracts/<name>.<major>.schema.json` and a fixture at `examples/contracts/<name>.<major>.json`. */
-export const CONTRACT_IDS = ["messages/1", "fleet.directory_feed/1"] as const;
+export const CONTRACT_IDS = ["messages/1", "fleet.directory_feed/1", "documents/1"] as const;
 /** v0.1.57 (C274c/C274d): who an app event goes to. `target` = only the agents the emit names (`to`); `granted` = every agent
  *  that passes the `visibleWith` rule. Either way the bridge delivers only to agents that pass it (MANIFEST §16). */
 export const EVENT_AUDIENCES = ["target", "granted"] as const;
