@@ -337,6 +337,19 @@ test("v0.1.83 (C373): documents/1 — text cap, deleted rows, page cap, https-on
   assert.equal(validate(page([{ ...row, text: "a", url: "https://docs.example.com/a" }])), true);
   assert.equal(validate(page([{ ...row, text: "a", url: "http://docs.example.com/a" }])), false);
   assert.equal(validate(page([{ ...row, text: "a", untrusted: false }])), false);
+  // QA specs#62 S3: author handle is canonical unless raw: true; url has no userinfo, space or fragment
+  const withAuthor = (author: unknown) => page([{ ...row, text: "a", author }]);
+  assert.equal(validate(withAuthor({ handle: "email:finance@example.com" })), true, JSON.stringify(validate.errors));
+  assert.equal(validate(withAuthor({ handle: "Alice B", raw: true })), true, JSON.stringify(validate.errors));
+  assert.equal(validate(withAuthor({ handle: "" })), false, "empty handle refused");
+  assert.equal(validate(withAuthor({ handle: "", raw: true })), false, "empty raw handle refused");
+  assert.equal(validate(withAuthor({ handle: "Alice B" })), false, "non-canonical handle without raw refused");
+  assert.equal(validate(withAuthor({ handle: "Alice B", raw: false })), false);
+  const withUrl = (url: string) => page([{ ...row, text: "a", url }]);
+  assert.equal(validate(withUrl("https://docs.example.com")), true);
+  assert.equal(validate(withUrl("https://docs.example.com/a/b?x=1&y=2")), true);
+  for (const url of ["https://u:p@docs.example.com/a", "https://u@docs.example.com/a", "https://docs.example.com/a b", "https://docs.example.com/a\n", "https://docs.example.com/a#f", "https://"])
+    assert.equal(validate(withUrl(url)), false, url);
 });
 
 test("v0.1.43 (LA-1, LR-1): viewer route purpose, workflow listing, slice viewUrl, StatusReport.views", async () => {

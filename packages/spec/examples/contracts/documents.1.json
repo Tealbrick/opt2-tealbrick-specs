@@ -76,6 +76,55 @@
       ],
       "nextCursor": null,
       "exhausted": true
+    },
+    {
+      "rows": [
+        {
+          "id": "file:///acme/finance/q3-board-memo.md",
+          "collection": "Acme LLC/Finance",
+          "title": "Q3 board memo",
+          "path": "Acme LLC/Finance/Q3 board memo",
+          "url": "https://docs.example.com/acme/finance/q3-board-memo",
+          "mime": "text/markdown",
+          "updatedAt": "2026-10-20T09:30:00Z",
+          "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "author": {
+            "handle": "Alice B",
+            "raw": true,
+            "display": "Alice B"
+          },
+          "kind": "document",
+          "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+          "untrusted": true,
+          "truncated": false
+        }
+      ],
+      "nextCursor": null,
+      "exhausted": true
+    },
+    {
+      "rows": [
+        {
+          "id": "file:///acme/finance/q3-board-memo.md",
+          "collection": "Acme LLC/Finance",
+          "title": "Q3 board memo",
+          "path": "Acme LLC/Finance/Q3 board memo",
+          "url": "https://docs.example.com/acme/q3?page=2",
+          "mime": "text/markdown",
+          "updatedAt": "2026-10-20T09:30:00Z",
+          "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "author": {
+            "handle": "email:finance@example.com",
+            "display": "Acme Finance"
+          },
+          "kind": "document",
+          "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+          "untrusted": true,
+          "truncated": false
+        }
+      ],
+      "nextCursor": null,
+      "exhausted": true
     }
   ],
   "invalid": [
@@ -963,6 +1012,166 @@
             "title": "Q3 board memo",
             "path": "Acme LLC/Finance/Q3 board memo",
             "url": "https://docs.example.com/acme/finance/q3-board-memo",
+            "mime": "text/markdown",
+            "updatedAt": "2026-10-20T09:30:00Z",
+            "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "handle": "email:finance@example.com",
+              "display": "Acme Finance"
+            },
+            "kind": "document",
+            "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+            "untrusted": true,
+            "truncated": false
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "author handle empty",
+      "doc": {
+        "rows": [
+          {
+            "id": "file:///acme/finance/q3-board-memo.md",
+            "collection": "Acme LLC/Finance",
+            "title": "Q3 board memo",
+            "path": "Acme LLC/Finance/Q3 board memo",
+            "url": "https://docs.example.com/acme/finance/q3-board-memo",
+            "mime": "text/markdown",
+            "updatedAt": "2026-10-20T09:30:00Z",
+            "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "handle": ""
+            },
+            "kind": "document",
+            "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+            "untrusted": true,
+            "truncated": false
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "author handle not canonical and raw not true",
+      "doc": {
+        "rows": [
+          {
+            "id": "file:///acme/finance/q3-board-memo.md",
+            "collection": "Acme LLC/Finance",
+            "title": "Q3 board memo",
+            "path": "Acme LLC/Finance/Q3 board memo",
+            "url": "https://docs.example.com/acme/finance/q3-board-memo",
+            "mime": "text/markdown",
+            "updatedAt": "2026-10-20T09:30:00Z",
+            "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "handle": "Alice B"
+            },
+            "kind": "document",
+            "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+            "untrusted": true,
+            "truncated": false
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "author handle not canonical and raw false",
+      "doc": {
+        "rows": [
+          {
+            "id": "file:///acme/finance/q3-board-memo.md",
+            "collection": "Acme LLC/Finance",
+            "title": "Q3 board memo",
+            "path": "Acme LLC/Finance/Q3 board memo",
+            "url": "https://docs.example.com/acme/finance/q3-board-memo",
+            "mime": "text/markdown",
+            "updatedAt": "2026-10-20T09:30:00Z",
+            "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "handle": "Alice B",
+              "raw": false
+            },
+            "kind": "document",
+            "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+            "untrusted": true,
+            "truncated": false
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "url with userinfo",
+      "doc": {
+        "rows": [
+          {
+            "id": "file:///acme/finance/q3-board-memo.md",
+            "collection": "Acme LLC/Finance",
+            "title": "Q3 board memo",
+            "path": "Acme LLC/Finance/Q3 board memo",
+            "url": "https://user:pw@docs.example.com/acme/q3",
+            "mime": "text/markdown",
+            "updatedAt": "2026-10-20T09:30:00Z",
+            "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "handle": "email:finance@example.com",
+              "display": "Acme Finance"
+            },
+            "kind": "document",
+            "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+            "untrusted": true,
+            "truncated": false
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "url with a space",
+      "doc": {
+        "rows": [
+          {
+            "id": "file:///acme/finance/q3-board-memo.md",
+            "collection": "Acme LLC/Finance",
+            "title": "Q3 board memo",
+            "path": "Acme LLC/Finance/Q3 board memo",
+            "url": "https://docs.example.com/acme/q3 memo",
+            "mime": "text/markdown",
+            "updatedAt": "2026-10-20T09:30:00Z",
+            "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "handle": "email:finance@example.com",
+              "display": "Acme Finance"
+            },
+            "kind": "document",
+            "text": "# Q3 board memo\n\nRevenue grew 12% against plan. Acme LLC keeps hiring flat until Q1.\n",
+            "untrusted": true,
+            "truncated": false
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "url with a fragment",
+      "doc": {
+        "rows": [
+          {
+            "id": "file:///acme/finance/q3-board-memo.md",
+            "collection": "Acme LLC/Finance",
+            "title": "Q3 board memo",
+            "path": "Acme LLC/Finance/Q3 board memo",
+            "url": "https://docs.example.com/acme/q3#top",
             "mime": "text/markdown",
             "updatedAt": "2026-10-20T09:30:00Z",
             "rev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
