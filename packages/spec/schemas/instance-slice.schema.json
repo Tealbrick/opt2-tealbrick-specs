@@ -319,7 +319,7 @@
         "companions",
         "connections"
       ],
-      "description": "v0.1.80 (C373, G-2; number set at merge): a DISPLAY copy of the workspace grant picture in compact tuple form. Present ONLY when the manifest declares needsTopology: true (requires needsAgentDirectory) AND the owner granted the consent `topology` at deploy or update (an update that adds the flag needs a new consent). The bridge and the SDK never read it to authorize; apps MUST NOT use it to authorize; stale until the next slice revision. Core counts its worst case in the slice size. No labels beyond instance name/version; no key names, persona, endpoints, secrets or token data. agentIdx indexes this slice's agents[]; instIdx/fromIdx/toIdx index topology.instances; a reader MUST check 0 <= idx < length, else drop the row and treat the topology as truncated. Bounds = TOPOLOGY_MAX.",
+      "description": "v0.1.87 (C373, G-2; number set at merge): a DISPLAY copy of the workspace grant picture in compact tuple form. Present ONLY when the manifest declares needsTopology: true (requires needsAgentDirectory) AND the owner granted the consent `topology` at deploy or update (an update that adds the flag needs a new consent). The bridge and the SDK never read it to authorize; apps MUST NOT use it to authorize; stale until the next slice revision. Core counts its worst case in the slice size. No labels beyond instance name/version; no key names, persona, endpoints, secrets or token data. agentIdx indexes this slice's agents[]; instIdx/fromIdx/toIdx index topology.instances; a reader MUST check 0 <= idx < length, else drop the row and treat the topology as truncated. Bounds = TOPOLOGY_MAX.",
       "properties": {
         "v": {
           "const": 1

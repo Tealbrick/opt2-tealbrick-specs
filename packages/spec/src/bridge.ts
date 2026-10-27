@@ -319,25 +319,25 @@ export interface InstanceSlice extends SliceClaims {
    *  the SDK REFUSES an app call (or a resumed held app call) whose caller has no verified product (no `prd` and no
    *  `companionCallers` entry): 403 `caller_unverified`, nothing runs, audited. Absent = the earlier lenient rule. */
   appCallers?: "verified";
-  /** v0.1.80 (C373, G-2; number set at merge): a DISPLAY copy of the workspace grant picture in compact tuple form
-   *  (SliceTopology). Normative (CORE "v0.1.80"): present ONLY when the app's manifest declares `needsTopology: true` (which
+  /** v0.1.87 (C373, G-2): a DISPLAY copy of the workspace grant picture in compact tuple form
+   *  (SliceTopology). Normative (CORE "v0.1.87"): present ONLY when the app's manifest declares `needsTopology: true` (which
    *  requires `needsAgentDirectory: true`) AND the owner granted the consent `topology` at deploy or update (the review names
    *  it: "This app can see which agents and apps have access to what in this workspace"). An update that adds the flag needs
    *  a new consent; without it Core leaves the field out. DISPLAY ONLY: the bridge and the SDK never read it to authorize, and
-   *  apps MUST NOT use it to authorize; it is stale until the next slice revision. Size is ELASTIC (CORE "v0.1.80" rules 7-8): Core
+   *  apps MUST NOT use it to authorize; it is stale until the next slice revision. Size is ELASTIC (CORE "v0.1.87" rules 7-8): Core
    *  sizes it last with the budget left, may cut rows (connections, then companions, then edges) and then sets `truncated`;
    *  it never makes an owner change or a consent refusable. SDK: `ctx.topology()`. */
   topology?: SliceTopology;
 }
 
-/** v0.1.80 (C373, G-2): the list bounds of `InstanceSlice.topology` (= instance-slice.schema.json maxItems). Core cuts a list
+/** v0.1.87 (C373, G-2): the list bounds of `InstanceSlice.topology` (= instance-slice.schema.json maxItems). Core cuts a list
  *  at its bound and then sets `truncated: true`. */
 export const TOPOLOGY_MAX = { instances: 40, edges: 600, companions: 100, connections: 300 } as const;
-/** v0.1.80: the largest `wfCount` / `opsCount` (an op list has at most 128 ids, C359c). */
+/** v0.1.87: the largest `wfCount` / `opsCount` (an op list has at most 128 ids, C359c). */
 export const TOPOLOGY_OPS_COUNT_MAX = 128;
-/** v0.1.80: the largest `held` bitmask (31 bits: safe for JavaScript bitwise operators). */
+/** v0.1.87: the largest `held` bitmask (31 bits: safe for JavaScript bitwise operators). */
 export const TOPOLOGY_HELD_MASK_MAX = 0x7fff_ffff;
-/** v0.1.80: a topology crud code: the letters c, r, u, d of the granted actions, in this order ("" = none, "crud" = all). */
+/** v0.1.87: a topology crud code: the letters c, r, u, d of the granted actions, in this order ("" = none, "crud" = all). */
 export const TOPOLOGY_CRUD_PATTERN = "^c?r?u?d?$";
 
 /** Compact crud code (`TOPOLOGY_CRUD_PATTERN`), e.g. "r", "cru", "crud". */
@@ -355,7 +355,7 @@ export type TopologyCompanion = [fromIdx: number, toIdx: number, crud: TopologyC
  *  "p" = pairing; status "a" = active, "r" = revoked. Never key or token data. */
 export type TopologyConnection = [con: ConnectionId, agentIdx: number, method: "k" | "p", status: "a" | "r"];
 
-/** v0.1.80 (C373, G-2): the workspace grant picture an app with `needsTopology` (owner-consented) gets in its slice. DISPLAY
+/** v0.1.87 (C373, G-2): the workspace grant picture an app with `needsTopology` (owner-consented) gets in its slice. DISPLAY
  *  ONLY (see `InstanceSlice.topology`). No labels beyond instance `name` / `version`; no key names, persona, endpoints,
  *  secrets or token data. A READER MUST check every index (0 ≤ idx < length of the list it indexes); a row with an index out
  *  of range is dropped and the topology is treated as `truncated`. */
@@ -369,7 +369,7 @@ export interface SliceTopology {
   truncated?: true;
 }
 
-/** v0.1.80 (C373, G-2): what the SDK returns from `ctx.topology()`: the topology AND the agent ids of the SAME verified slice in
+/** v0.1.87 (C373, G-2): what the SDK returns from `ctx.topology()`: the topology AND the agent ids of the SAME verified slice in
  *  slice order (`agentIds[i]` = `slice.agents[i].id`), read together, so `agentIdx` resolves as `agentIds[agentIdx]` without a
  *  second read that a newer slice could reorder. */
 export type SliceTopologyView = SliceTopology & { agentIds: readonly AgentId[] };

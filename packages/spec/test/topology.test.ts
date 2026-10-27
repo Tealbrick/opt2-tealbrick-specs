@@ -1,4 +1,4 @@
-// v0.1.80 (C373, G-2; number set at merge): slice `topology` (compact tuple form, display only), manifest `needsTopology`,
+// v0.1.87 (C373, G-2): slice `topology` (compact tuple form, display only), manifest `needsTopology`,
 // the append-only hold-family bit order, the `topology` consent kind.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -146,7 +146,7 @@ test("refused shapes: arity, vocabularies, v, extra members, bounds", () => {
   bad((t) => (t.instances = Array.from({ length: TOPOLOGY_MAX.instances + 1 }, () => t.instances[0])), "instances ≤ 40");
 });
 
-test("worst case at the bounds, measured (CORE v0.1.80 rule 7)", () => {
+test("worst case at the bounds, measured (CORE v0.1.87 rule 7)", () => {
   const p32 = "x".repeat(32);
   const name = "x".repeat(80);
   const worst = {
@@ -163,7 +163,7 @@ test("worst case at the bounds, measured (CORE v0.1.80 rule 7)", () => {
   // the CORE text quotes these numbers (41,119 JSON chars, 54,826 base64 chars); fail loudly when the shape changes
   assert.equal(chars, 41_119);
   assert.equal(b64, 54_826);
-  // OQ-C373-1 decided ELASTIC (CORE "v0.1.80" rules 7-8): at the full bounds the topology alone passes the slice limit, so
+  // OQ-C373-1 decided ELASTIC (CORE "v0.1.87" rules 7-8): at the full bounds the topology alone passes the slice limit, so
   // Core must be able to cut it (truncated) instead of refusing a change
   assert.ok(b64 > SLICE_CORE_MAX_CHARS, "at the full bounds the topology alone passes SLICE_CORE_MAX_CHARS: Core cuts it (elastic)");
 });

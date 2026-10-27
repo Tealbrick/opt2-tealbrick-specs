@@ -2,12 +2,12 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
-## Changelog → v0.1.80 (C373, G-2: slice topology for display; label 0.1.80, number set at merge)
+## Changelog → v0.1.87 (C373, G-2: slice topology for display; spec 0.1.87)
 - Manifest `needsTopology?: boolean` (default false), next to `needsAgentDirectory`; M-TP-1: it requires `needsAgentDirectory: true` (MANIFEST §9; schema, `Manifest` type).
-- Slice `topology?: SliceTopology` in compact tuple form `{v: 1, instances, edges, companions, connections, truncated?}`, `TOPOLOGY_MAX` = 40 / 600 / 100 / 300, tuple aliases and the helpers `topologyCrudCode`, `topologyCrudActions`, `topologyHeldMask`, `topologyHeldFamilies` (instance-slice.schema.json, `bridge.ts`). Present only for a `needsTopology` app with the owner's `topology` consent; DISPLAY ONLY (bridge, SDK and apps never authorize with it). Rules: "v0.1.80" below (size: ELASTIC, rules 7–8).
+- Slice `topology?: SliceTopology` in compact tuple form `{v: 1, instances, edges, companions, connections, truncated?}`, `TOPOLOGY_MAX` = 40 / 600 / 100 / 300, tuple aliases and the helpers `topologyCrudCode`, `topologyCrudActions`, `topologyHeldMask`, `topologyHeldFamilies` (instance-slice.schema.json, `bridge.ts`). Present only for a `needsTopology` app with the owner's `topology` consent; DISPLAY ONLY (bridge, SDK and apps never authorize with it). Rules: "v0.1.87" below (size: ELASTIC, rules 7–8).
 - `MANIFEST_HOLD_FAMILIES` (= `HOLD_FAMILIES`, the bit order of `held`) is APPEND-ONLY (manifest.ts; the order is pinned by a test).
 - `ConsentKind` gains `topology`; `CatalogEntry.consentsAsked?`, `Instance.updateConsentsAsked?` (routes.ts, PORTAL-API `instances.consent`).
-- SDK `ctx.topology(): SliceTopologyView | null` (topology + `agentIds` of the same slice) on op, start and event contexts (SDK-API "v0.1.80"; `sdk.ts`).
+- SDK `ctx.topology(): SliceTopologyView | null` (topology + `agentIds` of the same slice) on op, start and event contexts (SDK-API "v0.1.87"; `sdk.ts`).
 - Test: `test/topology.test.ts`.
 
 ## Changelog → v0.1.82 (C373 P1: per-workflow companion grants; number taken at merge time, C340)
@@ -352,7 +352,7 @@ Core creates `tb-views` (the bridge image with `TB_ROLE=views`, same digest as t
 ## v0.1.77 (C367 P3) — companion `tb.hold_status`
 - MANIFEST M-CP-3 lets a companion entry for one product list `tb.hold_status` next to an op of that product. Core's `companionErrors` calls the manifest package, so Core has no new rule. Core mints the op into that companion grant's `wf` like any declared op. CORE I4 is unchanged: a valid grant suffices, no CRUD check. SDK-API §4.7 says what the app caller sees.
 
-## v0.1.80 (C373, G-2) — slice `topology` (display only; label 0.1.80, number set at merge)
+## v0.1.87 (C373, G-2) — slice `topology` (display only; spec 0.1.87)
 Normative.
 1. **What.** `InstanceSlice.topology?: SliceTopology` is a DISPLAY copy of the workspace grant picture in compact tuple form (bounds `TOPOLOGY_MAX` = the schema `maxItems`; every tuple has exactly its arity, schema `prefixItems` + `items: false`):
    - `v`: `1`.
