@@ -391,7 +391,7 @@ Gated by the bridge's reported cap `app_workflow_grants`, never by version; a br
   - `C-WFL.iat_after_withdrawal`: a narrowing and a re-mint in the same second → the new grant's `iat` > the record's `at`.
 - Spec repo (C5 S3-6): `test/workflow-grants.test.ts` checks `draftable: "app_only"` and that the op is not a `DraftableOpId`; `test/killpath-model.test.ts` (RM-24c P1 rows) models per-caller records, the epoch fallback, edges and base-grant sizes against the worst case.
 
-## Unreleased rows (next; C373, G-6; the conformance PR adds them)
+## v0.1.86 rows (C373, G-6; the conformance PR adds them)
 Gated by the bridge's reported cap `hook_recipients`, never by version. A bridge without the cap skips the group (noted, not failed). Fixture: app X with a static outward op `send` (`recipients: [{pointer: "/to", kind: "email"}, {pointer: "/cc", kind: "email"}]`), a static outward op `post` without `recipients`, a read op, and a dynamic op whose outward tool `chat_send` resolves `recipients: [{pointer: "/channel", kind: "slack"}]`; a before hook on X that records `call.target`; an agent caller and an app caller.
 - `B34.static_op`: `send {to: ["B@Example.com", "a@example.com"], cc: null}` → `target.recipients = ["email:a@example.com", "email:b@example.com"]`, no `recipientsIncomplete`; agent and app caller see the same.
 - `B34.dynamic_op`: `chat_send {channel: "u012abcdef"}` → `["slack:U012ABCDEF"]`.

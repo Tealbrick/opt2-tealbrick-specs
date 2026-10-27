@@ -218,7 +218,7 @@ Call proofs (`TB-Call`, `typ: tb-call+jwt`, K7, ≤ 60 s; CREDENTIALS §10): op 
 ### 8.2 Hook rules
 - Hook calls are bridge→app HTTP calls, never routed calls: they never trigger hooks and carry no grant. Their legitimacy = config `hooks[]` (Core-resolved, licensed, owner-enabled) + call proof with `phase`.
 - A companion call whose `parentCall` is a call currently inside a hook → `hook_reentry`; companion chains deeper than 3 → `call_depth_exceeded`.
-- Hook target recipients (next, cap `hook_recipients`): `call.target.recipients` / `recipientsIncomplete` for an outward call, see the "hook recipients" section at the end.
+- Hook target recipients (v0.1.86, cap `hook_recipients`): `call.target.recipients` / `recipientsIncomplete` for an outward call, see the "hook recipients" section at the end.
 - `context` is open JSON. The bridge adds only the reserved `tb.*` keys (v0.1.13: `tb.onBehalfOf`, §8.5); hooks never write `tb.*`. v0.1.77 (C367): on the companion path the bridge also copies the caller's own validated context keys (§8.5). Unknown namespaced fields pass through untouched.
 
 ### 8.3 App → app (companion) path
@@ -651,7 +651,7 @@ RM-2 resolve: declared + set → binding; undeclared → `role_not_declared`; un
 7. **App caps (C354).** The bridge copies each app's `AppStatus.caps` (claim, then every push; normalised by the `APP_CAPS` rules) into `StatusReport.apps[].caps`. Core's gate reads `app_workflow_grants` (caller) and `grant_wfl` (target) there. The bridge itself never gates on app caps for workflow grants.
 8. **Conformance.** Rows `B-WFL.*` in CONFORMANCE.md v0.1.82 (gated by this cap, never by version).
 
-## Unreleased (next) — hook recipients (C373, G-6)
+## v0.1.86 — hook recipients (C373, G-6)
 
 - **Cap.** `BRIDGE_CAPS` gains `"hook_recipients"`. A bridge declares it only when it implements all of this section. Without the cap `target.recipients` is never set (a policy reads that as unknown).
 - **Where the places come from.** A static op: `Operation.recipients` (MANIFEST M-OP-14), pointers into the call `input`. A dynamic op: `DynamicResolution.recipients` of the tool's resolution (MANIFEST §5.3), pointers into `input.arguments`. A resolution is per tool and cached; it never carries values.

@@ -375,7 +375,7 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
  *  `CallEnvelope.workflow`, the wfl gate rules, `workflowGrantsWithdrawn` / `wflEpoch` in its config, `call.caller.workflow`
  *  for hooks. Core mints wfl grants and sends those config fields only to a bridge that declares it; the SDK refuses
  *  `callApp(..., {workflow})` and `ctx.workflowGrants.*` locally without it (`bridge_cap_missing`). */
-/** Unreleased (next; C373, G-6): + `hook_recipients` = for an `outward` call the bridge sets `HookCallInfo.target.recipients`
+/** v0.1.86 (C373, G-6): + `hook_recipients` = for an `outward` call the bridge sets `HookCallInfo.target.recipients`
  *  (and `recipientsIncomplete`) from `Operation.recipients` (static op) or `DynamicResolution.recipients` (dynamic op) with the
  *  manifest package's `extractRecipients`, for agent and app callers, in every hook phase; values are never logged. */
 export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients"] as const;
@@ -538,7 +538,7 @@ export interface HookCallInfo {
   caller: { type: "agent" | "app"; id: AgentId | InstanceId; mode?: AgentMode; product?: ProductId; /** v0.1.82 (C373 P1, cap `app_workflow_grants`): the VERIFIED `wfl` of the presented grant (app callers with a workflow grant only) */ workflow?: WorkflowId };
   /** v0.1.68 (C336 RQ-2, cap `hook_tool`): `tool` = `DynamicResolution.tool` of a dynamic call (`crud`/`effect`/`holdFamily` are then
    *  the entry's resolution); absent for static ops and dynamic search. Policy apps (Rules) may match on it. */
-  /** Unreleased (next; C373, G-6; cap `hook_recipients`, BRIDGE "hook recipients" section): `recipients` = the canonical handles
+  /** v0.1.86 (C373, G-6; cap `hook_recipients`, BRIDGE "hook recipients" section): `recipients` = the canonical handles
    *  (`normalizeHandle`) at the op's `recipients` places (static op) or the resolution's (dynamic op) in THIS call's input;
    *  de-duplicated, sorted by code unit, ≤ `RECIPIENTS_MAX`; only for an `outward` call; the same for agent and app callers;
    *  never logged. Absent = unknown (no cap, no places declared, not outward); `[]` = known: the input names nobody.
