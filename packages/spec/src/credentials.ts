@@ -79,6 +79,9 @@ export const OPAQUE_PREFIX = {
 } as const;
 export type OpaquePrefix = (typeof OPAQUE_PREFIX)[keyof typeof OPAQUE_PREFIX];
 
+/** v0.1.82 (C373, P1): lifetime of a per-workflow companion grant (a K10 grant with `wfl`), exp − iat, seconds. Such a grant is
+ *  minted on demand (never in a slice or the config), so its short life bounds how long a withdrawal record must live. */
+export const WORKFLOW_GRANT_TTL_SEC = 900;
 /** Verification constants (seconds). */
 export const LEEWAY_S = 30;
 export const MAX_JWS_BYTES = 8192;
@@ -107,6 +110,9 @@ export const LIFETIME_S = {
   releaseIndex: 15552000,
   grant: 43200,
   grantRemintBelow: 21600,
+  /** v0.1.82 (C373, P1): a grant with `wfl` (= WORKFLOW_GRANT_TTL_SEC); Core reuses a cached one only while more than half is left */
+  workflowGrant: WORKFLOW_GRANT_TTL_SEC,
+  workflowGrantRemintBelow: WORKFLOW_GRANT_TTL_SEC / 2,
   ticketLaunch: 60,
   ticketKeys: 120,
   proof: 60,
@@ -275,7 +281,23 @@ export interface GrantClaims extends BaseClaims<PortalOrStandaloneIssuer, AgentR
  *  `prd`, so issuers mint it only for bridge >= 0.2.3 and target SDK >= 0.1.28 (CREDENTIALS v0.1.46). The SDK takes Caller.product
  *  from `prd` first and from slice companionCallers only when `prd` is absent; a `prd` that differs from the slice entry
  *  for the same instance is refused (`grant_invalid`). Agent grants never carry `prd`. */
-export type CompanionGrantClaims = GrantClaims & { sub: InstanceRef; mode: "bound"; prd?: ProductId };
+export type CompanionGrantClaims = GrantClaims & { sub: InstanceRef; mode: "bound"; prd?: ProductId; wfl?: WorkflowId };
+
+// ── Per-workflow companion grants (v0.1.82, C373 P1; CREDENTIALS v0.1.82, BRIDGE §8.6, CORE v0.1.82) ──────────────
+/** The workflow id of the CALLER app (`wfl` claim). Not `wf`: `wf` stays the list of allowed operation ids.
+ *  Pattern WORKFLOW_ID_PATTERN (Evolution's workflow id rule; the name is generic: "a workflow id of the caller app"). */
+export type WorkflowId = string;
+/** `wfl` claim, `CallEnvelope.workflow`, `CallAppOptions.workflow`, withdrawal records: 3..40 chars. */
+export const WORKFLOW_ID_PATTERN = "^[a-z][a-z0-9-]{2,39}$";
+/** v0.1.82 (C373, P1): a companion grant WITH `wfl` (a "workflow grant"). Minted by Core on demand through the bridge relay
+ *  `bridge_api.workflow_grant_get`; never carried in a slice or in the config. `exp − iat` = WORKFLOW_GRANT_TTL_SEC (900 s);
+ *  a verifier refuses a grant with `wfl` whose `exp − iat` is larger (`grant_invalid`). `wf` = the owner-approved ops for this
+ *  (caller, workflow, target) ∩ the caller's CURRENT `perWorkflow.operations` (+ `tb.hold_status` when the caller's base entry
+ *  lists it); `crud` = approved ∩ edge crud ∩ current `perWorkflow.crud`; `held` = `appsPolicy.held`; `prd` always present.
+ *  The grant claim set is CLOSED (manifest jws.ts): verifiers that do not know `wfl` refuse the whole grant, so Core mints it
+ *  only behind the gate of CORE v0.1.82. Withdrawal is by config records (`workflowGrantsWithdrawn`, `wflEpoch`), checked by
+ *  the bridge only (like agent-grant revocations); a wfl grant is never in `revoked.jtis`. */
+export type WorkflowGrantClaims = CompanionGrantClaims & { wfl: WorkflowId; prd: ProductId };
 export type AgentGrantClaims = GrantClaims & { sub: AgentRef };
 
 // ── K11 person ticket ────────────────────────────────────────────────────────
@@ -604,9 +626,9 @@ export const CREDENTIAL_REGISTRY = [
     storage: ["holder_memory"], maxLifetimeS: 43200, oneTime: false,
     audienceRule: "aud = tb:ins:<target>; cnf.brg = workspace bridge",
     verifier: "bridge verifyGrant before forwarding; app SDK verifyGrant again + call proof",
-    checks: ["ws = own workspace", "cnf.brg = workspace bridge", "jti ∉ revoked.jtis", "companion: sub = asserting instance", "app: call proof binds sub/aud/gjti/op/in/ctx"],
+    checks: ["ws = own workspace", "cnf.brg = workspace bridge", "jti ∉ revoked.jtis", "companion: sub = asserting instance", "app: call proof binds sub/aud/gjti/op/in/ctx", "v0.1.82 wfl grant: exp − iat ≤ WORKFLOW_GRANT_TTL_SEC", "v0.1.82 wfl grant (bridge): envelope workflow = wfl; not withdrawn (config workflowGrantsWithdrawn / wflEpoch); caller slice lists the target in companionTargets"],
     acceptedAt: ["app /tb/v1/ops/<op> (Authorization: Bearer) with TB-Call", "bridge internal companion call"],
-    revocation: "not re-minted + revoked.jtis", revocationLatency: "≤ 60 s online; ≤ 12 h offline", pause: "not minted while paused; gate() step 1 refuses",
+    revocation: "not re-minted + revoked.jtis (v0.1.82 wfl grants: config workflowGrantsWithdrawn / wflEpoch, bridge only)", revocationLatency: "≤ 60 s online; ≤ 12 h offline (wfl grants: ≤ 15 min offline)", pause: "not minted while paused; gate() step 1 refuses",
   },
   {
     id: "K11", name: "person ticket (pur launch | keys)", form: "jwt", typ: TYP.personTicket, prefix: null,

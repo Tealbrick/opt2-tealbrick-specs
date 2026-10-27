@@ -7,10 +7,13 @@
 //
 // Shared vocabulary and ids are imported, never re-declared (CORE §0).
 
-import type { CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, ScopeSourceItem, StatusReport } from "./bridge.ts";
+import type {
+  CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, ScopeSourceItem, StatusReport,
+  WorkflowGrantGetBody, WorkflowGrantGetResult, WorkflowGrantReleaseBody, WorkflowGrantRequestBody, WorkflowGrantState, WorkflowGrantStatus, WorkflowGrantTarget,
+} from "./bridge.ts";
 import type {
   AgentId, BridgeId, ConnectionId, DeviceClientId, DeviceRequestId, DeviceScope, Ed25519PublicJwk,
-  FreeCaps, InstanceId, OwnerSessionClient, PersonId, PersonOpClient, WorkspaceId,
+  FreeCaps, InstanceId, OwnerSessionClient, PersonId, PersonOpClient, WorkflowId, WorkspaceId,
 } from "./credentials.ts";
 import type {
   DeviceHostTokenResult, DeviceRequestHost, DeviceStartHostInput, HostPlanJws, HostPlansQuery, HostReport, HostReportAck,
@@ -160,6 +163,10 @@ export const AUDIT_ACTIONS = [
   "person_op.relay",
   /** v0.1.70 (QA-SPEC51-1): the person acknowledged listed new sign-ins (details: count; the osns are the audit targets) */
   "owner_session.sign_in_ack",
+  /** v0.1.82 (C373, P1): an app requested a workflow grant set (details: ins, wfl, digest, outcome applied_narrower | draft | unchanged);
+   *  the owner applied one (draft step), revoked one, the app released one; Core withdrew or narrowed one on its own (app update,
+   *  edge disabled, consent revoke, uninstall of a target; details.reason) */
+  "workflow_grant.request", "workflow_grant.set", "workflow_grant.revoke", "workflow_grant.release", "workflow_grant.withdraw",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -214,6 +221,9 @@ export type ErrorCode =
   | "person_op_timeout"
   /** v0.1.64 (C332): 403, push_devices.register from a K3 whose client is not in PUSH.clients */
   | "push_client_not_allowed"
+  /** v0.1.82 (C373, P1; CORE v0.1.82): 404 no applied workflow grant for (caller, wfl[, target]); 410 it was withdrawn; 409 the
+   *  gate is off for that target (`details.product`); 409 the caller has WORKFLOW_GRANTS_MAX requested + applied records */
+  | "workflow_grant_missing" | "workflow_grant_withdrawn" | "workflow_grants_unsupported" | "workflow_grants_full"
   | "internal";
 /** CORE §8: the one error envelope. */
 export interface ErrorEnvelope { error: { code: ErrorCode; message: string; requestId: string; details?: Record<string, unknown> } }
@@ -1325,6 +1335,40 @@ export interface BridgePersonOpResultInput {
   body: string;
 }
 
+// ── v0.1.82 (C373, P1): per-workflow companion grants (CORE v0.1.82, PORTAL-API v0.1.82) ──────────────────────
+/** Requested + applied records per caller instance (rejected and withdrawn ones do not count); more → 409 `workflow_grants_full`. */
+export const WORKFLOW_GRANTS_MAX = 500;
+/** Draft step input of `companions.workflow_grant_set` (Core writes it from the app's request; never typed by a person). `ins` =
+ *  the CALLER instance (the contract's `from_ins`). `digest` must equal the recomputed canonical digest of `{ins, wfl, title,
+ *  targets, reason?}` AND the record's pending digest, else `draft_invalid`. */
+export interface WorkflowGrantSetInput {
+  ws: WorkspaceId;
+  ins: InstanceId;
+  wfl: WorkflowId;
+  title: string;
+  targets: WorkflowGrantTarget[];
+  reason?: string;
+  digest: Digest;
+}
+/** Owner kill path (`companions.workflow_grant_revoke`): never size-refused. */
+export interface WorkflowGrantRevokeInput { ws: WorkspaceId; ins: InstanceId; wfl: WorkflowId }
+export type WorkflowGrantListInput = PageQuery & { ws: WorkspaceId; ins?: InstanceId; state?: Exclude<WorkflowGrantState, "none"> };
+/** One record as the owner sees it (Portal list, revoke button). */
+export interface WorkflowGrantRecord extends WorkflowGrantStatus {
+  ins: InstanceId;
+  product: ProductId;
+  /** the open draft for `pending`, else null */
+  draft: DraftId | null;
+  requestedAt: IsoTime;
+  appliedAt: IsoTime | null;
+  withdrawnAt: IsoTime | null;
+}
+export type WorkflowGrantList = Page<WorkflowGrantRecord>;
+/** Bridge relays (auth bridge): the app's body + `ins` = the instance that signed the app's `TB-Assert` (set by the bridge). */
+export type BridgeWorkflowGrantRequestInput = WorkflowGrantRequestBody & { ins: InstanceId };
+export type BridgeWorkflowGrantGetInput = WorkflowGrantGetBody & { ins: InstanceId };
+export type BridgeWorkflowGrantReleaseInput = WorkflowGrantReleaseBody & { ins: InstanceId };
+
 // v0.1.64 (C332a(3)): public Portal identity for native clients checking a custom Portal URL before sign-in.
 export interface PortalInfo {
   /** constant: a client refuses any other value */
@@ -1365,7 +1409,7 @@ export interface Draft {
   revision: number;
   state: DraftState;
   /** v0.1.41: + `device` = the draft an agent device approval (adopt, C96) wrote and applied at once; `id` = the device request. */
-  createdBy: { kind: "owner_session"; id: OwnerSessionId; label: string } | { kind: "browser" } | { kind: "recipe"; title: string } | { kind: "device"; id: DeviceRequestId };
+  createdBy: { kind: "owner_session"; id: OwnerSessionId; label: string } | { kind: "browser" } | { kind: "recipe"; title: string } | { kind: "device"; id: DeviceRequestId } | DraftCreatedByApp;
   steps: DraftStepView[];
   confirmCount: number;
   requiresPurchase: boolean;
@@ -1396,6 +1440,19 @@ export interface LooseningItem {
   after: string;
   /** optional plain detail, e.g. the write operations a grant unlocks */
   detail?: string;
+}
+/** v0.1.82 (C373, P1): a draft Core created from an app's REQUEST (`bridge_api.workflow_grant_request`). The app may only
+ *  request; a person applies (K1 browser + confirm per widened item). `digest` = the BOUND payload digest: `sha256:` + hex of
+ *  SHA-256 over the JCS of the canonical request body (CORE v0.1.82); the review page shows it and apply refuses a step whose
+ *  recomputed digest differs (`draft_invalid`). Such a draft holds exactly one step `companions.workflow_grant_set`; the owner
+ *  cannot edit it (`drafts.update` → `draft_state`) or export it (`recipe_not_portable`), only apply or reject it. */
+export interface DraftCreatedByApp {
+  kind: "app";
+  ins: InstanceId;
+  product: ProductId;
+  /** the app's manifest name (display only) */
+  name: string;
+  digest: Digest;
 }
 export interface DraftSummary {
   id: DraftId;
@@ -1531,6 +1588,10 @@ export interface SchemaMap {
   BridgePersonOpsQuery: BridgePersonOpsQuery; BridgePersonOpBatch: BridgePersonOpBatch; BridgePersonOpResultInput: BridgePersonOpResultInput; PortalInfo: PortalInfo;
   /** v0.1.70 */
   NewSignInsAckInput: NewSignInsAckInput;
+  /** v0.1.82 (C373, P1) */
+  WorkflowGrantSetInput: WorkflowGrantSetInput; WorkflowGrantRevokeInput: WorkflowGrantRevokeInput; WorkflowGrantListInput: WorkflowGrantListInput;
+  WorkflowGrantList: WorkflowGrantList; WorkflowGrantRecord: WorkflowGrantRecord; WorkflowGrantStatus: WorkflowGrantStatus; WorkflowGrantGetResult: WorkflowGrantGetResult;
+  BridgeWorkflowGrantRequestInput: BridgeWorkflowGrantRequestInput; BridgeWorkflowGrantGetInput: BridgeWorkflowGrantGetInput; BridgeWorkflowGrantReleaseInput: BridgeWorkflowGrantReleaseInput;
 }
 export type SchemaName = keyof SchemaMap;
 
@@ -1649,6 +1710,13 @@ export const ROUTES = [
   { opId: "instances.update", method: "POST", path: "/workspaces/{ws}/instances/{ins}/update", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "InstanceUpdateInput", output: "Instance", rate: "write", bodyLog: "meta", audit: "instance.update", draftable: true, confirm: true, idempotent: true, registry: "instance" },
   { opId: "instances.rollback", method: "POST", path: "/workspaces/{ws}/instances/{ins}/rollback", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "RollbackInput", output: "Instance", rate: "write", bodyLog: "meta", audit: "instance.rollback", draftable: true, confirm: true, idempotent: true, registry: "instance" },
   { opId: "instances.remove", method: "POST", path: "/workspaces/{ws}/instances/{ins}/remove", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "RemoveInput", output: "RemoveResult", rate: "write", bodyLog: "meta", audit: "instance.remove", draftable: true, confirm: true, idempotent: false, registry: "instance" },
+  /** v0.1.82 (C373, P1): per-workflow companion grants of one caller instance (`ins`). `workflow_grant_set` is applied ONLY as the one
+   *  step of an app-created draft (`DraftCreatedByApp`); a direct call → 403 `forbidden` (details.reason "apply_via_draft"), and
+   *  drafts.create / update / import refuse the op (`draft_op_not_draftable`). `workflow_grant_revoke` is the owner kill path:
+   *  immediate, never size-refused, not draftable. */
+  { opId: "companions.workflow_grants_list", method: "GET", path: "/workspaces/{ws}/workflow-grants", auth: BO, exposure: "gateway", transport: "json", query: ["cursor", "limit", "ins", "state"], input: "WorkflowGrantListInput", output: "WorkflowGrantList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "consent" },
+  { opId: "companions.workflow_grant_set", method: "PUT", path: "/workspaces/{ws}/instances/{ins}/workflow-grants/{wfl}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "WorkflowGrantSetInput", output: "WorkflowGrantRecord", rate: "write", bodyLog: "meta", audit: "workflow_grant.set", draftable: true, confirm: true, idempotent: false, registry: "consent" },
+  { opId: "companions.workflow_grant_revoke", method: "DELETE", path: "/workspaces/{ws}/instances/{ins}/workflow-grants/{wfl}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "WorkflowGrantRevokeInput", output: "WorkflowGrantRecord", rate: "write", bodyLog: "meta", audit: "workflow_grant.revoke", draftable: false, confirm: false, idempotent: false, registry: "consent" },
   { opId: "instances.consent", method: "POST", path: "/workspaces/{ws}/instances/{ins}/consent", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "InstanceConsentInput", output: "Instance", rate: "write", bodyLog: "meta", audit: "instance.consent", draftable: false, confirm: true, idempotent: true, registry: "instance" },
   { opId: "instances.register_own_infra", method: "POST", path: "/workspaces/{ws}/instances/own-infra", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "OwnInfraRegisterInput", output: "EnrolmentCode", rate: "sensitive", bodyLog: "none", audit: "instance.register_own_infra", draftable: false, confirm: false, idempotent: false, registry: "instance" },
   { opId: "bridge.get", method: "GET", path: "/workspaces/{ws}/bridge", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "WorkspaceRef", output: "BridgeStatus", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
@@ -1723,6 +1791,11 @@ export const ROUTES = [
   { opId: "bridge_api.ack", method: "POST", path: "/bridge/ack", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeAckInput", output: "BridgeAckResult", rate: "bridge_write", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
   /** v0.1.64 (C326): the bridge pulls queued person ops for its workspace (BRIDGE §16); empty batch after `wait` s. */
   { opId: "bridge_api.person_ops", method: "GET", path: "/bridge/person-ops", auth: ["bridge"], exposure: "gateway", transport: "json_slow", query: ["wait"], input: "BridgePersonOpsQuery", output: "BridgePersonOpBatch", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
+  /** v0.1.82 (C373, P1): workflow-grant relays (BRIDGE §8.6). `ins` = the instance the bridge verified; Core checks it is an installed
+   *  instance of this bridge's workspace. Natural idempotency per (ins, wfl, digest); no Idempotency-Key. get answers a grant: never logged. */
+  { opId: "bridge_api.workflow_grant_request", method: "POST", path: "/bridge/workflow-grants/request", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeWorkflowGrantRequestInput", output: "WorkflowGrantStatus", rate: "bridge_relay", bodyLog: "meta", audit: "workflow_grant.request", draftable: false, confirm: false, idempotent: false, registry: "consent" },
+  { opId: "bridge_api.workflow_grant_get", method: "POST", path: "/bridge/workflow-grants/get", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeWorkflowGrantGetInput", output: "WorkflowGrantGetResult", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "consent" },
+  { opId: "bridge_api.workflow_grant_release", method: "POST", path: "/bridge/workflow-grants/release", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeWorkflowGrantReleaseInput", output: "WorkflowGrantStatus", rate: "bridge_relay", bodyLog: "meta", audit: "workflow_grant.release", draftable: false, confirm: false, idempotent: false, registry: "consent" },
   { opId: "bridge_api.person_op_result", method: "POST", path: "/bridge/person-ops/{pop}/result", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgePersonOpResultInput", output: "Ok", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
 
   // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)

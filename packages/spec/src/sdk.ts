@@ -24,6 +24,8 @@ import type {
   SchemaVersion,
   ScopeSourceItem,
   ScopeSummaryResult,
+  WorkflowGrantRequestBody,
+  WorkflowGrantStatus,
 } from "./bridge.ts";
 import type {
   AgentId,
@@ -49,6 +51,7 @@ import type {
   SliceClaims,
   Typ,
   Ulid,
+  WorkflowId,
   WorkspaceId,
 } from "./credentials.ts";
 import type {
@@ -361,6 +364,10 @@ export interface Caller {
    *  edge removed since the grant was minted). Absent for agent and person callers. Apps that share data with a calling app
    *  re-check `listed` (and `product` + `id`) at use time. */
   listed?: boolean;
+  /** v0.1.82 (C373, P1): app callers only — the VERIFIED `wfl` of the presented companion grant (the caller's workflow id).
+   *  Absent for a base grant, agents and persons. An app may narrow on it; the bridge already limited the call to that
+   *  workflow's approved ops. Stored as receipt `meta.callerWorkflow` (SDK-API §22). */
+  workflow?: WorkflowId;
 }
 
 export interface Logger {
@@ -410,6 +417,21 @@ export type CompanionResult<O = Json> = OpResult<O>;
 export interface CallAppOptions {
   idempotencyKey?: string;
   context?: Record<string, Json>;
+  /** v0.1.82 (C373, P1; cap `app_workflow_grants`, SDK-API §22): run this call under the owner-approved grant of this workflow
+   *  (WORKFLOW_ID_PATTERN). The SDK selects or fetches the workflow grant for (workflow, target), sets `CallEnvelope.workflow`,
+   *  and NEVER falls back to the base grant. Absent = the base grant, as before. Gate-relevant, unlike `context`. */
+  workflow?: WorkflowId;
+}
+/** v0.1.82 (C373, P1; SDK-API §22): `ctx.workflowGrants`. Every method throws `bridge_cap_missing` (409, `details.cap:
+ *  "app_workflow_grants"`) before any network call when `ctx.bridgeCaps()` lacks the cap; Core refusals surface as TbError with
+ *  Core's code (`validation_failed` with `details.pointer`, `workflow_grants_full`, `workflow_grants_unsupported`, ...). */
+export interface WorkflowGrantsApi {
+  /** Ask for this set. Narrower or equal to the applied set → applied at once (no draft). Wider → an owner draft (state
+   *  `requested`, or `applied` with `pending`). Same body again → same answer (idempotent per digest). */
+  request(body: WorkflowGrantRequestBody): Promise<WorkflowGrantStatus>;
+  status(wfl: WorkflowId): Promise<WorkflowGrantStatus>;
+  /** Withdraw the whole record (kill path) and drop every cached grant of that workflow. */
+  release(wfl: WorkflowId): Promise<WorkflowGrantStatus>;
 }
 
 export interface OpContext {
@@ -427,6 +449,8 @@ export interface OpContext {
   /** v0.1.63 (SDK-API "v0.1.63 additions"): the resolved binding of a role the manifest declares for `app`; null = unset or below `minPolicy`. */
   modelRole(role: ModelRole): Promise<ResolvedModelRole | null>;
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
+  /** v0.1.82 (C373, P1): optional in this type (hand-built contexts); SDKs that implement SDK-API §22 always set it */
+  workflowGrants?: WorkflowGrantsApi;
   callServiceHelper<O = Json>(serviceId: string, path: string, body: Json): Promise<O>;
   db: Db;
   log: Logger;
@@ -485,6 +509,8 @@ export interface StartContext {
   /** v0.1.13 (C85): app-initiated companion call (timers, background refresh): no parentCall, own companion grant; same
    *  hooks, holds, rate limits as any caller; audited `call.app_initiated` by the bridge. Usable for the app's lifetime. */
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
+  /** v0.1.82 (C373, P1): as OpContext.workflowGrants */
+  workflowGrants?: WorkflowGrantsApi;
   /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
    *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
   bridgeCaps?: () => readonly string[];
@@ -502,6 +528,8 @@ export interface EventContext {
   log: Logger;
   scopes: ScopeStore;
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
+  /** v0.1.82 (C373, P1): as OpContext.workflowGrants */
+  workflowGrants?: WorkflowGrantsApi;
   /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
    *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
   bridgeCaps?: () => readonly string[];
@@ -697,7 +725,9 @@ export interface Receipt {
   summary: string;
   /** free JSON ≤ 4 KB. v0.1.77 (C367, P4): `callerContext` = the final op `context` keys under `<caller product>.` (an object), set
    *  only when `caller.type === "app"` and the call carried any (SDK-API §18.6); `tb.receipts_list` and `tb.holds_list` return it.
-   *  On an approved repeat that reports other caller keys, they go to `callerContextRun` (the hold's `callerContext` stays). */
+   *  On an approved repeat that reports other caller keys, they go to `callerContextRun` (the hold's `callerContext` stays).
+   *  v0.1.82 (C373, P1): `callerWorkflow` = the verified `wfl` (Caller.workflow) of an app caller with a workflow grant; written
+   *  by the SDK, never by `ctx.receipt.meta()`; not part of the approval match (SDK-API §22). */
   meta: Json;
   idempotencyKey: string | null;
   /** hold view; present only while held/approved, person reads only */

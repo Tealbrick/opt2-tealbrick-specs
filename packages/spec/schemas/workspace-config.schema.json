@@ -232,9 +232,53 @@
     },
     "standalone": {
       "$ref": "#/$defs/standaloneBlock"
+    },
+    "workflowGrantsWithdrawn": {
+      "type": "array",
+      "maxItems": 4096,
+      "description": "v0.1.82 (C373, P1; CREDENTIALS §5.1, BRIDGE §8.6): withdrawn per-workflow grants, at most WORKFLOW_WITHDRAWN_MAX (64) per caller instance (64 instances x 64). Sent only to a bridge that declares app_workflow_grants. A grant with wfl is refused when sub and wfl match, aud is absent or matches, and iat <= at.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sub",
+          "wfl",
+          "at"
+        ],
+        "properties": {
+          "sub": {
+            "$ref": "#/$defs/insAudience"
+          },
+          "wfl": {
+            "$ref": "#/$defs/workflowId"
+          },
+          "aud": {
+            "$ref": "#/$defs/insAudience"
+          },
+          "at": {
+            "$ref": "#/$defs/epochSeconds"
+          }
+        }
+      }
+    },
+    "wflEpoch": {
+      "type": "object",
+      "maxProperties": 64,
+      "description": "v0.1.82 (C373, P1): per caller instance ref, every grant with wfl of that caller with iat <= the value is withdrawn. Sent only to a bridge that declares app_workflow_grants.",
+      "propertyNames": {
+        "$ref": "#/$defs/insAudience"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/epochSeconds"
+      }
     }
   },
   "$defs": {
+    "workflowId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,39}$",
+      "description": "v0.1.82 (C373, P1): WORKFLOW_ID_PATTERN, the wfl claim (workflow id of the caller app)."
+    },
     "ulid": {
       "type": "string",
       "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"

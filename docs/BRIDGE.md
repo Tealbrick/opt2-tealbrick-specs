@@ -623,3 +623,28 @@ RM-2 resolve: declared + set → binding; undeclared → `role_not_declared`; un
 - **Merge.** The bridge copies the caller's keys into the op body `context` BEFORE the before-hook chain, like `tb.onBehalfOf`. The hooks and the app see them. `contextDigest` (`ctx` in the op proof, §8.1) covers them, so a tampered context fails `call_proof_invalid` at the app.
 - **Hooks.** A context hook keeps its own rule: it may add only keys under its own product (§8.1 step 7). A hook of the caller's own product may overwrite a caller key, because hooks run later. No other hook can.
 - **Conformance.** `B31.*` (P3) and `B32.*` (P4) rows in CONFORMANCE.md v0.1.77; the case file is `examples/caller-context.cases.json`.
+
+## v0.1.82 — per-workflow companion grants (C373 P1, cap `app_workflow_grants`; spec 0.1.82 is a reservation, C340)
+
+- **Cap.** `BRIDGE_CAPS` gains `"app_workflow_grants"` (`WORKFLOW_GRANTS_CAP`). A bridge declares it only when it implements all of §8.6. Without the cap nothing changes: Core sends no `workflowGrantsWithdrawn` / `wflEpoch` and mints no grant with `wfl`, and the SDK refuses workflow calls locally (SDK-API §22).
+- **Words.** `wf` = the grant's allowed op ids (unchanged). `wfl` = the caller app's workflow id (CREDENTIALS v0.1.82). `CallEnvelope.workflow` = the workflow the caller says this call runs for. P4 `context` (§8.5) stays informational and is never read by the gate below.
+- **Refuse codes (§8.4 gains):** `workflow_mismatch` (403), `workflow_grant_required` (403), `workflow_grant_withdrawn` (403 here; 410 from Core), `workflow_grant_missing` (404, Core), `workflow_grants_unsupported` (409, `details.product`), `workflow_grants_full` (409, Core), `portal_unavailable` (503: a relay got no answer from Core).
+
+### 8.6 Workflow grants on the companion path (§8.3)
+1. **Envelope.** `CallEnvelope.workflow?` (string). Present → it must match `WORKFLOW_ID_PATTERN`, else `400 input_invalid` with `details.pointer` `/workflow` (before step 5). The bridge never reads a workflow id from `context`, input or a header.
+2. **Gate (in step 5, right after `verifyGrant` and the check `sub` = the asserting instance; on top of the P3/P4 steps).** Let G be the presented grant.
+   1. G has `wfl` and `exp − iat` > `WORKFLOW_GRANT_TTL_SEC` → `403 grant_invalid` (counted `rejected` kind `grant`).
+   2. G has `wfl` and the envelope `workflow` is absent or differs → `403 workflow_mismatch`.
+   3. The envelope has `workflow` and G has no `wfl` → `403 workflow_grant_required`. A base grant is never valid for a workflow call.
+   4. G has `wfl`: the `grant_stale` rule (G is in the caller's current slice `grants`) is SKIPPED, because workflow grants are never in a slice. Instead the call is refused `403 workflow_grant_withdrawn` when ANY of these holds in the current config: (a) a `workflowGrantsWithdrawn` record has `sub` = G.`sub`, `wfl` = G.`wfl`, `aud` absent or = G.`aud`, and G.`iat ≤ at`; (b) `wflEpoch[G.sub]` exists and G.`iat ≤` it; (c) the caller's slice in the config does not list the target instance in `companionTargets` (no enabled, licensed companion edge caller → target).
+   5. Then the normal checks run on G exactly as today: `op.crud ⊆ G.crud` (`crud_exceeds_grant`), `wf` (`not_in_workflow` for an op outside the approved ops), held families from G.`held`, the P3 target gate for `tb.hold_status`.
+   A grant without `wfl` and an envelope without `workflow`: unchanged (base grant, `grant_stale` rule as before).
+3. **Re-gate (step 9).** Rules 2.1–2.5 run again on the current table; a withdrawal that arrived during the hooks wins.
+4. **Hooks and audit.** `HookCallInfo.caller.workflow` = G.`wfl` (verified; only for an app caller with a workflow grant; absent otherwise). Rules may match on it next to `caller.product` (C3). The bridge log line of a companion call (incl. `call.app_initiated`) adds `wfl`. Rate limits of calls are unchanged (app-initiated bucket).
+5. **Relays (internal listener, `TB-Assert` with `htm`, `htu`, `bd`).** Three routes, each forwarded to Core with the bridge assertion and `ins` = the instance that signed `TB-Assert` (a body field `ins` is refused `400 input_invalid`):
+   - `POST /tb/v1/workflow-grants/request` (`WorkflowGrantRequestBody`) → `bridge_api.workflow_grant_request` → `WorkflowGrantStatus`.
+   - `POST /tb/v1/workflow-grants/get` (`WorkflowGrantGetBody`) → `bridge_api.workflow_grant_get` → `WorkflowGrantGetResult` (`grant` only with `aud`). The bridge does not keep or log the grant.
+   - `POST /tb/v1/workflow-grants/release` (`WorkflowGrantReleaseBody`) → `bridge_api.workflow_grant_release` → `WorkflowGrantStatus`.
+   Core's answer (status and envelope) passes through unchanged. A paused caller → `paused` (pause matrix: a paused instance's assertions serve only slice pull and status; the owner can still revoke in Portal). Portal unreachable or no answer within 15 s → `503 portal_unavailable` (no answer is invented; a cached grant stays usable until `exp`). Standalone (§11) → `409 workflow_grants_unsupported`. Bucket per caller instance: `WORKFLOW_GRANT_RELAY_LIMIT` (240/min, burst 60) → `429 rate_limited` + `Retry-After`; separate from the call bucket.
+6. **Config.** The bridge applies `workflowGrantsWithdrawn` and `wflEpoch` atomically with the rest of the config (§5.3). Core prunes them; the bridge does not need to.
+7. **Conformance.** Rows `B-WFL.*` in CONFORMANCE.md v0.1.82 (gated by this cap, never by version).
