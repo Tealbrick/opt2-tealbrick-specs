@@ -753,6 +753,9 @@ export interface HoldsPendingItem {
    *  `callerContextSummary` in SDK-API §18.6 (bare keys; `key=<value>` for scalar `workflow`/`version`/`run`; sorted, joined
    *  by `"; "`, ≤ `CALLER_CONTEXT_SUMMARY_MAX_CHARS`). Never the whole context. */
   callerContext?: string;
+  /** v0.1.84 (C369; Inbox/Rules): the resolved dynamic tool name of the held call (`meta.tool`, `HOLDS_PENDING_TOOL_PATTERN`); absent
+   *  for static ops. A name, never input (C90). */
+  tool?: string;
 }
 // ── Readable hold cards (v0.1.84, C369; SDK-API §4.8 default view, §4.9 tb.hold_details) ──
 /** Every hold view is at most this many UTF-16 code units (SDK-API §4.1; unchanged). */
@@ -777,9 +780,17 @@ export const HOLD_VIEW_LIMITS = {
   /** the default summary names at most this many fields */
   summaryFields: 2,
 } as const;
-/** v0.1.84 (C369 D4/D1): a key is SECRET when one of its words (the humanized key split at spaces, ASCII lower case) is in this list.
- *  Secret members are replaced by `HOLD_INPUT_REDACTED` in the kept input and left out of the default summary. */
-export const HOLD_SECRET_KEY_WORDS = ["key", "apikey", "token", "secret", "password", "passwd", "passphrase", "authorization", "cookie", "credential", "credentials"] as const;
+/** v0.1.84 (C369 D4/D1, QA-C369-6; SDK-API §4.9 "Secret keys"): a key is SECRET when its FOLDED form (humanized, ASCII lower case,
+ *  separators removed) CONTAINS one of these parts, or one of its WORDS equals one of `HOLD_SECRET_KEY_WORDS`. Secret members show
+ *  `HOLD_VIEW_HIDDEN` in the default view, are replaced by `HOLD_INPUT_REDACTED` in the kept input and stay out of the default summary. */
+export const HOLD_SECRET_KEY_PARTS = ["token", "secret", "password", "passwd", "passphrase", "apikey", "authorization", "cookie", "credential", "bearer", "jwt", "privatekey", "clientsecret"] as const;
+export const HOLD_SECRET_KEY_WORDS = ["auth", "pwd", "otp", "pin", "sig", "signature"] as const;
+/** v0.1.84 (QA-C369-2): the value text of a secret member in the default view (`<label>: (hidden)`). */
+export const HOLD_VIEW_HIDDEN = "(hidden)";
+/** v0.1.84 (QA-C369-1): line 2 of a default view that does not show every field; `<n>` = `group(n)` (SDK-API §4.8 "Elision and cap"). */
+export const HOLD_VIEW_ELIDED_LINE = "Not every field is shown (<n> more). Open More details before you approve." as const;
+/** v0.1.84 (C369): `HoldsPendingItem.tool` is a resolved dynamic tool name matching this pattern; anything else is left out. */
+export const HOLDS_PENDING_TOOL_PATTERN = "^[a-z][a-z0-9_]{1,62}$" as const;
 export const HOLD_INPUT_REDACTED = "[redacted]";
 /** v0.1.84 (C369 D4): the kept input = JCS text of the redacted input; more UTF-8 bytes than this → not kept (`too_large`). */
 export const HOLD_INPUT_MAX_BYTES = 60_000;
@@ -821,7 +832,7 @@ export interface HoldDetails {
   createdAt: IsoTime;
   expiresAt: IsoTime | null;
   decidedAt: IsoTime | null;
-  /** `sha256:` hex of the view the owner saw (D2); null for a hold made before v0.1.84 */
+  /** `sha256:` hex of the view the owner saw (D2; kept after the approved call ran or failed); null only for a hold made before v0.1.84 */
   viewSha256: string | null;
 }
 
