@@ -404,3 +404,13 @@ Gated by the bridge's reported cap `app_workflow_grants`, never by version; a br
   - `B33.ceiling_still_enforced`: the resolver answers an inner tool with `crud ["delete"]` (outside this op's `crudCeiling`) → `dynamic_ceiling_exceeded`, whatever the grant's `crud`.
   - `B33.scoped_no_row_refused` (scoped `tools`): A's grant has `crud ["read","create","update"]`, A has NO scope row on the account (and no scope default for app callers) → `draft_x` → `403 scope_denied` from the target SDK; the handler does not run; `read_x` follows the same row rule.
   - `B33.scoped_row_bounds_grant` (scoped `tools`): grant `crud ["read","create","update"]`, A's scope row on the account allows `["read"]` only → `draft_x` → `403 scope_denied`; with a row allowing `["read","create","update"]` → ok (grant ∩ row). A grant of `["read"]` with a wide row → `draft_x` → `scope_denied` (the row never widens the grant).
+
+## v0.1.86 rows (C373, G-6; the conformance PR adds them)
+Gated by the bridge's reported cap `hook_recipients`, never by version. A bridge without the cap skips the group (noted, not failed). Fixture: app X with a static outward op `send` (`recipients: [{pointer: "/to", kind: "email"}, {pointer: "/cc", kind: "email"}]`), a static outward op `post` without `recipients`, a read op, and a dynamic op whose outward tool `chat_send` resolves `recipients: [{pointer: "/channel", kind: "slack"}]`; a before hook on X that records `call.target`; an agent caller and an app caller.
+- `B34.static_op`: `send {to: ["B@Example.com", "a@example.com"], cc: null}` → `target.recipients = ["email:a@example.com", "email:b@example.com"]`, no `recipientsIncomplete`; agent and app caller see the same.
+- `B34.dynamic_op`: `chat_send {channel: "u012abcdef"}` → `["slack:U012ABCDEF"]`.
+- `B34.telegram_integer`: a dynamic tool resolving `recipients: [{pointer: "/chat_id", kind: "telegram"}]`, call with `chat_id: -1001234567890` (a JSON integer) → `["telegram:-1001234567890"]`; `chat_id: "-1001234567890"` → the same; `chat_id: 1.5` or `1e21` → `recipientsIncomplete: true`, nothing listed.
+- `B34.slack_conversation`: `chat_send {channel: "C012ABCDEF"}` → `["slack:C012ABCDEF"]`; `{channel: "D012ABCDEF"}` → `["slack:D012ABCDEF"]` (conversations, not people: a policy finds no holder, trust `unreviewed`); `{channel: "X012ABCDEF"}` → `recipientsIncomplete: true`.
+- `B34.known_none`: `send {to: []}` → `[]`.
+- `B34.incomplete`: `send {to: ["Name <a@example.com>"]}`, `{to: 42}`, `{to: "telegram:123"}` → `recipientsIncomplete: true`, the bad value not listed; 65 distinct addresses → 64 listed and `recipientsIncomplete: true`.
+- `B34.absent`: the read op, `post` (no places) → no `recipients` member. No value appears in any bridge log line.
