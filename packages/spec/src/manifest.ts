@@ -15,6 +15,10 @@ export const EFFECTS = ["read", "write", "outward", "destructive", "money"] as c
 /** v0.1.41 (C167, C232, LA-2): + `public_link` (an action that makes agent-written content visible to people outside the
  *  workspace: create a viewer link, or make new content live on a page that has an active link). */
 export const HOLD_FAMILIES = ["first_contact", "profile_change", "live_call", "destructive", "money", "outward", "identity", "public_link"] as const;
+/** v0.1.87 (C373, G-2): the hold families in their FIXED order: slice `topology` edges carry `held` as a bitmask over this
+ *  order (bit i = family i). APPEND-ONLY: a new family is added at the END (a new high bit); never reorder or remove one
+ *  (pinned by test/topology.test.ts). */
+export const MANIFEST_HOLD_FAMILIES = HOLD_FAMILIES;
 /** v0.1.15 (C105): the families an op may declare (= HOLD_FAMILIES; the name Core, GUI and conformance import). */
 export const KNOWN_HOLD_FAMILIES = HOLD_FAMILIES;
 /** v0.1.15 (C105, QA S2: a first-contact DM went out unheld on a default card): the held families of a NEW agent card
@@ -145,6 +149,10 @@ export interface Manifest {
   /** v0.1.15 (C104) */
   requires?: ManifestRequires;
   needsAgentDirectory?: boolean;
+  /** v0.1.87 (C373, G-2): the app asks for the workspace grant picture (slice `topology`, display only). Requires
+   *  `needsAgentDirectory: true` (M-TP-1, `topology_needs_directory`). Core sends it only after the owner granted the consent
+   *  `topology` at deploy or update (MANIFEST §9). Default false. */
+  needsTopology?: boolean;
   skills?: Skill[];
   harnessHints?: HarnessHint[];
   unlocks?: Unlock[];

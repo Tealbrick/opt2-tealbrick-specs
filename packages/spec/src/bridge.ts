@@ -42,6 +42,7 @@ import type {
   SemVer,
   SnakeId,
 } from "./manifest.ts";
+import { MANIFEST_HOLD_FAMILIES } from "./manifest.ts";
 import type { DataPolicy, ModelRole, PolicyBasis } from "./models.ts";
 
 // ── Common ───────────────────────────────────────────────────────────────────
@@ -318,6 +319,91 @@ export interface InstanceSlice extends SliceClaims {
    *  the SDK REFUSES an app call (or a resumed held app call) whose caller has no verified product (no `prd` and no
    *  `companionCallers` entry): 403 `caller_unverified`, nothing runs, audited. Absent = the earlier lenient rule. */
   appCallers?: "verified";
+  /** v0.1.87 (C373, G-2): a DISPLAY copy of the workspace grant picture in compact tuple form
+   *  (SliceTopology). Normative (CORE "v0.1.87"): present ONLY when the app's manifest declares `needsTopology: true` (which
+   *  requires `needsAgentDirectory: true`) AND the owner granted the consent `topology` at deploy or update (the review names
+   *  it: "This app can see which agents and apps have access to what in this workspace"). An update that adds the flag needs
+   *  a new consent; without it Core leaves the field out. DISPLAY ONLY: the bridge and the SDK never read it to authorize, and
+   *  apps MUST NOT use it to authorize; it is stale until the next slice revision. Size is ELASTIC (CORE "v0.1.87" rules 7-8): Core
+   *  sizes it last with the budget left, may cut rows (connections, then companions, then edges) and then sets `truncated`;
+   *  it never makes an owner change or a consent refusable. SDK: `ctx.topology()`. */
+  topology?: SliceTopology;
+}
+
+/** v0.1.87 (C373, G-2): the list bounds of `InstanceSlice.topology` (= instance-slice.schema.json maxItems). Core cuts a list
+ *  at its bound and then sets `truncated: true`. */
+export const TOPOLOGY_MAX = { instances: 40, edges: 600, companions: 100, connections: 300 } as const;
+/** v0.1.87: the largest `wfCount` / `opsCount` (an op list has at most 128 ids, C359c). */
+export const TOPOLOGY_OPS_COUNT_MAX = 128;
+/** v0.1.87: the largest `held` bitmask (31 bits: safe for JavaScript bitwise operators). */
+export const TOPOLOGY_HELD_MASK_MAX = 0x7fff_ffff;
+/** v0.1.87: a topology crud code: the letters c, r, u, d of the granted actions, in this order ("" = none, "crud" = all). */
+export const TOPOLOGY_CRUD_PATTERN = "^c?r?u?d?$";
+
+/** Compact crud code (`TOPOLOGY_CRUD_PATTERN`), e.g. "r", "cru", "crud". */
+export type TopologyCrud = string;
+/** `[ins, product, name, version]`: an app instance; `name` = its manifest name (display copy, ≤ 80), `version` = the deployed release. */
+export type TopologyInstance = [ins: InstanceId, product: ProductId, name: string, version: SemVer];
+/** `[agentIdx, instIdx, crud, mode, held, wfCount, paused]`: one agent → app grant. `agentIdx` indexes the SAME slice's
+ *  `agents[]`; `instIdx` indexes `topology.instances`; `mode` "f" = free, "b" = bound; `held` = bitmask over
+ *  MANIFEST_HOLD_FAMILIES order (bit i = family i); `wfCount` = the length of the grant's op list (0 = all ops, no list);
+ *  `paused` 1 when the agent, the instance or the workspace is paused. */
+export type TopologyEdge = [agentIdx: number, instIdx: number, crud: TopologyCrud, mode: "f" | "b", held: number, wfCount: number, paused: 0 | 1];
+/** `[fromIdx, toIdx, crud, opsCount]`: one app → app companion grant; both indexes into `topology.instances`; `opsCount` 0 = all ops, no list. */
+export type TopologyCompanion = [fromIdx: number, toIdx: number, crud: TopologyCrud, opsCount: number];
+/** `[con, agentIdx, method, status]`: one agent connection; `agentIdx` indexes the slice's `agents[]`; method "k" = key,
+ *  "p" = pairing; status "a" = active, "r" = revoked. Never key or token data. */
+export type TopologyConnection = [con: ConnectionId, agentIdx: number, method: "k" | "p", status: "a" | "r"];
+
+/** v0.1.87 (C373, G-2): the workspace grant picture an app with `needsTopology` (owner-consented) gets in its slice. DISPLAY
+ *  ONLY (see `InstanceSlice.topology`). No labels beyond instance `name` / `version`; no key names, persona, endpoints,
+ *  secrets or token data. A READER MUST check every index (0 ≤ idx < length of the list it indexes); a row with an index out
+ *  of range is dropped and the topology is treated as `truncated`. */
+export interface SliceTopology {
+  v: 1;
+  instances: TopologyInstance[];
+  edges: TopologyEdge[];
+  companions: TopologyCompanion[];
+  connections: TopologyConnection[];
+  /** Core cut at least one list at its bound (or a reader dropped a row with an index out of range) */
+  truncated?: true;
+}
+
+/** v0.1.87 (C373, G-2): what the SDK returns from `ctx.topology()`: the topology AND the agent ids of the SAME verified slice in
+ *  slice order (`agentIds[i]` = `slice.agents[i].id`), read together, so `agentIdx` resolves as `agentIds[agentIdx]` without a
+ *  second read that a newer slice could reorder. */
+export type SliceTopologyView = SliceTopology & { agentIds: readonly AgentId[] };
+
+const TOPOLOGY_CRUD_ORDER = [
+  ["c", "create"],
+  ["r", "read"],
+  ["u", "update"],
+  ["d", "delete"],
+] as const;
+/** Crud actions → the compact code (letters in c, r, u, d order). Unknown entries are ignored. */
+export function topologyCrudCode(crud: readonly string[]): TopologyCrud {
+  return TOPOLOGY_CRUD_ORDER.filter(([, a]) => crud.includes(a))
+    .map(([l]) => l)
+    .join("");
+}
+/** The compact code → crud actions; null when the code does not match `TOPOLOGY_CRUD_PATTERN`. */
+export function topologyCrudActions(code: string): CrudAction[] | null {
+  if (typeof code !== "string" || !new RegExp(TOPOLOGY_CRUD_PATTERN).test(code)) return null;
+  return TOPOLOGY_CRUD_ORDER.filter(([l]) => code.includes(l)).map(([, a]) => a);
+}
+/** Hold families → the `held` bitmask (bit i = MANIFEST_HOLD_FAMILIES[i]). Unknown families are ignored. */
+export function topologyHeldMask(held: readonly string[]): number {
+  let mask = 0;
+  MANIFEST_HOLD_FAMILIES.forEach((f, i) => {
+    if (held.includes(f)) mask |= 1 << i;
+  });
+  return mask;
+}
+/** The `held` bitmask → the hold families it names, in MANIFEST_HOLD_FAMILIES order. Bits above the known families are
+ *  ignored (a newer Core may know more families: readers tolerate). null when `mask` is not an integer in 0..TOPOLOGY_HELD_MASK_MAX. */
+export function topologyHeldFamilies(mask: number): HoldFamily[] | null {
+  if (!Number.isInteger(mask) || mask < 0 || mask > TOPOLOGY_HELD_MASK_MAX) return null;
+  return MANIFEST_HOLD_FAMILIES.filter((_, i) => (mask & (1 << i)) !== 0);
 }
 
 // ── Enrolment (BRIDGE §4) — op `bridge_api.enrol` ───────────────────────────

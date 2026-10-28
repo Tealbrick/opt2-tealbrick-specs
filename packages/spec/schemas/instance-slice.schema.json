@@ -308,6 +308,173 @@
     "portalUrl": {
       "$ref": "workspace-config.schema.json#/$defs/httpsOrigin",
       "description": "v0.1.13 (C86): the Portal GUI origin (no path); apps build owner links `<portalUrl>/w/<ws>/open?product=<p>&path=<path>`."
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "v",
+        "instances",
+        "edges",
+        "companions",
+        "connections"
+      ],
+      "description": "v0.1.87 (C373, G-2; number set at merge): a DISPLAY copy of the workspace grant picture in compact tuple form. Present ONLY when the manifest declares needsTopology: true (requires needsAgentDirectory) AND the owner granted the consent `topology` at deploy or update (an update that adds the flag needs a new consent). The bridge and the SDK never read it to authorize; apps MUST NOT use it to authorize; stale until the next slice revision. Core counts its worst case in the slice size. No labels beyond instance name/version; no key names, persona, endpoints, secrets or token data. agentIdx indexes this slice's agents[]; instIdx/fromIdx/toIdx index topology.instances; a reader MUST check 0 <= idx < length, else drop the row and treat the topology as truncated. Bounds = TOPOLOGY_MAX.",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "instances": {
+          "type": "array",
+          "maxItems": 40,
+          "description": "[ins, product, name, version]",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "workspace-config.schema.json#/$defs/insId"
+              },
+              {
+                "$ref": "workspace-config.schema.json#/$defs/productId"
+              },
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              {
+                "$ref": "workspace-config.schema.json#/$defs/semver"
+              }
+            ],
+            "items": false,
+            "minItems": 4
+          }
+        },
+        "edges": {
+          "type": "array",
+          "maxItems": 600,
+          "description": "[agentIdx, instIdx, crud, mode, held, wfCount, paused] — one agent -> app grant",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "description": "agentIdx: index into this slice's agents[]"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "description": "instIdx: index into topology.instances"
+              },
+              {
+                "type": "string",
+                "pattern": "^c?r?u?d?$",
+                "description": "crud letters of the granted actions in c, r, u, d order"
+              },
+              {
+                "enum": [
+                  "f",
+                  "b"
+                ],
+                "description": "mode: f = free, b = bound"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2147483647,
+                "description": "held: bitmask over MANIFEST_HOLD_FAMILIES order (bit i = family i; append-only)"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 128,
+                "description": "wfCount: length of the grant op list; 0 = all ops, no list"
+              },
+              {
+                "enum": [
+                  0,
+                  1
+                ],
+                "description": "paused: 1 when the agent, the instance or the workspace is paused"
+              }
+            ],
+            "items": false,
+            "minItems": 7
+          }
+        },
+        "companions": {
+          "type": "array",
+          "maxItems": 100,
+          "description": "[fromIdx, toIdx, crud, opsCount] — one app -> app companion grant",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "description": "fromIdx: index into topology.instances"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "description": "toIdx: index into topology.instances"
+              },
+              {
+                "type": "string",
+                "pattern": "^c?r?u?d?$",
+                "description": "crud letters of the granted actions in c, r, u, d order"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 128,
+                "description": "opsCount: length of the grant op list; 0 = all ops, no list"
+              }
+            ],
+            "items": false,
+            "minItems": 4
+          }
+        },
+        "connections": {
+          "type": "array",
+          "maxItems": 300,
+          "description": "[con, agentIdx, method, status] — one agent connection",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "workspace-config.schema.json#/$defs/conId"
+              },
+              {
+                "type": "integer",
+                "minimum": 0,
+                "description": "agentIdx: index into this slice's agents[]"
+              },
+              {
+                "enum": [
+                  "k",
+                  "p"
+                ],
+                "description": "method: k = key, p = pairing"
+              },
+              {
+                "enum": [
+                  "a",
+                  "r"
+                ],
+                "description": "status: a = active, r = revoked"
+              }
+            ],
+            "items": false,
+            "minItems": 4
+          }
+        },
+        "truncated": {
+          "const": true,
+          "description": "Core cut at least one list at its bound."
+        }
+      }
     }
   }
 }

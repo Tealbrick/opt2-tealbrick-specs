@@ -700,6 +700,9 @@ export interface CatalogEntry {
   devOnly?: true;
   skills: string[];
   companions: { product: ProductId; purpose: string }[];
+  /** v0.1.87 (C373, G-2): the consents this release asks for at deploy (wildcard companion → `holds_pending_all`, `needsTopology`
+   *  → `topology`), so the review sheet names them before Deploy. Absent or [] = none. */
+  consentsAsked?: ConsentKind[];
   costEstimate: CostEstimate | null;
   /** Present only when the request names a workspace. */
   workspace?: {
@@ -906,6 +909,10 @@ export interface Instance {
   /** v0.1.63 RM-15 (typed in this follow-up): roles whose `minPolicy` the available release LOWERS; the update needs the owner's
    *  explicit consent. `notice` = "This version accepts a less private model for <role>: <from> → <to>". Absent = none. */
   updatePolicyLowered?: { role: ModelRole; from: DataPolicy; to: DataPolicy; notice: string }[];
+  /** v0.1.87 (C373, G-2): consents `updateAvailable` asks for that the running release does not (e.g. `topology` when the update
+   *  adds `needsTopology`). The update GUI asks for each before Confirm; until the owner grants it, Core does not send what it
+   *  covers (a new `topology` needs a new consent). Absent or [] = none. */
+  updateConsentsAsked?: ConsentKind[];
   /** v0.1.14 (A2A-11): this app's companion connections that do not work now */
   companionIssues?: { target: ProductId | "*"; edge: EdgeId | null; state: "blocked" | "not_deployed" | "unlicensed" | "paused" | "disabled"; reason: "companion_op_missing" | "target_not_deployed" | null; detail: string }[];
   provider: ProviderKey | "own_infra";
@@ -937,8 +944,11 @@ export interface InstanceLastUpdate {
    *  stored it (then an owner rollback-with-restore is not offered: restorable null). */
   fromSdkVersion?: string;
 }
-/** v0.1.13 (C82). GUI text for `holds_pending_all`: "This app can see the pending approvals of all apps". */
-export type ConsentKind = "holds_pending_all";
+/** v0.1.13 (C82). GUI text for `holds_pending_all`: "This app can see the pending approvals of all apps".
+ *  v0.1.87 (C373, G-2): + `topology` — asked by a release whose manifest declares `needsTopology: true`; GUI text "This app can
+ *  see which agents and apps have access to what in this workspace". Granted → the app's slice carries `topology` (display only,
+ *  CORE "v0.1.87"); not granted / revoked → the next slice has none. */
+export type ConsentKind = "holds_pending_all" | "topology";
 export interface InstanceConsent { kind: ConsentKind; granted: boolean; at: IsoTime | null; by: PersonId | null }
 export interface InstanceConsentInput { ws: WorkspaceId; ins: InstanceId; kind: ConsentKind; granted: boolean }
 /** v0.1.14 (C100) */
