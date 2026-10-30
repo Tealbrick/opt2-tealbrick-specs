@@ -8,7 +8,8 @@
 // Shared vocabulary and ids are imported, never re-declared (CORE §0).
 
 import type {
-  CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, ScopeSourceItem, StatusReport,
+  CompactJws, ConfigPullQuery, EnrolRequest, EnrolResponse, 
+  OwnerDraftGetResult, OwnerDraftKeyBody, OwnerDraftRequestBody, OwnerDraftStatus,ScopeSourceItem, StatusReport,
   WorkflowGrantGetBody, WorkflowGrantGetResult, WorkflowGrantReleaseBody, WorkflowGrantRequestBody, WorkflowGrantState, WorkflowGrantStatus, WorkflowGrantTarget,
 } from "./bridge.ts";
 import type {
@@ -166,6 +167,8 @@ export const AUDIT_ACTIONS = [
   /** v0.1.82 (C373, P1): an app requested a workflow grant set (details: ins, wfl, digest, outcome applied_narrower | draft | unchanged
    *  | refused); the owner applied one (draft step), revoked one, the app released one; Core withdrew or narrowed one on its own (app
    *  update, edge disabled or removed, target removed, workspace kill, base re-mint epoch; details.reason) */
+  /** v0.1.89 (C380) */
+  "agent.offboard", "agent.rotate", "agent.reinstate", "owner_draft.request", "owner_draft.withdraw",
   "workflow_grant.request", "workflow_grant.set", "workflow_grant.revoke", "workflow_grant.release", "workflow_grant.withdraw",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -224,6 +227,8 @@ export type ErrorCode =
   /** v0.1.82 (C373, P1; CORE v0.1.82): 404 no applied workflow grant for (caller, wfl[, target]); 410 it was withdrawn; 409 the
    *  gate is off for that target (`details.product`); 409 the caller has WORKFLOW_GRANTS_MAX requested + applied records */
   | "workflow_grant_missing" | "workflow_grant_withdrawn" | "workflow_grants_unsupported" | "workflow_grants_full"
+  /** v0.1.89 (C380): 409 `owner_drafts_full`, 409 `owner_drafts_unsupported` (standalone); 409 `agent_offboarded` (`details.offboardedAt`; on reinstate after the window `details.reason` "reinstate_window_closed") */
+  | "owner_drafts_full" | "owner_drafts_unsupported" | "agent_offboarded"
   | "internal";
 /** CORE §8: the one error envelope. */
 export interface ErrorEnvelope { error: { code: ErrorCode; message: string; requestId: string; details?: Record<string, unknown> } }
@@ -445,6 +450,8 @@ export interface AgentCard {
   connections: number;
   createdBy: "owner" | "app";
   createdAt: IsoTime;
+  /** v0.1.89 (C380): set by `agents.offboard`, cleared by `agents.reinstate`. Set → Core refuses resume, new edge and new connection (`agent_offboarded`). Absent on an older Core. */
+  offboardedAt?: IsoTime | null;
 }
 export type AgentListInput = WorkspaceRef & PageQuery;
 export type AgentList = Page<AgentCard>;
@@ -452,6 +459,14 @@ export type AgentList = Page<AgentCard>;
 export interface AgentCreateInput { ws: WorkspaceId; name: string; purpose: string; harnessOptionId: string; endpointLabel?: string; /** v0.1.63 */ persona?: string }
 export interface AgentUpdateInput { ws: WorkspaceId; agt: AgentId; name?: string; purpose?: string; harnessOptionId?: string; endpointLabel?: string | null; /** v0.1.63; "" clears */ persona?: string }
 export interface AgentDeleteResult { agt: AgentId; revokedConnections: number; configRevision: number }
+/** v0.1.89 (C380): output of `agents.offboard`. One transaction: pause, revoke connections, revoke open pairing codes, soft-delete edges, set `offboarded_at`. A repeat answers with zero counts and the first `offboardedAt`. */
+export interface AgentOffboardResult { agt: AgentId; paused: true; removedEdges: number; revokedConnections: number; revokedCodes: number; offboardedAt: IsoTime; configRevision: number }
+/** v0.1.89 (C380): output of `agents.rotate`. One transaction: revoke connections and open pairing codes; edges and card stay. */
+export interface AgentRotateResult { agt: AgentId; revokedConnections: number; revokedCodes: number; configRevision: number }
+/** v0.1.89 (C380): output of `agents.reinstate`. It clears `offboarded_at` and restores nothing: the agent stays paused, with no edge and no connection. */
+export interface AgentReinstateResult { agt: AgentId; offboardedAt: null; paused: true; configRevision: number }
+/** v0.1.89 (C380): `agents.reinstate` works until this long after `offboarded_at`; later → 409 `agent_offboarded`. */
+export const AGENT_REINSTATE_WINDOW_SEC = 30 * 86400;
 export interface InstructionsInput { ws: WorkspaceId; agt: AgentId; harnessOptionId?: string }
 export interface InstructionSet {
   harnessOptionId: string;
@@ -1384,6 +1399,9 @@ export type WorkflowGrantList = Page<WorkflowGrantRecord>;
 export type BridgeWorkflowGrantRequestInput = WorkflowGrantRequestBody & { ins: InstanceId };
 export type BridgeWorkflowGrantGetInput = WorkflowGrantGetBody & { ins: InstanceId };
 export type BridgeWorkflowGrantReleaseInput = WorkflowGrantReleaseBody & { ins: InstanceId };
+/** v0.1.89 (C380): `ins` = the instance that signed `TB-Assert`, set by the bridge. */
+export type BridgeOwnerDraftRequestInput = OwnerDraftRequestBody & { ins: InstanceId };
+export type BridgeOwnerDraftKeyInput = OwnerDraftKeyBody & { ins: InstanceId };
 
 // v0.1.64 (C332a(3)): public Portal identity for native clients checking a custom Portal URL before sign-in.
 export interface PortalInfo {
@@ -1433,6 +1451,8 @@ export interface Draft {
   result: ApplyResult | null;
   createdAt: IsoTime;
   updatedAt: IsoTime;
+  /** v0.1.89 (C380): only a stop request (`bridge_api.owner_draft_request`) has one. Passed and not applied: the GUI shows "expired", and apply refuses (409 `draft_state`, `details.reason` "expired"). `state` does not change. */
+  expiresAt?: IsoTime | null;
   /** v0.1.41 (G3 R1, F126): the recipe's own text (what the recipe CLAIMS to do; shown as a claim, never as Portal text) */
   description?: string | null;
   /** v0.1.41 (G3 R1, F126): every step that LOWERS protection, recomputed by Core against the current state on every read
@@ -1442,7 +1462,8 @@ export interface Draft {
 /** v0.1.41 (G3 R1, F126): one step that lowers protection: an owner approval turned off (card or apps-policy hold family),
  *  a cap raised or removed, a bound card set free or its workflow widened, a hook switched off, a grant that adds write
  *  access, an op-limited grant widened, a write connection switched on, a paused card resumed. Read-only access and
- *  tightening steps are never items. */
+ *  tightening steps are never items. v0.1.89 (C380): one exception, a step of a stop draft (`bridge_api.owner_draft_request`) is
+ *  one item per agent (`<n>:stop`, `subject` = the card name), so the owner ticks each agent an app asks to stop. */
 export interface LooseningItem {
   /** `<step n>:<setting key>`, stable for one draft revision */
   id: string;
@@ -1458,11 +1479,16 @@ export interface LooseningItem {
   /** optional plain detail, e.g. the write operations a grant unlocks */
   detail?: string;
 }
-/** v0.1.82 (C373, P1): a draft Core created from an app's REQUEST (`bridge_api.workflow_grant_request`). The app may only
- *  request; a person applies (K1 browser + confirm per widened item). `digest` = the BOUND payload digest: `sha256:` + hex of
- *  SHA-256 over the JCS of the canonical request body (CORE v0.1.82); the review page shows it and apply refuses a step whose
- *  recomputed digest differs (`draft_invalid`). Such a draft holds exactly one step `companions.workflow_grant_set`; the owner
- *  cannot edit it (`drafts.update` → `draft_state`) or export it (`recipe_not_portable`), only apply or reject it. */
+/** v0.1.82 (C373, P1), v0.1.89 (C380): a draft Core created from an app's REQUEST. The app may only request; a person applies
+ *  (K1 browser + confirm per item). The owner cannot edit it (`drafts.update` → `draft_state`) or export it
+ *  (`recipe_not_portable`), only apply or reject it. Its steps come only from `APP_DRAFT_OPS`, checked at request AND at apply.
+ *  Two forms, never mixed:
+ *  - `bridge_api.workflow_grant_request`: exactly one step `companions.workflow_grant_set`. `digest` = the BOUND payload digest:
+ *    `sha256:` + hex of SHA-256 over the JCS of the canonical request body (CORE v0.1.82); the review page shows it and apply
+ *    refuses a step whose recomputed digest differs (`draft_invalid`).
+ *  - `bridge_api.owner_draft_request`: 1..100 steps of `OWNER_DRAFT_OPS`. `digest` = the BOUND digest: `sha256:` + hex of SHA-256
+ *    over the JCS of the stored steps (`[{opId, input}]`, in order; CORE v0.1.89); apply refuses a difference (`draft_invalid`).
+ *    `planDigest` is the app's own, shown as "reported by the app". */
 export interface DraftCreatedByApp {
   kind: "app";
   ins: InstanceId;
@@ -1470,7 +1496,15 @@ export interface DraftCreatedByApp {
   /** the app's manifest name (display only) */
   name: string;
   digest: Digest;
+  /** v0.1.89: stop requests only: the app's `title`, shown under "The app says", no markdown. `Draft.title` is then Core's headline, never the app's text. */
+  appTitle?: string;
+  /** v0.1.89: the app's own plan digest; stop requests only */
+  planDigest?: Digest;
+  /** v0.1.89: the open draft this one replaced on the same key: the page says "This replaces an earlier request" */
+  replacesDraft?: DraftId;
 }
+/** v0.1.89 (C380): the ONLY source of what an app-created draft may hold. Never relax it to "any draftable row". */
+export const APP_DRAFT_OPS = ["agents.pause", "agents.offboard", "agents.rotate", "companions.workflow_grant_set"] as const;
 export interface DraftSummary {
   id: DraftId;
   ws: WorkspaceId | null;
@@ -1564,6 +1598,8 @@ export interface SchemaMap {
   SetInfrastructureInput: SetInfrastructureInput; CostEstimateInput: CostEstimateInput; CostEstimate: CostEstimate;
   KeptDataList: KeptDataList; WorkspaceDeleteResult: WorkspaceDeleteResult; KeptDataDeleteInput: KeptDataDeleteInput; KeptDataDeleteResult: KeptDataDeleteResult;
   StandaloneInput: StandaloneInput; StandaloneResult: StandaloneResult; PauseState: PauseState;
+  AgentOffboardResult: AgentOffboardResult; AgentRotateResult: AgentRotateResult; AgentReinstateResult: AgentReinstateResult;
+  BridgeOwnerDraftRequestInput: BridgeOwnerDraftRequestInput; BridgeOwnerDraftKeyInput: BridgeOwnerDraftKeyInput; OwnerDraftStatus: OwnerDraftStatus; OwnerDraftGetResult: OwnerDraftGetResult;
   ProviderList: ProviderList; LinkStart: LinkStart; LinkCompleteInput: LinkCompleteInput; LinkTokenInput: LinkTokenInput;
   ProviderLink: ProviderLink; DestinationList: DestinationList; DestinationCreateInput: DestinationCreateInput; Destination: Destination;
   HarnessOptionList: HarnessOptionList;
@@ -1693,6 +1729,10 @@ export const ROUTES = [
   { opId: "agents.policy_set", method: "PUT", path: "/workspaces/{ws}/agents/{agt}/policy", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "AgentPolicySetInput", output: "AgentPolicy", rate: "write", bodyLog: "meta", audit: "agent.policy_set", draftable: true, confirm: true, idempotent: false, registry: "agent_policy" },
   { opId: "agents.pause", method: "POST", path: "/workspaces/{ws}/agents/{agt}/pause", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "AgentRef", output: "PauseState", rate: "write", bodyLog: "meta", audit: "agent.pause", draftable: true, confirm: false, idempotent: false, registry: "agent_policy" },
   { opId: "agents.resume", method: "POST", path: "/workspaces/{ws}/agents/{agt}/resume", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "AgentRef", output: "PauseState", rate: "write", bodyLog: "meta", audit: "agent.resume", draftable: true, confirm: true, idempotent: false, registry: "agent_policy" },
+  /** v0.1.89 (C380): `agents.offboard` and `agents.rotate` only tighten: both are kill-path ops. `agents.reinstate` is browser only and never in a draft. */
+  { opId: "agents.offboard", method: "POST", path: "/workspaces/{ws}/agents/{agt}/offboard", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "AgentRef", output: "AgentOffboardResult", rate: "write", bodyLog: "meta", audit: "agent.offboard", draftable: true, confirm: true, idempotent: false, registry: "agent" },
+  { opId: "agents.rotate", method: "POST", path: "/workspaces/{ws}/agents/{agt}/rotate", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "AgentRef", output: "AgentRotateResult", rate: "write", bodyLog: "meta", audit: "agent.rotate", draftable: true, confirm: true, idempotent: false, registry: "agent" },
+  { opId: "agents.reinstate", method: "POST", path: "/workspaces/{ws}/agents/{agt}/reinstate", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "AgentRef", output: "AgentReinstateResult", rate: "sensitive", bodyLog: "meta", audit: "agent.reinstate", draftable: false, confirm: false, idempotent: false, registry: "agent" },
 
   // connections
   { opId: "connections.list", method: "GET", path: "/workspaces/{ws}/agents/{agt}/connections", auth: BO, exposure: "gateway", transport: "json", query: NOQ, input: "AgentRef", output: "ConnectionList", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "connection" },
@@ -1815,6 +1855,10 @@ export const ROUTES = [
   { opId: "bridge_api.workflow_grant_request", method: "POST", path: "/bridge/workflow-grants/request", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeWorkflowGrantRequestInput", output: "WorkflowGrantStatus", rate: "bridge_relay", bodyLog: "meta", audit: "workflow_grant.request", draftable: false, confirm: false, idempotent: false, registry: "consent" },
   { opId: "bridge_api.workflow_grant_get", method: "POST", path: "/bridge/workflow-grants/get", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeWorkflowGrantGetInput", output: "WorkflowGrantGetResult", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "consent" },
   { opId: "bridge_api.workflow_grant_release", method: "POST", path: "/bridge/workflow-grants/release", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeWorkflowGrantReleaseInput", output: "WorkflowGrantStatus", rate: "bridge_relay", bodyLog: "meta", audit: "workflow_grant.release", draftable: false, confirm: false, idempotent: false, registry: "consent" },
+  /** v0.1.89 (C380): an app asks for a stop draft; only a person applies it. Core answers 404 `not_found` unless env `TB_APP_DRAFTS` is set (CORE v0.1.89). */
+  { opId: "bridge_api.owner_draft_request", method: "POST", path: "/bridge/owner-drafts/request", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeOwnerDraftRequestInput", output: "OwnerDraftStatus", rate: "bridge_relay", bodyLog: "meta", audit: "owner_draft.request", draftable: false, confirm: false, idempotent: false, registry: "consent" },
+  { opId: "bridge_api.owner_draft_get", method: "POST", path: "/bridge/owner-drafts/get", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeOwnerDraftKeyInput", output: "OwnerDraftGetResult", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "consent" },
+  { opId: "bridge_api.owner_draft_withdraw", method: "POST", path: "/bridge/owner-drafts/withdraw", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgeOwnerDraftKeyInput", output: "OwnerDraftStatus", rate: "bridge_relay", bodyLog: "meta", audit: "owner_draft.withdraw", draftable: false, confirm: false, idempotent: false, registry: "consent" },
   { opId: "bridge_api.person_op_result", method: "POST", path: "/bridge/person-ops/{pop}/result", auth: ["bridge"], exposure: "gateway", transport: "json", query: NOQ, input: "BridgePersonOpResultInput", output: "Ok", rate: "bridge_relay", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "instance" },
 
   // v0.1.58 (S1-0, HOST.md): paired servers (Provider Registry: a server is an own-infrastructure destination)

@@ -167,6 +167,9 @@ Auth: B = browser, O = owner native session, pub = public, dev = device, brg = b
 | `agents.policy_set` | PUT `/workspaces/{ws}/agents/{agt}/policy` | B | DC | agent_policy |
 | `agents.pause` | POST `/workspaces/{ws}/agents/{agt}/pause` | B | D | agent_policy |
 | `agents.resume` | POST `/workspaces/{ws}/agents/{agt}/resume` | B | DC | agent_policy |
+| `agents.offboard` | POST `/workspaces/{ws}/agents/{agt}/offboard` | B | DC | agent |
+| `agents.rotate` | POST `/workspaces/{ws}/agents/{agt}/rotate` | B | DC | agent |
+| `agents.reinstate` | POST `/workspaces/{ws}/agents/{agt}/reinstate` | B | - | agent |
 | `connections.list` | GET `/workspaces/{ws}/agents/{agt}/connections` | B,O | - | connection |
 | `connections.revoke` | DELETE `/workspaces/{ws}/agents/{agt}/connections/{con}` | B | DC | connection |
 | `device.start` | POST `/device/authorize` | pub | - | credential |
@@ -641,3 +644,20 @@ Semantics are in CORE v0.1.82; wire types in `types/routes.ts` and `types/bridge
 - **Owner revoke.** `companions.workflow_grant_revoke` withdraws the whole record at once (state `withdrawn`, open draft rejected, one withdrawal record). It is a kill-path op: never refused by the config-size rule, never draftable, no confirmation needed (it only tightens). The GUI shows it as a button on each applied record of `companions.workflow_grants_list`.
 - **Bridge rows.** `ins` is set by the bridge from the verified instance assertion; Core checks it belongs to the bridge's workspace (else 403 `forbidden`). Errors: `validation_failed` (`details.pointer`), 409 `conflict` (`details.reason` "paused": the caller instance is paused; the bridge refuses first), `workflow_grants_full` (409), `workflow_grant_missing` (404), `workflow_grant_withdrawn` (410), `workflow_grants_unsupported` (409, `details.product`). `bridge_api.workflow_grant_get` answers a grant only with `aud`; its body is never logged (`bodyLog: none`). Rate class `bridge_relay`.
 - **Config size (adds to "Config size", QA-SPEC49-11/-15, C349, C359d).** Kill-path ops gain: `companions.workflow_grant_revoke`, `bridge_api.workflow_grant_release`, a narrower `bridge_api.workflow_grant_request`, a draft apply that narrows, and Core's own withdrawals (app update narrowing `perWorkflow`, companion edge disabled or removed, target removed, caller uninstalled, workspace kill switch, and the `wflEpoch` bump that goes with every base re-mint, C5 S2-1). The wildcard consent revoke does NOT withdraw workflow grants (lead §11.1). None of them is ever refused by the size rule, so the worst-case kill-path config ALREADY includes their result: for EVERY instance `WORKFLOW_WITHDRAWN_MAX` (64) `workflowGrantsWithdrawn` records at their largest serialized size (40-char `wfl`, with `aud`), one `wflEpoch` entry and its `workflowGrantEdges` entry with every possible target, and every base companion grant at the upper bound `wf = operations ∪ perWorkflow.operations` (the gate-off fallback is `operations ∪` applied ops, never more, C5 S1-1; MANIFEST §9.1). Executable model: `test/killpath-model.test.ts` (RM-24c P1 rows, C5 S3-6). Above 64 live records for one caller Core bumps `wflEpoch[sub]` instead of adding a record (epoch fallback), so the config never holds more. Workflow grants themselves are never in the config or a slice. A widening (draft apply) is an owner change and is measured like any other; it adds no config bytes.
+
+## v0.1.89 additions (C380: stop drafts and offboard; 6 rows; rules in CORE "v0.1.89")
+
+| Op | Route | Auth | Draft | Registry |
+|---|---|---|---|---|
+| `agents.offboard` | POST `/workspaces/{ws}/agents/{agt}/offboard` | B | DC | agent |
+| `agents.rotate` | POST `/workspaces/{ws}/agents/{agt}/rotate` | B | DC | agent |
+| `agents.reinstate` | POST `/workspaces/{ws}/agents/{agt}/reinstate` | B | - (never in a draft) | agent |
+| `bridge_api.owner_draft_request` | POST `/bridge/owner-drafts/request` | brg | - | consent |
+| `bridge_api.owner_draft_get` | POST `/bridge/owner-drafts/get` | brg | - (body never logged) | consent |
+| `bridge_api.owner_draft_withdraw` | POST `/bridge/owner-drafts/withdraw` | brg | - | consent |
+
+- **App-created drafts.** The v0.1.82 text "holds exactly one step" now applies only to a draft from `bridge_api.workflow_grant_request`. A draft from `bridge_api.owner_draft_request` holds 1..100 steps of `OWNER_DRAFT_OPS`. `APP_DRAFT_OPS` (`routes.ts`) is the only source for both, checked at request and at apply; the two forms never mix. `draftable` stays boolean or `"app_only"`; `agents.pause`, `agents.offboard` and `agents.rotate` are `draftable: true`.
+- **Views.** `Draft.expiresAt`, `DraftCreatedByApp.appTitle`, `DraftCreatedByApp.planDigest`, `DraftCreatedByApp.replacesDraft`, `AgentCard.offboardedAt`: optional, absent on an older Core.
+- **Errors.** `owner_drafts_full` (409), `owner_drafts_unsupported` (409, standalone), `agent_offboarded` (409). `draft_state` (409) with `details.reason` "expired". `forbidden` (403) with `details.reason` "topology_consent".
+- **Config size.** `agents.offboard`, `agents.rotate`, and a draft apply that holds only `OWNER_DRAFT_OPS`, are kill-path ops: never refused by the size rule. They only remove.
+- **Consent text.** `topology` gains one sentence: this app can ask you to stop agents.

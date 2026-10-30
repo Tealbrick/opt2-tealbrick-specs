@@ -566,7 +566,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
   // v0.1.63 adds model_roles (BRIDGE §15); v0.1.64 (C326) adds person_ops (BRIDGE §16)
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents"]); // + hook_tool, secret_output (C336), hold_families (C354a), app_hold_status, app_call_context (C367), app_workflow_grants (C373) + hook_recipients (C373 G-6)
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents", "owner_drafts"]); // + hook_tool, secret_output (C336), hold_families (C354a), app_hold_status, app_call_context (C367), app_workflow_grants (C373) + hook_recipients (C373 G-6)
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {

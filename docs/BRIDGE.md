@@ -680,3 +680,17 @@ RM-2 resolve: declared + set → binding; undeclared → `role_not_declared`; un
    - Answer: `PolicyRecheckResponse`, or the normal refusal envelope. A hold answer is only a statement: the app creates a hold itself when it acts on it (SDK-API §19).
    - App-initiated bucket (C85). The call is logged.
 7. **Conformance.** Rows `B-ACT.*` in CONFORMANCE.md v0.1.88, gated by the cap.
+
+## v0.1.89 — owner drafts (C380, cap `owner_drafts`)
+
+- **Cap.** `BRIDGE_CAPS` gains `"owner_drafts"` (`OWNER_DRAFTS_CAP`). A bridge declares it only when it implements all of §8.8.
+- **Refuse codes (§8.4 gains):** `owner_drafts_unsupported` (409), `owner_drafts_full` (409, from Core).
+
+### 8.8 Owner drafts
+1. **Relays (internal listener, `TB-Assert` with `htm`, `htu`, `bd`).** Three routes. Each is forwarded to Core with the bridge assertion and `ins` = the instance that signed `TB-Assert`. A body field `ins` is refused `400 input_invalid`.
+   - `POST /tb/v1/owner-drafts` (`OwnerDraftRequestBody`) → `bridge_api.owner_draft_request` → `OwnerDraftStatus`.
+   - `POST /tb/v1/owner-drafts/get` (`OwnerDraftKeyBody`) → `bridge_api.owner_draft_get` → `OwnerDraftGetResult`.
+   - `POST /tb/v1/owner-drafts/withdraw` (`OwnerDraftKeyBody`) → `bridge_api.owner_draft_withdraw` → `OwnerDraftStatus`.
+2. **Checks before the forward:** a service caller → `401 unauthenticated`; config absent or expired → `503 config_expired`; a paused instance → `403 paused`; a draining bridge → `503 temporarily_unavailable` + `Retry-After`; an assertion that verifies only against a pending claim → `401 unauthenticated`. Bucket: the app-initiated bucket per caller instance (`429 rate_limited` + `Retry-After`).
+3. **Answers.** Core's status and envelope pass through unchanged, including `not_found` when Core's flag is off (no `details.pointer`). Portal unreachable or no answer within 15 s → `503 portal_unavailable`; no answer is invented. Standalone (§11) → `409 owner_drafts_unsupported`. The body of get is never logged.
+4. **The bridge decides nothing.** It does not read the steps, apply a draft or hold a key. Direct calls stop at an online bridge when the signed config shows the applied change.

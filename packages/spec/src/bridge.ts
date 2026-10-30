@@ -129,6 +129,10 @@ export type BridgeErrorCode =
   | "workflow_grants_unsupported"
   /** 409 from Core: the caller has WORKFLOW_GRANTS_MAX requested + applied records */
   | "workflow_grants_full"
+  /** v0.1.89 (C380): 409 on a standalone bridge: no Core, so no owner draft */
+  | "owner_drafts_unsupported"
+  /** v0.1.89 (C380): 409 from Core: the instance has OWNER_DRAFT_LIMITS.openMax open app drafts */
+  | "owner_drafts_full"
   /** 503: a workflow-grant relay got no answer from Core (Portal unreachable, or no answer within the json transport timeout) */
   | "portal_unavailable";
 
@@ -468,9 +472,10 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.86 (C373, G-6): + `hook_recipients` = for an `outward` call the bridge sets `HookCallInfo.target.recipients`
  *  (and `recipientsIncomplete`) from `Operation.recipients` (static op) or `DynamicResolution.recipients` (dynamic op) with the
  *  manifest package's `extractRecipients`, for agent and app callers, in every hook phase; values are never logged. */
-/** v0.1.88 (C378): + `acting_agents` = the bridge implements BRIDGE §8.7 in full: context `tb.acting`, `POST /tb/v1/acting-tickets`,
+/** v0.1.89 (C380): + `owner_drafts` = the bridge implements BRIDGE §8.8: the three relays to Core for an app's stop request.
+ *  v0.1.88 (C378): + `acting_agents` = the bridge implements BRIDGE §8.7 in full: context `tb.acting`, `POST /tb/v1/acting-tickets`,
  *  `CallEnvelope.acting`, `POST /tb/v1/policy-recheck`. Without it the SDK refuses those calls locally (`bridge_cap_missing`) and a policy app reads every app call as having no acting agent. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents"] as const;
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents", "owner_drafts"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -1234,6 +1239,52 @@ export interface WorkflowGrantGetBody {
 export interface WorkflowGrantReleaseBody {
   wfl: WorkflowId;
 }
+/** v0.1.89 (C380, BRIDGE §8.8): the ops an app may ask Core to put in an owner draft. It only stops: the owner approves in the
+ *  browser, and Core expands at apply. `routes.ts` APP_DRAFT_OPS = these + `companions.workflow_grant_set`. */
+export const OWNER_DRAFT_OPS = ["agents.pause", "agents.offboard", "agents.rotate"] as const;
+export type OwnerDraftOpId = (typeof OWNER_DRAFT_OPS)[number];
+/** v0.1.89: the cap name of owner drafts (one of BRIDGE_CAPS). */
+export const OWNER_DRAFTS_CAP = "owner_drafts" as const;
+/** v0.1.89: request limits (Core refuses more with 400 `validation_failed` + `details.pointer`) and open drafts per instance
+ *  (over `openMax` → 409 `owner_drafts_full`; over `perHour` → 429 `rate_limited`). */
+export const OWNER_DRAFT_LIMITS = { titleMaxChars: 120, stepsMax: 100, expiresInSecMin: 60, expiresInSecMax: 86400, openMax: 10, perHour: 30 } as const;
+/** v0.1.89: `key`, unique per (ins, key): one plan, or one numbered part of a split plan. */
+export const OWNER_DRAFT_KEY_PATTERN = "^pln_[A-Za-z0-9._:-]{1,124}$" as const;
+/** `POST /tb/v1/owner-drafts` body (app → bridge). The bridge relays it as `bridge_api.owner_draft_request` with `ins` = the
+ *  instance that signed `TB-Assert` (a body field `ins` is refused). */
+export interface OwnerDraftRequestBody {
+  key: string;
+  /** generic, e.g. "Governance: stop request": never a person or a reason. 1..120 chars, WORKFLOW_GRANT_TEXT_PATTERN. Core writes the headline. */
+  title: string;
+  /** the app's own digest of its plan; shown as "reported by the app", never the bound digest */
+  planDigest: Sha256Digest;
+  /** 60..86400 */
+  expiresInSec: number;
+  /** 1..100, in order; each (opId, agt) once; no other member */
+  steps: { opId: OwnerDraftOpId; agt: AgentId }[];
+}
+/** `POST /tb/v1/owner-drafts/get` and `/withdraw` body. A key of another instance → 404 `not_found`. */
+export interface OwnerDraftKeyBody {
+  key: string;
+}
+/** `DraftState`, or `expired` = `expiresAt` passed and the draft was not applied. */
+export type OwnerDraftState = "open" | "submitted" | "applying" | "applied" | "failed" | "rejected" | "expired";
+/** The answer of request and withdraw. `reviewUrl` = the Portal page where the owner approves. */
+export interface OwnerDraftStatus {
+  draftId: `drf_${string}`;
+  state: OwnerDraftState;
+  reviewUrl: string;
+}
+/** The answer of get. `output` of a step with status `ok`: `PauseState`, `AgentOffboardResult` or `AgentRotateResult` (routes.ts). */
+export interface OwnerDraftGetResult extends OwnerDraftStatus {
+  /** Core's bound digest of the stored steps (`DraftCreatedByApp.digest`) */
+  digest: Sha256Digest;
+  expiresAt: string;
+  steps: { n: number; opId: OwnerDraftOpId; agt: AgentId; status: "pending" | "ok" | "failed" | "skipped"; output?: unknown; error?: { code: string; message: string } }[];
+  /** null until the draft was applied */
+  receiptId: `rcp_${string}` | null;
+}
+
 /** State of one (caller instance, workflow) record. `none` = Core has no record. */
 export type WorkflowGrantState = "none" | "requested" | "applied" | "rejected" | "withdrawn";
 /** The answer of all three relays (and `ctx.workflowGrants.*`). */
@@ -1281,6 +1332,10 @@ export const BRIDGE_INTERNAL_PATHS = {
   workflowGrantRequest: "/tb/v1/workflow-grants/request",
   workflowGrantGet: "/tb/v1/workflow-grants/get",
   workflowGrantRelease: "/tb/v1/workflow-grants/release",
+  /** v0.1.89 (C380; BRIDGE §8.8): owner-draft relays to Core (TB-Assert; the bridge adds the verified instance) */
+  ownerDraftRequest: "/tb/v1/owner-drafts",
+  ownerDraftGet: "/tb/v1/owner-drafts/get",
+  ownerDraftWithdraw: "/tb/v1/owner-drafts/withdraw",
   /** v0.1.88 (C378; BRIDGE §8.7) */
   actingTickets: "/tb/v1/acting-tickets",
   policyRecheck: "/tb/v1/policy-recheck",

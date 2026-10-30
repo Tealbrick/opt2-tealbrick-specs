@@ -2,6 +2,9 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.89 (C380: `tb.access/1`, stop drafts, `agents.offboard`; spec 0.1.89)
+- New doc ACCESS.md (`tb.access/1`). New rows `agents.offboard`, `agents.rotate`, `agents.reinstate`, `bridge_api.owner_draft_request`, `_get`, `_withdraw`. `APP_DRAFT_OPS`. Bridge cap `owner_drafts`. Feed members `lifecycle`, `floor`. No manifest field, no standard op. Rules: CORE "v0.1.89" below.
+
 ## Changelog → v0.1.87 (C373, G-2: slice topology for display; spec 0.1.87)
 - Manifest `needsTopology?: boolean` (default false), next to `needsAgentDirectory`; M-TP-1: it requires `needsAgentDirectory: true` (MANIFEST §9; schema, `Manifest` type).
 - Slice `topology?: SliceTopology` in compact tuple form `{v: 1, instances, edges, companions, connections, truncated?}`, `TOPOLOGY_MAX` = 40 / 600 / 100 / 300, tuple aliases and the helpers `topologyCrudCode`, `topologyCrudActions`, `topologyHeldMask`, `topologyHeldFamilies` (instance-slice.schema.json, `bridge.ts`). Present only for a `needsTopology` app with the owner's `topology` consent; DISPLAY ONLY (bridge, SDK and apps never authorize with it). Rules: "v0.1.87" below (size: ELASTIC, rules 7–8).
@@ -351,6 +354,34 @@ Core creates `tb-views` (the bridge image with `TB_ROLE=views`, same digest as t
 
 ## v0.1.77 (C367 P3) — companion `tb.hold_status`
 - MANIFEST M-CP-3 lets a companion entry for one product list `tb.hold_status` next to an op of that product. Core's `companionErrors` calls the manifest package, so Core has no new rule. Core mints the op into that companion grant's `wf` like any declared op. CORE I4 is unchanged: a valid grant suffices, no CRUD check. SDK-API §4.7 says what the app caller sees.
+
+## v0.1.89 (C380) — stop drafts and offboard (Core)
+
+The app only asks. Only a person applies, in the browser. Governance has no approve button.
+
+- **Flag.** Env `TB_APP_DRAFTS` unset: all three `bridge_api.owner_draft_*` rows answer 404 `not_found` with no `details.pointer`, and no draft is created. For the app: a 404 with no `details.pointer` means the rail is off or Core is older, so it stays in Portal link mode.
+- **Request (`bridge_api.owner_draft_request`).** Refuse unless all hold:
+  1. The bridge is the workspace bridge; `ins` is an instance of that workspace, not removed and not paused (409 `conflict`, `details.reason` "paused").
+  2. `consentGranted(ins, "topology")` (403 `forbidden`, `details.reason` "topology_consent"). This is the D1 gate: Core keeps no product list, and no manifest field exists.
+  3. Each step's `opId` is in `OWNER_DRAFT_OPS` (400 `draft_op_not_draftable`, `details.pointer`). Each step has only `opId` and `agt`; each (opId, agt) once.
+  4. Each `agt` is an agent of this workspace (404 `not_found`, `details.pointer`; no other detail).
+  5. Limits `OWNER_DRAFT_LIMITS`, key `OWNER_DRAFT_KEY_PATTERN`, title `WORKFLOW_GRANT_TEXT_PATTERN` (400 `validation_failed`, `details.pointer`). Open drafts per instance over `openMax`: 409 `owner_drafts_full`; a draft counts as open in state `open` or `submitted` until its `expiresAt` has passed. Requests per hour over `perHour`: 429 `rate_limited`.
+- **From Core's row, never the body:** `product` and `name` in `DraftCreatedByApp`. `Draft.title` is Core's headline: "Stop N agents: Henry, Sales, …. To undo this you must pair each agent again and grant its access again." Core writes the step summaries from card names. The app's `title` goes only in `DraftCreatedByApp.appTitle`, shown below the headline, under "The app says", with no markdown.
+- **Bound digest.** `DraftCreatedByApp.digest` = `digestOf(steps)` over the stored steps `[{opId, input}]`, in order. Apply recomputes it and refuses a difference (`draft_invalid`). `planDigest` is the app's own, in its own field, shown as "reported by the app".
+- **Key, unique per (ins, key).** The key names the latest draft of that plan; a replaced row's key is cleared in the same transaction, so a plain unique index holds.
+  - Same steps: same answer, in any state. A new ask for the same steps after a reject or an expiry takes a new key.
+  - Other steps, draft `open` or `submitted`, not expired: that draft moves to `rejected`, the new draft takes the key, and `replacesDraft` names the old one.
+  - Other steps, draft `rejected`, `failed` or expired: the new draft takes the key, with no `replacesDraft`.
+  - Other steps, draft `applying` or `applied`: 409 `draft_state`.
+  - Get and withdraw of an unknown key, or a key of another instance: 404 `not_found`, `details.pointer` `/key`.
+- **Allow-list.** `APP_DRAFT_OPS` is the only source. Core checks it at request AND at apply, and never relaxes it to "any draftable row". A draft of `workflow_grant_request` holds exactly its one step; the two forms never mix.
+- **Apply.** `drafts.apply` needs K1 browser, the one apply confirmation, and one `LooseningItem` id per agent (`<n>:stop`) in `confirmLoosening`. Owner session or bridge: `forbidden`. `agents.offboard` has effect `destructive`. `drafts.update` → `draft_state`; `drafts.export` → `recipe_not_portable`. The receipt has `requested_by = app:<ins>`.
+- **Expiry.** `expires_at` = request time + `expiresInSec`. Checked inside the apply lock: 409 `draft_state`, `details.reason` "expired". The get answer then reads `expired`; `Draft.state` does not change, and `Draft.expiresAt` tells the GUI.
+- **Stuck apply.** A draft in `applying` for longer than the slow-transport bound moves to `failed`, at boot and at apply.
+- **`agents.offboard`.** One transaction: pause, revoke connections, revoke open pairing codes (K2b), soft-delete edges, set `offboarded_at`, `bumpConfig {killPath: true}`. A repeat is tolerated: zero counts, first `offboardedAt`. **`agents.rotate`.** One transaction: revoke connections and open codes; edges and card stay; `bumpConfig {killPath: true}`. Both tighten only, so the size rule never refuses them.
+- **`offboarded_at` guard.** While set, Core refuses with 409 `agent_offboarded` (`details.offboardedAt`): `agents.resume`, `edges.create`, an edge update that enables, `agents.pairing_code`, `pairing.approve`, a device approval for that agent, every new connection, and the same ops as draft steps. `agents.delete` still works.
+- **`agents.reinstate`.** Browser only, never in a draft. Until `AGENT_REINSTATE_WINDOW_SEC` after `offboarded_at`; later 409 `agent_offboarded`, `details.reason` "reinstate_window_closed". It clears `offboarded_at` and restores nothing.
+- **Proof for the app.** `owner_draft_get` gives step output with `configRevision`. Paused is read from `agents[].status` in the signed slice, with no consent. No name or reason of a person goes to Core.
 
 ## v0.1.87 (C373, G-2) — slice `topology` (display only; spec 0.1.87)
 Normative.
