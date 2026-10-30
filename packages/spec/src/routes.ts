@@ -464,7 +464,7 @@ export interface AgentOffboardResult { agt: AgentId; paused: true; removedEdges:
 /** v0.1.89 (C380): output of `agents.rotate`. One transaction: revoke connections and open pairing codes; edges and card stay. */
 export interface AgentRotateResult { agt: AgentId; revokedConnections: number; revokedCodes: number; configRevision: number }
 /** v0.1.89 (C380): output of `agents.reinstate`. It clears `offboarded_at` and restores nothing: the agent stays paused, with no edge and no connection. */
-export interface AgentReinstateResult { agt: AgentId; offboardedAt: null; paused: boolean; configRevision: number }
+export interface AgentReinstateResult { agt: AgentId; offboardedAt: null; paused: true; configRevision: number }
 /** v0.1.89 (C380): `agents.reinstate` works until this long after `offboarded_at`; later → 409 `agent_offboarded`. */
 export const AGENT_REINSTATE_WINDOW_SEC = 30 * 86400;
 export interface InstructionsInput { ws: WorkspaceId; agt: AgentId; harnessOptionId?: string }
@@ -1462,7 +1462,8 @@ export interface Draft {
 /** v0.1.41 (G3 R1, F126): one step that lowers protection: an owner approval turned off (card or apps-policy hold family),
  *  a cap raised or removed, a bound card set free or its workflow widened, a hook switched off, a grant that adds write
  *  access, an op-limited grant widened, a write connection switched on, a paused card resumed. Read-only access and
- *  tightening steps are never items. */
+ *  tightening steps are never items. v0.1.89 (C380): one exception, a step of a stop draft (`bridge_api.owner_draft_request`) is
+ *  one item per agent (`<n>:stop`, `subject` = the card name), so the owner ticks each agent an app asks to stop. */
 export interface LooseningItem {
   /** `<step n>:<setting key>`, stable for one draft revision */
   id: string;
@@ -1495,6 +1496,8 @@ export interface DraftCreatedByApp {
   /** the app's manifest name (display only) */
   name: string;
   digest: Digest;
+  /** v0.1.89: stop requests only: the app's `title`, shown under "The app says", no markdown. `Draft.title` is then Core's headline, never the app's text. */
+  appTitle?: string;
   /** v0.1.89: the app's own plan digest; stop requests only */
   planDigest?: Digest;
   /** v0.1.89: the open draft this one replaced on the same key: the page says "This replaces an earlier request" */

@@ -1245,8 +1245,6 @@ export const OWNER_DRAFT_OPS = ["agents.pause", "agents.offboard", "agents.rotat
 export type OwnerDraftOpId = (typeof OWNER_DRAFT_OPS)[number];
 /** v0.1.89: the cap name of owner drafts (one of BRIDGE_CAPS). */
 export const OWNER_DRAFTS_CAP = "owner_drafts" as const;
-/** v0.1.89: the relay paths on the internal listener: request, get, withdraw. */
-export const OWNER_DRAFTS_PATHS = { request: "/tb/v1/owner-drafts", get: "/tb/v1/owner-drafts/get", withdraw: "/tb/v1/owner-drafts/withdraw" } as const;
 /** v0.1.89: request limits (Core refuses more with 400 `validation_failed` + `details.pointer`) and open drafts per instance
  *  (over `openMax` → 409 `owner_drafts_full`; over `perHour` → 429 `rate_limited`). */
 export const OWNER_DRAFT_LIMITS = { titleMaxChars: 120, stepsMax: 100, expiresInSecMin: 60, expiresInSecMax: 86400, openMax: 10, perHour: 30 } as const;
@@ -1334,6 +1332,10 @@ export const BRIDGE_INTERNAL_PATHS = {
   workflowGrantRequest: "/tb/v1/workflow-grants/request",
   workflowGrantGet: "/tb/v1/workflow-grants/get",
   workflowGrantRelease: "/tb/v1/workflow-grants/release",
+  /** v0.1.89 (C380; BRIDGE §8.8): owner-draft relays to Core (TB-Assert; the bridge adds the verified instance) */
+  ownerDraftRequest: "/tb/v1/owner-drafts",
+  ownerDraftGet: "/tb/v1/owner-drafts/get",
+  ownerDraftWithdraw: "/tb/v1/owner-drafts/withdraw",
   /** v0.1.88 (C378; BRIDGE §8.7) */
   actingTickets: "/tb/v1/acting-tickets",
   policyRecheck: "/tb/v1/policy-recheck",

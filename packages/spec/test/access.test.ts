@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
-import { ACCESS_KINDS, ACCESS_OPS, ACCESS_REVOKE_ITEMS_MAX, type AccessItem, type AccessListOut, type AccessRevokeIn, FEED_ACCEPT_LIFECYCLE, FEED_LIFECYCLES } from "../src/access.ts";
-import { BRIDGE_CAPS, OWNER_DRAFT_KEY_PATTERN, OWNER_DRAFT_LIMITS, OWNER_DRAFT_OPS, OWNER_DRAFTS_CAP, OWNER_DRAFTS_PATHS, type OwnerDraftGetResult, type OwnerDraftRequestBody } from "../src/bridge.ts";
+import { ACCESS_KINDS, ACCESS_NOT_SHOWN, ACCESS_OPS, ACCESS_REVOKE_ITEMS_MAX, type AccessItem, type AccessListOut, type AccessRevokeIn, FEED_ACCEPT_LIFECYCLE, FEED_LIFECYCLES } from "../src/access.ts";
+import { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, OWNER_DRAFT_KEY_PATTERN, OWNER_DRAFT_LIMITS, OWNER_DRAFT_OPS, OWNER_DRAFTS_CAP, type OwnerDraftGetResult, type OwnerDraftRequestBody } from "../src/bridge.ts";
 import { CONTRACT_IDS } from "../src/manifest.ts";
 import { AGENT_REINSTATE_WINDOW_SEC, APP_DRAFT_OPS, type AppDraftOpId, AUDIT_ACTIONS, type DraftableOpId, ROUTES } from "../src/routes.ts";
 import type { OpContext } from "../src/sdk.ts";
@@ -126,6 +126,27 @@ test("v0.1.89: the kinds per target equal the schema enum; the op table is exact
   assert.equal(revoke.v, 1);
 });
 
+test("v0.1.89: revoke binds to the target's own row: subject, digest and the running check", () => {
+  const fx = json("examples/contracts/access.revoke_bind.1.json") as {
+    row: { id: string; subject: { kind: string; id: string }; digest: string };
+    cases: { name: string; request: { subject: { kind: string; id: string }; digest: string }; agents: Record<string, string>; outcome: string; code?: string }[];
+  };
+  assert.equal(fx.cases.length, 5);
+  const revoke = (c: (typeof fx.cases)[number]): { outcome: string; code?: string } => {
+    if (c.request.digest !== fx.row.digest) return { outcome: "changed" };
+    if (c.request.subject.kind !== fx.row.subject.kind || c.request.subject.id !== fx.row.subject.id) return { outcome: "changed" };
+    const status = c.agents[fx.row.subject.id];
+    if (status !== undefined && status !== "paused") return { outcome: "not_revocable", code: "agent_running" };
+    return { outcome: "revoked" };
+  };
+  for (const c of fx.cases) assert.deepEqual(revoke(c), c.code ? { outcome: c.outcome, code: c.code } : { outcome: c.outcome }, c.name);
+});
+
+test("v0.1.89: notShown names per target", () => {
+  assert.deepEqual(Object.keys(ACCESS_NOT_SHOWN), Object.keys(ACCESS_KINDS));
+  for (const names of Object.values(ACCESS_NOT_SHOWN)) assert.ok((names as readonly string[]).includes("held_calls"));
+});
+
 test("v0.1.89: feed lifecycle: the new schema takes all answers; the base schema still takes them (extras ignored)", () => {
   const schema = json("schemas/contracts/fleet.directory_feed.1.lifecycle.schema.json");
   const validate = ajv().compile(schema);
@@ -183,7 +204,9 @@ test("v0.1.89: APP_DRAFT_OPS is the only allow-list: exact, narrow, and every ot
 test("v0.1.89: bridge cap, paths, limits, key; wire shapes compile; the body has no ins", () => {
   assert.ok((BRIDGE_CAPS as readonly string[]).includes(OWNER_DRAFTS_CAP));
   assert.equal(OWNER_DRAFTS_CAP, "owner_drafts");
-  assert.equal(OWNER_DRAFTS_PATHS.request, "/tb/v1/owner-drafts");
+  assert.equal(BRIDGE_INTERNAL_PATHS.ownerDraftRequest, "/tb/v1/owner-drafts");
+  assert.equal(BRIDGE_INTERNAL_PATHS.ownerDraftGet, "/tb/v1/owner-drafts/get");
+  assert.equal(BRIDGE_INTERNAL_PATHS.ownerDraftWithdraw, "/tb/v1/owner-drafts/withdraw");
   assert.deepEqual(OWNER_DRAFT_LIMITS, { titleMaxChars: 120, stepsMax: 100, expiresInSecMin: 60, expiresInSecMax: 86400, openMax: 10, perHour: 30 });
   const key = new RegExp(OWNER_DRAFT_KEY_PATTERN);
   for (const ok of ["pln_1", "pln_01M66:2", `pln_${"a".repeat(124)}`]) assert.ok(key.test(ok), ok);

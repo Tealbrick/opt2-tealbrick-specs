@@ -657,7 +657,7 @@ Semantics are in CORE v0.1.82; wire types in `types/routes.ts` and `types/bridge
 | `bridge_api.owner_draft_withdraw` | POST `/bridge/owner-drafts/withdraw` | brg | - | consent |
 
 - **App-created drafts.** The v0.1.82 text "holds exactly one step" now applies only to a draft from `bridge_api.workflow_grant_request`. A draft from `bridge_api.owner_draft_request` holds 1..100 steps of `OWNER_DRAFT_OPS`. `APP_DRAFT_OPS` (`routes.ts`) is the only source for both, checked at request and at apply; the two forms never mix. `draftable` stays boolean or `"app_only"`; `agents.pause`, `agents.offboard` and `agents.rotate` are `draftable: true`.
-- **Views.** `Draft.expiresAt`, `DraftCreatedByApp.planDigest`, `DraftCreatedByApp.replacesDraft`, `AgentCard.offboardedAt`: optional, absent on an older Core.
+- **Views.** `Draft.expiresAt`, `DraftCreatedByApp.appTitle`, `DraftCreatedByApp.planDigest`, `DraftCreatedByApp.replacesDraft`, `AgentCard.offboardedAt`: optional, absent on an older Core.
 - **Errors.** `owner_drafts_full` (409), `owner_drafts_unsupported` (409, standalone), `agent_offboarded` (409). `draft_state` (409) with `details.reason` "expired". `forbidden` (403) with `details.reason` "topology_consent".
 - **Config size.** `agents.offboard`, `agents.rotate`, and a draft apply that holds only `OWNER_DRAFT_OPS`, are kill-path ops: never refused by the size rule. They only remove.
 - **Consent text.** `topology` gains one sentence: this app can ask you to stop agents.

@@ -80,6 +80,10 @@ interface RevokeOut { v: 1; asOf: string; results: { id: string;
 - **`label` and `detail`:** the schema checks the length only. Fleet runs `cleanText` on them and renders plain text.
 - **Guard refusal in Fleet's failure map.** `no_access` and `caller_unverified` on `access_*` = `not_read` ("Could not be read"). Never zero.
 - **Guard vector.** `examples/contracts/access.caller_vector.1.json`, 6 cases. `caller.listed` is `true` only for an app the current signed slice lists; `false` or absent is `caller_unverified`. A person caller gets the agent answer.
+- **Revoke binds to the target's own row.** For each item the target loads the row by `id` and recomputes the digest from its own row. It answers `changed` when the digest or the subject differs from the request. The S2-6 check reads the row's subject in the target's own signed slice, never the request's subject, so Fleet cannot name a paused agent to reach a running agent's item. A row with subject `unlinked`: `not_revocable`. Vector: `access.revoke_bind.1.json`.
+- **Digest `target`** is the target's product id (`connect`, `knowledge`, `kanban`, `evolution`).
+- **An item's subject is stable.** One item has one subject in every answer, so its digest does not depend on the query. Under `all`, a target that cannot tie a person-subject kind to a Governance id (for example `channel_sender`, which holds a handle) leaves those items out and lists the kind in `notShown`, reason "Listed per person". It never reports them as `unlinked`. So Fleet's full sweep is one `all` read plus named `person` subjects (32 per call), with one `sweepId`. The deletion rule then applies per subject: a kind in `notShown` of the answer that covered that subject is never deleted. This "per person" use of `notShown` is a stated limit, and it does not block a Close.
+- **`notShown` names** for what no version lists: `ACCESS_NOT_SHOWN` (`held_calls`, `scope_rows`, `project_access`).
 - **Item ids** start with `<kind>:` and use ASCII with no spaces. `public_link` is a reserved kind name: no target lists it, and using it needs a contract change.
 - **Batch.** `access_revoke` items: `ACCESS_REVOKE_ITEMS_MAX`. The schema allows 10. Connect refuses 6 or more with 400 `input_invalid`.
 - **Idempotency key.** `pln_<id>:<target>:<batch>:<attempt>` fits the key rule `^[A-Za-z0-9._:-]{8,128}$`: `plan` is `^pln_[0-9A-Za-z]{1,40}$`.
@@ -90,6 +94,7 @@ Schema: `fleet.directory_feed.1.lifecycle.schema.json` (the base schema + option
 
 - **`lifecycle`** on `agents[]` and person `contacts[]`: the effective lifecycle, computed by Governance, never stored (`FEED_LIFECYCLES`: `not_started, proposed, active, suspended, leaving, archived`). Absent on outside agents.
 - **`floor`** on `agents[]` and `contacts[]`: `true` when the effective lifecycle is `not_started, suspended, leaving` or `archived` (not migrated `no_card` rows), or trust is `blocked`.
+- **Revision.** A change of an effective lifecycle or a `floor` value bumps `revision`, including one that a date causes. So does the update to a Governance that first sends these members.
 - **A Governance that ignores `accept`** omits both, and the answer stays valid. A member with no `floor` is not an entry, but trust `blocked` still refuses as a recipient (DESIGN §9, Rules gate).
 - **`status`** is derived and does not change meaning: `departed` for `proposed`, `leaving`, `archived`. A lean agent view shows `departed` from `archived` only.
 - **Floor store.** A reader replaces its entries only in the same transaction as a full valid read. A refusal, an expiry, a crash or an `unchanged` answer never touches them.
@@ -108,4 +113,4 @@ Routes, cap and limits: PORTAL-API "v0.1.89", CORE "v0.1.89", BRIDGE §8.8, SDK-
 | `access.revoke_out.1.schema.json` | `b36b1c6474fc858daf93e2a4d9605067113937b984e8b26833fa13eae314d919` |
 | `fleet.directory_feed.1.lifecycle.schema.json` | `35ebfd9f49eebeebc3c84a0ea686ab4efb18503953599828bdfd94f76734695f` |
 
-Fixtures, same folder name under `examples/contracts/`: `access.list_in.1.json`, `access.list_out.1.json`, `access.revoke_in.1.json`, `access.revoke_out.1.json` (`valid`, `invalid` with `why`), `access.caller_vector.1.json`, `access.digest.1.json`, `fleet.directory_feed.1.lifecycle.json`.
+Fixtures, same folder name under `examples/contracts/`: `access.list_in.1.json`, `access.list_out.1.json`, `access.revoke_in.1.json`, `access.revoke_out.1.json` (`valid`, `invalid` with `why`), `access.caller_vector.1.json`, `access.digest.1.json`, `access.revoke_bind.1.json`, `fleet.directory_feed.1.lifecycle.json`.

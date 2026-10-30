@@ -22,6 +22,14 @@ export const ACCESS_KINDS = {
 export type AccessTarget = keyof typeof ACCESS_KINDS;
 export type AccessKind = (typeof ACCESS_KINDS)[AccessTarget][number];
 
+/** `notShown[].kind` for what no version lists per target (a stated limit; it does not block a Close). A kind from ACCESS_KINDS there = listed per person (ACCESS.md). */
+export const ACCESS_NOT_SHOWN = {
+  connect: ["held_calls"],
+  knowledge: ["scope_rows", "held_calls"],
+  kanban: ["project_access", "held_calls"],
+  evolution: ["held_calls"],
+} as const;
+
 export const ACCESS_LIST_LIMITS = { subjectsMax: 32, handlesMax: 16, limitMax: 200, limitDefault: 100, sweepIdMaxChars: 64, cursorMaxChars: 512, sweepPagesMax: 50 } as const;
 /** Items per `access_revoke`; above it the target answers 400 `input_invalid`. */
 export const ACCESS_REVOKE_ITEMS_MAX = { connect: 5, knowledge: 10, evolution: 10 } as const;
