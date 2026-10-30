@@ -41,7 +41,7 @@ A connection belongs to exactly one agent; an agent has 0..n connections; a sess
 | agent refresh token (K5) | `tbr_` | bridge |
 | OAuth authorization code (K5 issuance step) | `tbac_` | bridge |
 
-## 4. Credential registry (15 kinds = K1–K14 + K2b; v0.1.58 adds K13 host key; v0.1.64 adds K14 relayed person op)
+## 4. Credential registry (16 kinds = K1–K15 + K2b; v0.1.58 adds K13 host key; v0.1.64 adds K14 relayed person op; v0.1.88 adds K15 acting ticket)
 Max lifetime is enforced by every verifier (`exp − iat`). "Digest" = SHA-256 at the issuer; "sealed" = AES-256-GCM under a KEK (§9).
 | # | Kind / `typ` | Issuer key → holder | Storage | Lifetime (max) | Audience rule | Verifier (key) | Revocation (mechanism → speed) | Pause |
 |---|---|---|---|---|---|---|---|---|
@@ -59,6 +59,7 @@ Max lifetime is enforced by every verifier (`exp − iat`). "Digest" = SHA-256 a
 | K11 | person ticket `tb-ticket+jwt` (`pur: launch \| keys`) | K12 (standalone: bridge key) → browser of a K1 person (never via K3) | not stored by holder; `jti` used-set: app DB (`launch`), bridge volume (`keys`) | launch 60 s; keys 120 s; one-time | `launch`: `aud = tb:ins:<target>`; `keys`: `aud = tb:brg:<id>` | app SDK (`launch`) / bridge key page (`keys`) (Portal key set) | not re-issuable after use; app UI session ends by `personNbf` (§12) | not paused (owner access by design, §13) |
 | K12 | Portal signing key (Ed25519) | Core → Core | private sealed in Core DB (`TB_KEK`); public in config, slices, `TB_PORTAL_KEYS` | planned rotation 90 d | — | — | rotation / compromise procedure §9 | n/a |
 | K14 | relayed person op `tb-person-op+jwt` (v0.1.64, C326) | K12 (Portal only) → workspace bridge (relay, in memory) → target app | Core: sealed until the row ends; app: `jti` used-set | 10 s; one-time | `aud = tb:ins:<target>`, allow-listed (product, op); writes only for `cli: tbm` | app SDK `POST /tb/v1/person-op` (Portal keys only) | one-time; not minted for a revoked or idle-expired K3 | not paused (owner access by design, like K11) |
+| K15 | acting ticket `tb-act+jwt` (v0.1.88, C378) | bridge identity key → the app it names, for one job | app database with the job | 30 d | a fact for hooks, never access; BRIDGE §8.7 |
 
 No purpose has two kinds: human at Portal = K1; human at CLI/TBD = K3; device pairing = K2; harness OAuth pairing = K2b; agent calls = K5; one-time registration = K6; agent→app and app→app = K10; person into app/key page = K11; configuration = K9; native owner person op through the relay = K14 (v0.1.64).
 
