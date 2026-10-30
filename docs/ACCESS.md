@@ -95,7 +95,8 @@ Schema: `fleet.directory_feed.1.lifecycle.schema.json` (the base schema + option
 - **`lifecycle`** on `agents[]` and person `contacts[]`: the effective lifecycle, computed by Governance, never stored (`FEED_LIFECYCLES`: `not_started, proposed, active, suspended, leaving, archived`). Absent on outside agents.
 - **`floor`** on `agents[]` and `contacts[]`: `true` when the effective lifecycle is `not_started, suspended, leaving` or `archived` (not migrated `no_card` rows), or trust is `blocked`.
 - **Revision.** A change of an effective lifecycle or a `floor` value bumps `revision`, including one that a date causes. So does the update to a Governance that first sends these members.
-- **A Governance that ignores `accept`** omits both, and the answer stays valid. A member with no `floor` is not an entry, but trust `blocked` still refuses as a recipient (DESIGN §9, Rules gate).
+- **A Governance that ignores `accept`** omits both, and the answer stays valid. A reader may refuse more, never less: on a member with no `floor`, Rules treats trust `blocked` and a `departed` contact as entries.
+- **An entry leaves the floor** only when a full valid read no longer marks it. So Governance keeps archived rows in the feed with `floor: true`.
 - **`status`** is derived and does not change meaning: `departed` for `proposed`, `leaving`, `archived`. A lean agent view shows `departed` from `archived` only.
 - **Floor store.** A reader replaces its entries only in the same transaction as a full valid read. A refusal, an expiry, a crash or an `unchanged` answer never touches them.
 
