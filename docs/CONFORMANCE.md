@@ -430,3 +430,11 @@ Gated by the bridge's reported cap `acting_agents`, never by version; a bridge w
   - `B-ACT.recheck_verdicts`: before hook allow → `{decision: "allow"}`; hold → `{decision: "hold", family, reason, by}`; refuse → `hook_denied`. Hook sees `tb.recheck: true`. X's op handler is not called and X writes no hold or receipt.
   - `B-ACT.recheck_own_only`: a body with a target field → `input_invalid`; an op of another app, a person op, a dynamic op → `unknown_tool`; a caller with no grant → `no_grant`.
   - `B-ACT.recheck_no_context_after`: context and after hooks are not called.
+
+## v0.1.89 rows (C380, owner drafts and `tb.access/1`)
+Gated by the bridge's reported cap `owner_drafts`, never by version; a bridge without it skips the group (noted, not failed). The conformance package does not change for spec 0.1.89: a target checks `tb.access/1` with its own tests from the fixtures in ACCESS.md.
+- B-OD (bridge, BRIDGE §8.8).
+  - `B-OD.relay`: an app's request, get and withdraw reach the fake Portal with `ins` = the asserting instance; the answer passes through unchanged.
+  - `B-OD.ins_in_body`: a body field `ins` → `400 input_invalid`, nothing forwarded.
+  - `B-OD.refused_callers`: a service caller → `401`; a paused instance → `403 paused`.
+  - `B-OD.no_portal`: no answer in 15 s → `503 portal_unavailable`. Standalone → `409 owner_drafts_unsupported`.

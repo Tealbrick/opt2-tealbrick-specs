@@ -35,7 +35,7 @@ Use it: install by release URL (no npm registry) from the dist host, and add its
 | Path | Purpose |
 |---|---|
 | `docs/CORE.md` | Ids, audience format, crypto, trust chain, 13 credential kinds, the grant, `authorize()`, hook envelope, versioning |
-| `docs/MANIFEST.md`, `BRIDGE.md`, `CREDENTIALS.md`, `PORTAL-API.md`, `SDK-API.md`, `CLI.md`, `CONFORMANCE.md`, `REPOS.md` | Topic specs |
+| `docs/ACCESS.md`, `MANIFEST.md`, `BRIDGE.md`, `CREDENTIALS.md`, `PORTAL-API.md`, `SDK-API.md`, `CLI.md`, `CONFORMANCE.md`, `REPOS.md` | Topic specs |
 | `docs/REQUESTS.md` | Append-only spec change requests |
 | `docs/FROZEN` | Freeze marker and change rule |
 | `packages/spec/src/routes.ts` | `ROUTES` (105 rows), error codes, rate classes, transports, audit actions |

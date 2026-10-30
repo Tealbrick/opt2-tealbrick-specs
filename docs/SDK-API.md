@@ -660,3 +660,7 @@ An app that runs owner-defined workflows (Evolution) can limit each workflow to 
 - **`ctx.callApp(product, op, input, { acting: { job, tickets } })`** presents them. Without the cap: `bridge_cap_missing`. A refusal `acting_ticket_invalid` ends the job; the app does not retry the call without the ticket.
 - **`ctx.policyRecheck({ op, input, caller })`** asks the bridge whether a call to this app's own op would pass now. It writes nothing. Timers and event handlers may call it.
 - **§19 SPEC-GAP closed.** `fireScheduledOp` calls the recheck before `authorize()`, when the cap is visible. Refusal: `refused` with that code. Hold: passed to `authorize()` as `holdVerdict`; the existing hold, wait and resume path runs. Allow: as before. Without the cap: as before.
+
+## v0.1.89 — owner drafts (C380; BRIDGE §8.8; cap `owner_drafts`)
+- **`ctx.ownerDrafts.request(body)`, `.get(key)`, `.withdraw(key)`** (`OwnerDraftsApi`; op, start and event contexts). The app only asks; the owner approves in Portal. Without the cap: `bridge_cap_missing` (409, `details.cap`) before any network call. Core's refusals surface as `TbError` with Core's code.
+- **`tb.access/1`** (ACCESS.md) uses normal ops and needs no SDK change: guard on `ctx.caller.type`, `ctx.caller.product`, `ctx.caller.listed`.

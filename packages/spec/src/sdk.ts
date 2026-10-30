@@ -20,6 +20,9 @@ import type {
   OnBehalfOfContext,
   OpCallBody,
   OpResult,
+  OwnerDraftGetResult,
+  OwnerDraftRequestBody,
+  OwnerDraftStatus,
   PreUpdateSnapshotRef,
   SchemaVersion,
   ScopeSourceItem,
@@ -435,6 +438,16 @@ export interface WorkflowGrantsApi {
   release(wfl: WorkflowId): Promise<WorkflowGrantStatus>;
 }
 
+/** v0.1.89 (C380, SDK-API "v0.1.89"): `ctx.ownerDrafts`. Every method throws `bridge_cap_missing` (409, `details.cap: "owner_drafts"`)
+ *  before any network call when `ctx.bridgeCaps()` lacks the cap; Core refusals surface as TbError with Core's code. The app only asks. */
+export interface OwnerDraftsApi {
+  /** Same key and same steps: same answer. Same key and other steps: the open draft is rejected and replaced. */
+  request(body: OwnerDraftRequestBody): Promise<OwnerDraftStatus>;
+  get(key: string): Promise<OwnerDraftGetResult>;
+  /** Rejects the open draft of this key. Applied or applying: 409 `draft_state`. */
+  withdraw(key: string): Promise<OwnerDraftStatus>;
+}
+
 export interface OpContext {
   caller: Caller;
   /** null for person calls */
@@ -452,6 +465,8 @@ export interface OpContext {
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
   /** v0.1.82 (C373, P1): optional in this type (hand-built contexts); SDKs that implement SDK-API §22 always set it */
   workflowGrants?: WorkflowGrantsApi;
+  /** v0.1.89 (C380, cap `owner_drafts`, SDK-API "v0.1.89"): ask the owner to approve a stop. */
+  ownerDrafts?: OwnerDraftsApi;
   callServiceHelper<O = Json>(serviceId: string, path: string, body: Json): Promise<O>;
   db: Db;
   log: Logger;
@@ -520,6 +535,8 @@ export interface StartContext {
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
   /** v0.1.82 (C373, P1): as OpContext.workflowGrants */
   workflowGrants?: WorkflowGrantsApi;
+  /** v0.1.89 (C380): as OpContext.ownerDrafts */
+  ownerDrafts?: OwnerDraftsApi;
   /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
    *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
   bridgeCaps?: () => readonly string[];
@@ -542,6 +559,8 @@ export interface EventContext {
   callApp<O = Json>(product: string, op: string, input: Json, opts?: CallAppOptions): Promise<CompanionResult<O>>;
   /** v0.1.82 (C373, P1): as OpContext.workflowGrants */
   workflowGrants?: WorkflowGrantsApi;
+  /** v0.1.89 (C380): as OpContext.ownerDrafts */
+  ownerDrafts?: OwnerDraftsApi;
   /** v0.1.77 (C367, QA-SPEC58-1): the same as `OpContext.bridgeCaps` (slice `bridge.caps`; [] when absent or expired), so an app can
    *  check `app_call_context` / `app_hold_status` before an app-initiated `callApp`. Optional in this type (hand-built contexts). */
   bridgeCaps?: () => readonly string[];

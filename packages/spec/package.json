@@ -1,6 +1,6 @@
 {
   "name": "@opt2-tealbrick/spec",
-  "version": "0.1.88",
+  "version": "0.1.89",
   "private": true,
   "description": "Teal Brick opt2 frozen interface contract: JSON Schemas, TypeScript types, route table, vocabularies (data only).",
   "license": "SEE LICENSE IN LICENSE",
@@ -12,6 +12,7 @@
     "./bridge": { "types": "./dist/bridge.d.ts", "default": "./dist/bridge.js" },
     "./routes": { "types": "./dist/routes.d.ts", "default": "./dist/routes.js" },
     "./sdk": { "types": "./dist/sdk.d.ts", "default": "./dist/sdk.js" },
+    "./access": { "types": "./dist/access.d.ts", "default": "./dist/access.js" },
     "./admin": { "types": "./dist/admin.d.ts", "default": "./dist/admin.js" },
     "./host": { "types": "./dist/host.d.ts", "default": "./dist/host.js" },
     "./models": { "types": "./dist/models.d.ts", "default": "./dist/models.js" },
