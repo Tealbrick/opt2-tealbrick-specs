@@ -111,6 +111,10 @@ export type BridgeErrorCode =
   | "internal_url_refused"
   /** v0.1.57 (C274c/C274d): per-item refusals of `POST /tb/v1/events` (EventIngestResult) and the events methods (BRIDGE §14) */
   | EventRefuseCode
+  /** v0.1.88 (C378, BRIDGE §8.7): 403: a ticket in `CallEnvelope.acting` fails a check (`details.reason`). The call does not run; there is no fallback to "no agent". */
+  | "acting_ticket_invalid"
+  /** v0.1.88: 403 on `POST /tb/v1/acting-tickets`: no open call of an agent delivered to this instance as target */
+  | "acting_call_invalid"
   /** v0.1.82 (C373, P1; BRIDGE §8.6): per-workflow companion grants. 403: the grant's `wfl` ≠ `CallEnvelope.workflow` (also when
    *  the envelope names none) */
   | "workflow_mismatch"
@@ -464,7 +468,9 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.86 (C373, G-6): + `hook_recipients` = for an `outward` call the bridge sets `HookCallInfo.target.recipients`
  *  (and `recipientsIncomplete`) from `Operation.recipients` (static op) or `DynamicResolution.recipients` (dynamic op) with the
  *  manifest package's `extractRecipients`, for agent and app callers, in every hook phase; values are never logged. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients"] as const;
+/** v0.1.88 (C378): + `acting_agents` = the bridge implements BRIDGE §8.7 in full: context `tb.acting`, `POST /tb/v1/acting-tickets`,
+ *  `CallEnvelope.acting`, `POST /tb/v1/policy-recheck`. Without it the SDK refuses those calls locally (`bridge_cap_missing`) and a policy app reads every app call as having no acting agent. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -1102,6 +1108,8 @@ export interface CallEnvelope<I = JsonValue> {
    *  for. MUST equal the presented grant's `wfl` (`workflow_mismatch`); with a grant that has no `wfl` → `workflow_grant_required`.
    *  Unlike `context`, it is gate-relevant; `context` stays informational. */
   workflow?: WorkflowId;
+  /** v0.1.88 (C378; cap `acting_agents`, BRIDGE §8.7): tickets of the agents this call acts for, on one durable job. */
+  acting?: ActingEnvelope;
 }
 
 // ── Caller context on app-initiated calls (v0.1.77, C367 P4) ────────────────
@@ -1143,6 +1151,52 @@ export interface OnBehalfOfContext {
   verified: false;
   via: "mcp_meta";
 }
+/** v0.1.88: `CallEnvelope.acting`. `tickets`: 1..ACTING_AGENTS_MAX K15 compact JWS, each with `job` equal to this `job`. */
+export interface ActingEnvelope {
+  job: string;
+  tickets: CompactJws[];
+}
+/** v0.1.88 (C378): the most agents one call can act for (tickets and the parent chain together; above it `acting_ticket_invalid`). */
+export const ACTING_AGENTS_MAX = 4;
+/** v0.1.88: a job id: opaque to the bridge, chosen by the app, one durable job (an engine run, a scheduled row). */
+export const ACTING_JOB_PATTERN = "^[A-Za-z0-9_.:-]{1,128}$";
+/** v0.1.88 (C378, BRIDGE §8.7): context key `tb.acting`, written only by the bridge. Verified, and NARROW ONLY for every reader:
+ *  a hook or an app may refuse or hold on it, and never allow more because of it. */
+export interface ActingContext {
+  v: 1;
+  /** 1..ACTING_AGENTS_MAX, distinct */
+  agents: ActingAgent[];
+}
+export interface ActingAgent {
+  id: AgentId;
+  /** `parent_call` = the bridge's own open-call table; `ticket` = a K15 it signed earlier */
+  via: "parent_call" | "ticket";
+  /** only with `via: "ticket"` */
+  job?: string;
+}
+/** v0.1.88: context key `tb.recheck: true` on a before hook of `POST /tb/v1/policy-recheck`. */
+export const RECHECK_CONTEXT_KEY = "tb.recheck" as const;
+/** `POST /tb/v1/acting-tickets` body. */
+export interface ActingTicketRequest {
+  /** an open call delivered to the asserting instance as target, whose caller is an agent or which carries `tb.acting` */
+  call: CallId;
+  job: string;
+}
+/** One ticket per agent of that call. */
+export interface ActingTicketResponse {
+  tickets: CompactJws[];
+}
+/** `POST /tb/v1/policy-recheck` body. No target field: the target is always the asserting instance. */
+export interface PolicyRecheckRequest {
+  /** a non-dynamic, agent-audience manifest op of the asserting instance */
+  op: SnakeId;
+  input: JsonValue;
+  /** an agent with a live grant to this instance, or an app with a live companion grant to it; else `no_grant` */
+  caller: { type: "agent"; id: AgentId } | { type: "app"; id: InstanceId };
+}
+/** 200 answer. A refusal is the normal error envelope (`hook_denied`, `paused`, `no_grant`, `hook_failed`). */
+export type PolicyRecheckResponse = { decision: "allow" } | { decision: "hold"; family: string; reason: string; by: string };
+
 export type CompanionCallResponse<O = JsonValue> = OpResult<O> | ErrorEnvelope;
 
 // ── Per-workflow companion grants (v0.1.82, C373 P1; BRIDGE §8.6, CORE v0.1.82, SDK-API §22) ────────────────────
@@ -1227,6 +1281,9 @@ export const BRIDGE_INTERNAL_PATHS = {
   workflowGrantRequest: "/tb/v1/workflow-grants/request",
   workflowGrantGet: "/tb/v1/workflow-grants/get",
   workflowGrantRelease: "/tb/v1/workflow-grants/release",
+  /** v0.1.88 (C378; BRIDGE §8.7) */
+  actingTickets: "/tb/v1/acting-tickets",
+  policyRecheck: "/tb/v1/policy-recheck",
   metrics: "/metrics",
 } as const;
 export const SDK_PATHS_CALLED_BY_BRIDGE = {

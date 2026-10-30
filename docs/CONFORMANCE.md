@@ -414,3 +414,19 @@ Gated by the bridge's reported cap `hook_recipients`, never by version. A bridge
 - `B34.known_none`: `send {to: []}` → `[]`.
 - `B34.incomplete`: `send {to: ["Name <a@example.com>"]}`, `{to: 42}`, `{to: "telegram:123"}` → `recipientsIncomplete: true`, the bad value not listed; 65 distinct addresses → 64 listed and `recipientsIncomplete: true`.
 - `B34.absent`: the read op, `post` (no places) → no `recipients` member. No value appears in any bridge log line.
+
+## v0.1.88 rows (C378, acting agents and the policy recheck)
+Gated by the bridge's reported cap `acting_agents`, never by version; a bridge without it skips the group (noted, not failed).
+- B-ACT (bridge, BRIDGE §8.7).
+  - `B-ACT.parent_agent`: agent A calls X; X's handler calls Y with `parentCall` → Y's context `tb.acting.agents` = `[{id: A, via: "parent_call"}]`, covered by `ctx`.
+  - `B-ACT.parent_chain`: A → X → Y → Z: Z sees A. The parent's `tb.onBehalfOf` reaches Y.
+  - `B-ACT.no_parent`: X calls Y from a timer → no `tb.acting`.
+  - `B-ACT.hook_app_inherits_nothing`: hook app H names the open call as `parentCall` → no `tb.acting`; `POST acting-tickets` by H for that call → `acting_call_invalid`.
+  - `B-ACT.reserved`: a caller context key `tb.acting` → `input_invalid`; a context hook adding it → `hook_failed`.
+  - `B-ACT.mint`: during A's call X mints a ticket: `typ` `tb-act+jwt`, `sub` A, `aud` X, `call`, `op`, `job`, `exp − iat` = 30 d. After the call ended → `acting_call_invalid`. A call by an app with no acting agent → `acting_call_invalid`.
+  - `B-ACT.use`: from a timer X sends the ticket → Y sees `{id: A, via: "ticket", job}`.
+  - `B-ACT.refused`: each → 403 `acting_ticket_invalid`, Y not called: another instance presents it; `job` differs; expired; tampered; `typ` differs; A left the config; 5 agents.
+  - `B-ACT.no_access`: a ticket does not change the grant: an op outside `wf` stays `not_in_workflow`.
+  - `B-ACT.recheck_verdicts`: before hook allow → `{decision: "allow"}`; hold → `{decision: "hold", family, reason, by}`; refuse → `hook_denied`. Hook sees `tb.recheck: true`. X's op handler is not called and X writes no hold or receipt.
+  - `B-ACT.recheck_own_only`: a body with a target field → `input_invalid`; an op of another app, a person op, a dynamic op → `unknown_tool`; a caller with no grant → `no_grant`.
+  - `B-ACT.recheck_no_context_after`: context and after hooks are not called.

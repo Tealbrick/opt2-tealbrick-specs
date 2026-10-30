@@ -37,7 +37,7 @@ export const CALLER_TYPES = ["person", "agent", "app", "bridge", "portal", "host
 export type CallerType = (typeof CALLER_TYPES)[number];
 
 /** v0.1.64 (C326, C332): K14 = relayed person op (Core-minted on the authority of an allow-listed K3 call; PORTAL-API "v0.1.64" B). */
-export const CREDENTIAL_KINDS = ["K1", "K2", "K2b", "K3", "K4", "K5", "K6", "K7", "K8", "K9", "K10", "K11", "K12", "K13", "K14"] as const;
+export const CREDENTIAL_KINDS = ["K1", "K2", "K2b", "K3", "K4", "K5", "K6", "K7", "K8", "K9", "K10", "K11", "K12", "K13", "K14", "K15"] as const;
 export type CredentialKindId = (typeof CREDENTIAL_KINDS)[number];
 
 // ── JOSE `typ` values: one per token kind / proof; every endpoint accepts exactly one ──
@@ -66,6 +66,8 @@ export const TYP = {
   hostPlan: "tb-host-plan+jws",
   /** v0.1.64 (C326): relayed person op (K14), accepted only by the app SDK on `POST /tb/v1/person-op` (SDK-API §21). */
   personOp: "tb-person-op+jwt",
+  /** v0.1.88 (C378): acting ticket (K15), accepted only by the bridge in `CallEnvelope.acting` (BRIDGE §8.7). */
+  actingTicket: "tb-act+jwt",
 } as const;
 export type Typ = (typeof TYP)[keyof typeof TYP];
 
@@ -99,6 +101,8 @@ export const LIFETIME_S = {
   /** v0.1.64 (C326): K14 relayed person op, exp − iat. > queueTtlS + bridgeForwardS, and exp + PERSON_OP_RELAY.expLeewayS ≤ Core's
    *  answer deadline (coreWaitS): the app never runs a K14 after Core answered the caller (QA S3). */
   personOp: 10,
+  /** v0.1.88 (C378): K15 acting ticket, exp − iat (30 d). */
+  actingTicket: 30 * 86400,
   agentAccess: 900,
   agentRefreshSliding: 30 * 86400,
   /** previous refresh token accepted once within this window (CORE I12) */
@@ -490,6 +494,8 @@ export type Storage =
   | "holder_sealed_volume"
   /** v0.1.58 (S1-0): a root-only (0600) file on the customer server, outside every container (K13) */
   | "holder_host_file"
+  /** v0.1.88 (C378): the app's own database, next to the job it belongs to (K15) */
+  | "holder_app_db"
   | "verifier_jti_set"
   | "none";
 export type Form = "external_jwt" | "opaque" | "jwt" | "jws" | "key_pair";
@@ -671,7 +677,31 @@ export const CREDENTIAL_REGISTRY = [
     acceptedAt: ["app private network POST /tb/v1/person-op (header TB-Person-Op), forwarded only by the workspace bridge"],
     revocation: "one-time; not minted for a revoked or idle-expired K3", revocationLatency: "n/a (≤ 60 s life)", pause: "not paused (owner access by design, like K11)",
   },
+  {
+    id: "K15", name: "acting ticket (v0.1.88, C378)", form: "jwt", typ: TYP.actingTicket, prefix: null,
+    issuer: "bridge", issuerKey: "bridge identity key", holder: "app", holderDetail: "the app it was minted for, in its own database with the one job it belongs to; never logged, never in Temporal payloads",
+    storage: ["holder_app_db"], maxLifetimeS: 30 * 86400, oneTime: false,
+    audienceRule: "iss = sub of the bridge's own key; aud = tb:ins:<the app>; sub = tb:agt:<the agent of the open call>",
+    verifier: "the workspace bridge on POST /tb/v1/call (CallEnvelope.acting)",
+    checks: ["signature by this bridge's key", "typ", "exp", "aud = the asserting instance", "job = CallEnvelope.acting.job", "sub is an agent in the current config"],
+    acceptedAt: ["bridge internal POST /tb/v1/call, field acting.tickets"],
+    revocation: "none: the agent leaving the config refuses it at the next use; a block or a rule applies at each use", revocationLatency: "next config", pause: "paused with the app (the companion path refuses)",
+  },
 ] as const satisfies readonly CredentialRegistryRow[];
+
+/**
+ * v0.1.88 (C378, BRIDGE §8.7): K15 acting ticket. The bridge signs it only while a call from agent `sub` is open and was delivered to
+ * instance `aud` as its target. The app keeps it for one durable job and presents it in `CallEnvelope.acting`. A fact, never access: it
+ * lets a deny or a hold match that agent; it never satisfies an allow and it never changes a grant.
+ */
+export interface ActingTicketClaims extends BaseClaims<BridgeRef, AgentRef, InstanceRef> {
+  /** the open call it was minted in */
+  call: CallId;
+  /** the op of that call */
+  op: string;
+  /** the durable job it is for (ACTING_JOB_PATTERN, chosen by the app); the envelope must name the same job */
+  job: string;
+}
 
 /** v0.1.1 (C30): claims of the signed release index JWS. Closed set. The JWS signs `indexDigest` = digest(index body), so it stays < MAX_JWS_BYTES. */
 export interface ReleaseIndexClaims {

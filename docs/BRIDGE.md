@@ -662,3 +662,21 @@ RM-2 resolve: declared + set → binding; undeclared → `role_not_declared`; un
 - **Known gap.** Connect's per-account services (`channel_*` tools that post as the connected account itself) have no recipient handle of these kinds; their resolutions name no places, so the recipients are unknown and recipient policies fail closed. A future `kind: "account"` needs its own contract pass.
 - **Logs.** The values are never logged and never in a status report (they are personal data like the input); a call log line keeps ids, codes and the input digest only. Hooks see them like the input.
 - **Conformance.** `B34.*` rows in CONFORMANCE.md (unreleased).
+
+## v0.1.88 — acting agents and the policy recheck (C378, cap `acting_agents`)
+
+- **Cap.** `BRIDGE_CAPS` gains `"acting_agents"`. A bridge declares it only when it implements all of §8.7.
+- **Refuse codes (§8.4 gains):** `acting_ticket_invalid` (403, `details.reason`), `acting_call_invalid` (403).
+
+### 8.7 Acting agents and the policy recheck
+1. **`tb.acting`.** The bridge writes the reserved context key `tb.acting` (`ActingContext`) on a companion call that acts for an agent, before the before-hook chain, like `tb.onBehalfOf`. Absent = no acting agent: the app's own work. Hooks and the target app see it, and `ctx` in the op proof covers it. A caller context key or a hook can never write it (§8.5).
+2. **Narrow only.** Every reader, hook or app, may refuse or hold on `tb.acting`. No reader allows more because of it. It is not an input to the gate, a grant check or the held families.
+3. **Source `parent_call`.** On a companion call with a valid `parentCall` (§8.3 A2A-2): when the parent's caller is an agent, or the parent carries `tb.acting`, the call inherits those agents, and the parent's `tb.onBehalfOf`. Only when the asserting instance is the parent's TARGET: a hook app that the call was delivered to inherits nothing.
+4. **Source `ticket`.** `POST /tb/v1/acting-tickets` (`ActingTicketRequest`, internal listener, `TB-Assert` with `bd`, app instance only). The call must be open, delivered to the asserting instance as target, not in a hook, and act for at least one agent; else `403 acting_call_invalid`. Answer: one K15 per agent (CREDENTIALS K15), `job` as given (`ACTING_JOB_PATTERN`, else `400 input_invalid`). Companion-call bucket (C85).
+5. **Use of a ticket.** `CallEnvelope.acting` on `POST /tb/v1/call`. Before the gate: the `job` pattern, 1..`ACTING_AGENTS_MAX` tickets, and each ticket: signature with this bridge's key set, `typ`, `exp`, `aud` = the asserting instance, `job` = the envelope's `job`, `sub` an agent in the current config. Any failure: `403 acting_ticket_invalid`, the call does not run, and there is no fallback to no agent. Agents from tickets and the parent chain merge, distinct; more than `ACTING_AGENTS_MAX` is refused the same way. The log line of the call adds the agents and the job, never a ticket.
+6. **`POST /tb/v1/policy-recheck`** (`PolicyRecheckRequest`, internal listener, `TB-Assert` with `bd`, app instance only). The target is always the asserting instance; the body has no target field. `op` must be a non-dynamic, agent-audience manifest op of that instance, else `404 unknown_tool`. `caller` must hold a live grant to this instance, else `403 no_grant`. A claimed caller is enough: nothing is forwarded, and the app only checks itself.
+   - It runs: gate on the current table (with the caller's current grant), the before hooks with `tb.recheck: true` in context, the re-gate.
+   - It does not run: context hooks, forward, after hooks. No hold, receipt or cap count is written by anyone on any answer. The hook app may write its own trace.
+   - Answer: `PolicyRecheckResponse`, or the normal refusal envelope. A hold answer is only a statement: the app creates a hold itself when it acts on it (SDK-API §19).
+   - App-initiated bucket (C85). The call is logged.
+7. **Conformance.** Rows `B-ACT.*` in CONFORMANCE.md v0.1.88, gated by the cap.
