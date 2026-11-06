@@ -440,9 +440,5 @@ Gated by the bridge's reported cap `owner_drafts`, never by version; a bridge wi
   - `B-OD.no_portal`: no answer in 15 s → `503 portal_unavailable`. Standalone → `409 owner_drafts_unsupported`.
 
 ## v0.1.90 rows (C392 L0, C395: harness package delivery; the CLI and Knowledge PRs add them)
-Real-harness rows (HH-0d); the full list with the HH-5 points is HARNESS-HOOKS §6 (H-W1-HP-*, H-W1-HH-5.*).
-- `HP.allowlist`: an upstream name not on the CLI allow-list, or a `repo` other than the listed one (fork, other owner, look-alike name) → refused, nothing fetched.
-- `HP.tag_check`: a `commit` that no `vX.Y.Z` release tag of the listed repo points to, or a document `tag` that points to another commit, or a non-40-hex commit → refused at install.
-- `HP.downgrade`: a tag below the allow-list minimum → refused, even when the tag points to the given commit.
-- `HP.tarball`: offline, a vendored tarball whose sha256 differs from `tarballSha256`, or a document without `tarballSha256` → refused.
-- `HP.offer`: no package offered or installed for `claude-desktop`, `codex-desktop`, `generic-mcp`, `tbd-default` or `eve` agents, or without the owner's per-agent confirmation.
+The canonical list, with the check text, is HARNESS-HOOKS §6 (real-harness rows, HH-0d). Same ids, no second naming:
+H-W1-HP-1 offer · H-W1-HP-2 runtime mapping · H-W1-HP-3 runtime missing from `runtimes` · H-W1-HP-4 owner confirmation per agent (with the offline line) · H-W1-HP-5 allow-list refusal · H-W1-HP-6 tag check · H-W1-HP-7 downgrade (floor and installed tag) · H-W1-HP-8 offline tarball sha256 · H-W1-HP-9 own home · H-W1-HP-10 malformed document · H-W1-HP-11 unknown values · H-W1-HP-12 the op takes no input · H-W1-HP-13 kill switch · H-W1-HP-14 forget/erase text · H-W1-HH-5.1 … H-W1-HH-5.4 the HH-5 exception points.
