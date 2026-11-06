@@ -68,6 +68,17 @@ export const MODEL_PROVIDERS: readonly ModelProvider[] = [
  * `embeddings_changed`: the embeddings binding differs from the one the app's index was built with; the app keeps the old
  * one until the owner approves a re-embed. Core's update gate treats these as configuration, not regression (PORTAL-API v0.1.63).
  */
+/** v0.1.92 (BRIDGE "one key per provider"): S3 name prefix of the ONE provider key per provider (`pk:@openai`); inside the
+ *  provider-key namespace `pk:` so older bridges serve bindings that name it */
+export const PROVIDER_DEFAULT_KEY_PREFIX = "pk:@" as const;
+
+/** v0.1.92: the keyNeeded provider a key requirement's `provider` names (id or label, case-insensitive, trimmed); undefined = a plain app key */
+export function keyProviderOf(provider: string | undefined | null): ModelProvider | undefined {
+  const v = (provider ?? "").trim().toLowerCase();
+  if (!v) return undefined;
+  return MODEL_PROVIDERS.find((p) => p.keyNeeded && (p.id === v || p.label.toLowerCase() === v));
+}
+
 export const MODEL_ROLE_ATTENTION = ["model_role_missing", "model_role_optional", "embeddings_changed"] as const;
 
 /** `provider` everywhere (bindings, status rows, hints, K11 claim) is a `MODEL_PROVIDERS` id of this form. */

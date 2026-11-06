@@ -2,6 +2,9 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.92 (Martin 2026-11-06: one key per provider on the bridge key page; spec 0.1.92)
+- Bridge-local: one provider key per `MODEL_PROVIDERS` row (`pk:@<id>`), requirement keys linked by their declared `provider` fall back to it, conflicts are shown and never resolved silently, every save names its scope. Details: BRIDGE.md "v0.1.92 — one key per provider". New data in `models.ts`: `PROVIDER_DEFAULT_KEY_PREFIX`, `keyProviderOf`. No schema, Portal, SDK or manifest change.
+
 ## Changelog → v0.1.91 (C392, C393: `messages/1` `author.verified`; spec 0.1.91)
 - `messages/1` rows get an OPTIONAL `author.verified`: `platform_id` | `dkim_spf_aligned` | `none`. Additive within the major (L24): extra members are ignored by older readers; a released major never changes. Details: MANIFEST.md "v0.1.91". Test: `test/messages-verified.test.ts`. No other schema, type or manifest change; no app changes in this release (Connect, Observer and Knowledge adopt it in their own PRs).
 
