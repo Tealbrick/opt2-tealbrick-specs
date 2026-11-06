@@ -417,9 +417,22 @@ export type DestinationCreateInput =
 export const HARNESS_OPTION_IDS = ["tbd-default", "claude-desktop", "codex-desktop", "claude-code", "eve", "tealbrick-cli", "generic-mcp"] as const;
 export type HarnessOptionId = (typeof HARNESS_OPTION_IDS)[number];
 export const isHarnessOptionId = (id: unknown): id is HarnessOptionId => typeof id === "string" && (HARNESS_OPTION_IDS as readonly string[]).includes(id);
+/**
+ * v0.1.90 (C392 L0, C393 Q4, C395): the harness option ids whose registry row (signed index `harnesses` section) has
+ * `kind: "agentic_system"`. An app's harness package (HARNESS-HOOKS "Harness package delivery") is never offered to a
+ * `desktop` or `other` row (`tbd-default`, `claude-desktop`, `codex-desktop`, `generic-mcp`). Package targets today are
+ * `claude-code` and `tealbrick-cli`; `eve` is agentic but has no hook points, so it is not a package target. Hermes is no
+ * option id: it is reached through `tealbrick-cli` with `--harness hermes` (C393 Q4). A subset of HARNESS_OPTION_IDS (pinned
+ * by a test); the platform registry sync checks that the rows of kind `agentic_system` are exactly this list (one list, L1).
+ */
+export const AGENTIC_HARNESS_OPTION_IDS = ["claude-code", "eve", "tealbrick-cli"] as const satisfies readonly HarnessOptionId[];
+export type AgenticHarnessOptionId = (typeof AGENTIC_HARNESS_OPTION_IDS)[number];
+export const isAgenticHarnessOptionId = (id: unknown): id is AgenticHarnessOptionId =>
+  typeof id === "string" && (AGENTIC_HARNESS_OPTION_IDS as readonly string[]).includes(id);
 export interface HarnessOption {
   /** one of HARNESS_OPTION_IDS (typed `string` so a reader holding an older list still parses newer rows, L24) */
   id: string;
+  /** v0.1.90: the ids of the `agentic_system` rows are AGENTIC_HARNESS_OPTION_IDS. */
   kind: "desktop" | "agentic_system" | "other";
   label: string;
   /** Asset URL served from the release of the harness, or null. */
