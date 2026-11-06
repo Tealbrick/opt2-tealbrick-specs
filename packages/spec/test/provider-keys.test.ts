@@ -14,6 +14,7 @@ test("v0.1.92: a requirement provider links by id or label, case-insensitive and
   assert.equal(keyProviderOf("Anthropic")?.id, "anthropic");
   assert.equal(keyProviderOf("google gemini")?.id, "google");
   assert.equal(keyProviderOf("deepseek")?.id, "deepseek");
+  assert.equal(keyProviderOf("Google   Gemini")?.id, "google");
 });
 
 test("v0.1.92: no link for an unknown provider, an empty value or a provider that needs no key", () => {
@@ -21,6 +22,8 @@ test("v0.1.92: no link for an unknown provider, an empty value or a provider tha
   assert.equal(keyProviderOf(""), undefined);
   assert.equal(keyProviderOf(undefined), undefined);
   assert.equal(keyProviderOf(null), undefined);
+  assert.equal(keyProviderOf(42), undefined);
+  assert.equal(keyProviderOf("Gemini"), undefined);
   for (const p of MODEL_PROVIDERS.filter((x) => !x.keyNeeded)) {
     assert.equal(keyProviderOf(p.id), undefined, p.id);
     assert.equal(keyProviderOf(p.label), undefined, p.label);
