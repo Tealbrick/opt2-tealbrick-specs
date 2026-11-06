@@ -64,6 +64,14 @@
             "display": {
               "type": "string",
               "maxLength": 128
+            },
+            "verified": {
+              "enum": [
+                "platform_id",
+                "dkim_spf_aligned",
+                "none"
+              ],
+              "description": "v0.1.91 (C392, C393). Optional. Who vouches that `author.handle` really sent this message. `platform_id`: the handle is the platform's own user id delivered by the platform API (Slack, Teams, Buzz, Telegram). `dkim_spf_aligned`: an email whose From domain passed DKIM or SPF with DMARC alignment, checked by the producer (Connect). `none`: not verified (email without alignment, or the producer cannot tell). Absent = unknown = treat as `none` (readers tolerate, L24). Consumers MUST NOT grant any trust-based permission (for example Knowledge Relationships `reply` trust) to an author whose `verified` is absent or `none`. A producer MUST NOT set `platform_id` for an email or phone handle, and MUST set `dkim_spf_aligned` only after its own check."
             }
           }
         },

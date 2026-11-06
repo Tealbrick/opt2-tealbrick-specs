@@ -508,3 +508,10 @@ their summary (every detail read is authorized per call).
 - `url` and `id` carry no credentials, userinfo, tokens or signed query parameters (the producer strips them); `url` matches `^https://[^\s@/?#]+(/[^\s?#]*)?(\?[^\s#]*)?$` (no userinfo, no control chars, no fragment). Producers drop secret columns from table pages.
 - `author.handle` is non-empty. Unless `author.raw` is `true` it is the canonical `<channel>:<value>` form (`^[a-z0-9_-]{1,32}:.+$`, as in `messages/1`); with `raw: true` it is the raw source string.
 - Extra members are ignored (L24). A released major never changes.
+
+## v0.1.91 — messages/1 author.verified (C392, C393)
+- `messages/1` row `author.verified?: "platform_id" | "dkim_spf_aligned" | "none"`. Optional and additive: the major stays 1, the manifest `contractId` enum is unchanged, and extra members are ignored (L24).
+- Meaning: who vouches that `author.handle` really sent the message. `platform_id`: the handle is the platform's own user id delivered by the platform API (Slack, Teams, Buzz, Telegram user ids). `dkim_spf_aligned`: an email whose From domain passed DKIM or SPF with DMARC alignment, as checked by the producer (Connect). `none`: not verified (an email without alignment, or the producer cannot tell). Absent = unknown = treat as `none`.
+- Consumers MUST NOT grant any trust-based permission (for example Knowledge Relationships `reply` trust) to an author whose `verified` is absent or `none`.
+- A producer MUST NOT set `platform_id` for an email or phone handle, and MUST set `dkim_spf_aligned` only after its own check.
+- Fixture `examples/contracts/messages.1.json` has one valid row per value and three invalid values. Producers (Connect) and consumers (Observer, Knowledge) adopt this in their own releases.
