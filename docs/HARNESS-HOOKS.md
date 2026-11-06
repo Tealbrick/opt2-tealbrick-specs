@@ -1,9 +1,10 @@
 # HARNESS-HOOKS — harness hook points → app hook modules (harness wave 1)
 
-Status: docs, no type change, no version bump. Sources: DECISION-LOG C313.1 (governance stays in Tealbrick), C319b (LCM keeps
+Status: docs; v0.1.90 adds the manifest field `harnessPackages` (MANIFEST §10.1), HH-5 amended and HH-8 (C392 L0). Sources: DECISION-LOG C313.1 (governance stays in Tealbrick), C319b (LCM keeps
 the context-engine slot), C329(2) (packs call apps through hooks, GBrain's event mapping), C330(2) (harness-facing
 packages), C338 (package ownership), **C345** (MCP stays the default; hooks are opt-in, OFF by default, app-specific, and
-ship per harness × app only after a real-harness test). Implemented by the runner `@opt2-tealbrick/hooks` (system,
+ship per harness × app only after a real-harness test), **C392/C393 Q4, Q6** (an app's harness package may install a pinned
+third-party plugin such as LCM-X; Hermes via `tealbrick-cli --harness hermes`). Implemented by the runner `@opt2-tealbrick/hooks` (system,
 plumbing only), the app modules (e.g. `@opt2-tealbrick/hooks-knowledge`, owned by the Knowledge lead), `tealbrick hook`
 (CLI §7), `harness-claude` `sdkAppHooks`, and the Hermes adapter `tealbrick-hermes`. Harness facts: the harness profiles
 (coordination `leads/harness/HARNESS-PROFILE-<harness>.md`).
@@ -50,12 +51,40 @@ plumbing only), the app modules (e.g. `@opt2-tealbrick/hooks-knowledge`, owned b
   allow-listed env only (`PATH`, `HOME`, locale, `TMPDIR`, `XDG_CONFIG_HOME`, CA files, `TB_CREDENTIAL_STORE`, `TB_AGENT`,
   `TB_PORTAL_URL`, `TB_HOOKS`): no model keys.
 - **HH-5 One slot owner.** A harness's context-engine slot (Hermes `context.engine`, OpenClaw `plugins.slots.contextEngine`)
-  belongs to the harness or LCM. A Tealbrick pack never sets it and never takes an occupied memory-provider slot. When a context
-  engine runs, the per-prompt recall (`prompt`) is skipped; context is added at session start and after compaction only.
+  belongs to the harness or LCM. A Tealbrick hook (runner or app module) never sets it and never takes an occupied
+  memory-provider slot. When a context engine runs, the per-prompt recall (`prompt`) is skipped; context is added at session
+  start and after compaction only.
+  **v0.1.90 exception (Coordinator HH-5 ruling 2026-11-06; C392, C393 Q6), narrow:**
+  1. Only the Knowledge harness package may set the slot, and only to `lcm-x` at the pinned commit (manifest
+     `CONTEXT_ENGINE_SLOT_OWNERS`, MANIFEST M-HP-5; HH-8). No other app, package, upstream or value.
+  2. The install sets the slot only when it is empty or already `lcm-x`. If another engine is set (e.g. lossless-claw,
+     gbrain-context-engine, a user's own), the install refuses with a clear message naming that engine and does not
+     overwrite it.
+  3. The owner opts in per agent; it is off by default (HH-0b). No workspace-wide or default-on switch.
+  4. Uninstall restores the previous slot value exactly (the value, or its absence, recorded at install).
+  While `lcm-x` holds the slot, the `prompt` recall is skipped exactly as for any context engine.
 - **HH-7 Off switches.** `TB_HOOKS_<APP>=0` (e.g. `TB_HOOKS_KNOWLEDGE=0`) switches one app's hooks off; `TB_HOOKS=0` (or `off`,
   `false`, `no`) in the harness environment switches every hook off. The runner applies both (apps read no env):
   no network call, nothing injected, exit 0 (Hermes answer `{"saved": 0, "skipped": "off"}`). It applies to `tealbrick hook`,
   the Agent SDK `knowledgeHooks` and the Hermes adapter.
+- **HH-8 Third-party upstream in a package (v0.1.90; C319a, C392, C393 Q6).** An app's harness package may install a
+  third-party harness plugin (`upstreams[]`, MANIFEST §10.1). Rules:
+  - **Exact pin.** The exact repo (`github.com/<owner>/<name>`) and the full 40-char commit, plus its SPDX licence. The install
+    fetches that commit only and checks the commit id after fetch; a tag, a branch, a fork or a look-alike repo is never used
+    (C319a: a look-alike malware repo was reported). A new upstream version = a new app release with a new pin.
+  - **Own home only.** It installs only into the harness's own home of that agent (e.g. its own `HERMES_HOME`, the Claude Code
+    plugin folder of that agent's user). Never into a global runtime (no global pip/npm/Python install, no shared interpreter
+    change), never into a home shared with another agent or person.
+  - **Not a Knowledge engine.** It is a harness plugin, not a Knowledge engine type (C319b stands; C393 Q6). Knowledge never
+    reads its store; it reaches the agent's memory only through Knowledge tools and its own hooks.
+  - **Store stays on the agent machine.** Its data stays on the agent machine (`dataOnAgentMachine` says what and where). The
+    package sends none of it to Tealbrick.
+  - **Honest erase.** `erase` states what erase can and cannot do for that store (e.g. per session only, no per-person purge).
+    The Knowledge forget report quotes it, and lists what the operator must do on the agent machine.
+  - **Slot.** An upstream takes a context-engine slot only under the HH-5 exception (Knowledge package, `lcm-x`, empty or own
+    slot, per-agent opt-in, exact restore on uninstall). Every other upstream leaves the slot as it is.
+  - **Same gates.** Opt-in and off by default (HH-0b), kill switches (HH-7) also stop the package's hooks, and the real-harness
+    gate (HH-0d) runs with the upstream installed.
 - **HH-6 Idempotent saves.** Each single-item save carries `_meta["tealbrick/idempotencyKey"] = "tbh-" + sha256(area + "\n" +
   normalised text)[0..48]`, so a repeated save (compaction twice, Stop after PreCompact) makes one document.
 
@@ -117,4 +146,18 @@ no `prompt` call · HH-6 same item twice → same idempotency key · HH-3b hung 
 (through `|| true`: shell status 0) · HH-3c bad flag / unknown harness → exit 0 · HH-3d bridge host DNS stall → stop ≤ 500 ms ·
 HH-3e FIFO transcript → read nothing at once · HH-4b 1 MB adversarial text scrubs in < 100 ms · HH-7 `TB_HOOKS=0` /
 `TB_HOOKS_<APP>=0` → no call · Claude Code context ≤ 10,000 chars · HH-0d the real-harness matrix (ok, empty, slow, error,
-refusal, hold, oversized, app down, bridge down, paused, kill switch, hostile text, secret) passes in the real harness.
+refusal, hold, oversized, app down, bridge down, paused, kill switch, hostile text, secret) passes in the real harness ·
+v0.1.90 (harness packages): H-W1-HP-1 the manifest package refuses every `invalid` case of
+`examples/harness-packages.cases.json` with `harness_package_invalid` and accepts every `valid` case · HP-2 Portal/CLI offer a
+package only to an agent whose harness option is in the package's `harnesses` (a `claude-desktop`, `codex-desktop`,
+`generic-mcp` or `tbd-default` agent is never offered one) · HP-3 the installed upstream's commit equals the manifest pin; a
+changed pin or a fetch of another commit stops the install · HP-4 install writes only inside the agent's harness home (file
+list before/after) · HH-8 the forget report quotes the package `erase` text ·
+HH-5 exception (Coordinator ruling 2026-11-06), one row per point: H-W1-HH-5.1 a package of any app other than `knowledge`, or
+an upstream other than `lcm-x`, with `takesContextEngineSlot: true` is refused (`harness_package_invalid`, M-HP-5), and the
+install never writes the slot for it · H-W1-HH-5.2 slot empty → set to `lcm-x`; slot `lcm-x` → unchanged; slot
+`lossless-claw` / `gbrain-context-engine` / a custom value → install refuses with a message naming it, slot and config bytes
+unchanged · H-W1-HH-5.3 a new agent has no package installed and the slot untouched until the owner turns it on for THAT
+agent; turning it on for agent A leaves agent B unchanged · H-W1-HH-5.4 install then uninstall → the slot value (or its
+absence) is byte-equal to the value before install, for each start state of HH-5.2 · while `lcm-x` holds the slot → no `prompt`
+call.

@@ -2,7 +2,7 @@
 
 Status: v0.1, Lead · Specs, 2026-10-11. Machine-readable: `manifest.schema.json` (structure), `types/manifest.ts` (types + vocabularies), `examples/notes.manifest.json`.
 
-Scope: the manifest is the ONLY description of a miniapp: identity, discovery, runtime, operations, scopes, settings and key requirements, hooks, companions, unlocks, skills, harness hints, backups, artifacts, public routes and UI entry points. Portal Core, the bridge, the SDK, the GUI, the CLI and conformance read it through one validator package; nothing else describes an app. This file states every field's meaning and every cross-field rule (`M-*`) the validator enforces. The schema checks structure; the rules check what JSON Schema cannot. If this text and the schema disagree, the schema wins (CORE §0).
+Scope: the manifest is the ONLY description of a miniapp: identity, discovery, runtime, operations, scopes, settings and key requirements, hooks, companions, unlocks, skills, harness hints, harness packages, backups, artifacts, public routes and UI entry points. Portal Core, the bridge, the SDK, the GUI, the CLI and conformance read it through one validator package; nothing else describes an app. This file states every field's meaning and every cross-field rule (`M-*`) the validator enforces. The schema checks structure; the rules check what JSON Schema cannot. If this text and the schema disagree, the schema wins (CORE §0).
 
 ## Note v0.1.1 (C28)
 On Railway one volume per service: the deploy recipe mounts the `data` volume and the backup directory is `<data mountPath>/backup`; the declared backup volume is merged into it.
@@ -285,6 +285,36 @@ Hooks match only `agent`-audience manifest operations reached through the bridge
 | M-SK-2 | `validateAppFiles` (CI, CLI): each file exists (resolved from the manifest directory, §3), frontmatter matches, only allowed variables, `{{settings.<key>}}` names a declared field; content sanitized (no raw HTML/script, no MCP-directive or tool-call markup, ≤ 64 KiB) → `skill_file_invalid`. |
 | M-HH-1 | One hint per harness kind → `hint_duplicate`. |
 
+### 10.1 Harness packages (v0.1.90; C392 L0, C330(2), C345, C393 Q4/Q6)
+
+`harnessPackages[]` (optional, at most ONE entry: C330(2) one harness-facing package per app) declares the app's package for AGENTIC harnesses: the app's own hook module (HARNESS-HOOKS) and/or third-party harness plugins it installs at a pinned commit (HARNESS-HOOKS HH-8). MCP stays the default integration (HH-0a). A package is an opt-in layer: there is no default-on field, nothing installs it implicitly, and its hooks stay off until the operator turns them on (HH-0b, kill switches HH-7). A package ships for a harness only after the real-harness gate (HH-0d, C345.3); the manifest field does not prove that gate.
+
+| Field | Meaning |
+|---|---|
+| `id` | `snakeId`; the package id. |
+| `title` | 1..80 chars; shown where the owner or operator turns the package on. |
+| `harnesses` | 1..3 unique ids from `AGENTIC_HARNESS_OPTION_IDS` (routes.ts: `claude-code`, `eve`, `tealbrick-cli` = the registry rows of kind `agentic_system`). Portal and the CLI offer the package ONLY to an agent whose `harnessOptionId` is listed here. Never a `desktop` or `other` row (`tbd-default`, `claude-desktop`, `codex-desktop`, `generic-mcp`). |
+| `runtimes` | 1..2 unique values of `HARNESS_PACKAGE_RUNTIMES` = the values of `tealbrick hook --harness` (`claude-code`, `hermes`). Hermes has no harness option row: a Hermes agent connects as `tealbrick-cli` and runs `--harness hermes` (C393 Q4). |
+| `hooks {module, events}` | Optional. `module` = the npm name of the app's own hook module (e.g. `@opt2-tealbrick/hooks-knowledge`; C338, HH-0c); `events` = 1..5 unique `HARNESS_HOOK_EVENTS` (`session_start`, `prompt`, `pre_compact`, `stop`, `session_end`; HARNESS-HOOKS §2). The runner skips `prompt` while a context engine holds the slot (HH-5), so a package may list it. |
+| `upstreams[]` | Optional, 1..4. Each `{name, repo, commit, licence, kind, takesContextEngineSlot, dataOnAgentMachine, erase}`, all required: `name` = install name (`^[a-z0-9][a-z0-9._-]{0,63}$`); `repo` = `github.com/<owner>/<name>` exactly (no scheme, no `.git`, no path; `HARNESS_UPSTREAM_REPO_PATTERN`); `commit` = the full 40-hex lower-case commit (`^[0-9a-f]{40}$`; never a tag, branch or short id); `licence` = SPDX id or expression; `kind` = `hermes_plugin` \| `claude_code_plugin`; `takesContextEngineSlot` = the plugin takes the harness's context-engine slot (HH-5; only `lcm-x` in the `knowledge` app, M-HP-5); `dataOnAgentMachine` (1..300) = what it stores on the agent machine and where; `erase` (1..300) = what erase can and cannot do for that store (the Knowledge forget report quotes it). |
+
+A package needs `hooks`, `upstreams` or both. Schema failures under `/harnessPackages` are reported with code `harness_package_invalid` and the rule below (as §16 does for events). Cases: `examples/harness-packages.cases.json` (`valid`, `invalid` with `rule`, `code`, `by: schema | validator`, and `manifestId` when the case needs another app id than the notes example); the manifest package tests against it.
+
+| Rule | Check |
+|---|---|
+| M-HP-1 | Structure (schema): at most one package; `harnesses` ⊆ `AGENTIC_HARNESS_OPTION_IDS` (a desktop or other row, an unknown id or `hermes` → refused); `runtimes` ⊆ `HARNESS_PACKAGE_RUNTIMES`; `hooks.events` ⊆ `HARNESS_HOOK_EVENTS`; lists non-empty and unique; `hooks` or `upstreams` present; no unknown member (e.g. `defaultOn`) → `harness_package_invalid`. |
+| M-HP-2 | Harness ↔ runtime (schema `allOf`): runtime `hermes` needs harness `tealbrick-cli`; runtime `claude-code` needs harness `claude-code` or `tealbrick-cli`; harness `claude-code` needs runtime `claude-code`; harness `eve` → refused (no runtime serves Eve today: no hook points, no plugin adapter; a later minor that adds an Eve runtime lifts this) → `harness_package_invalid`. |
+| M-HP-3 | Upstream pin and slot (schema): `commit` 40 hex; `repo` exact GitHub repo; a `hermes_plugin` needs runtime `hermes`, a `claude_code_plugin` needs runtime `claude-code`; `takesContextEngineSlot: true` only on a `hermes_plugin` (Claude Code has no context-engine slot), and at most one upstream per package takes it → `harness_package_invalid`. |
+| M-HP-4 | Validator only (not expressible in the schema): upstream `name`s unique and `repo`s unique in the package; `licence` passes the same SPDX check as `source.license` (embedded list; `LicenseRef-*` refused, v0.1.3) → `harness_package_invalid`. |
+| M-HP-5 | Validator only (Coordinator HH-5 ruling 2026-11-06; HARNESS-HOOKS HH-5): `takesContextEngineSlot: true` only on an upstream named `lcm-x` in the package of the app `knowledge` (`CONTEXT_ENGINE_SLOT_OWNERS`, manifest.ts; the schema holds no product name) → `harness_package_invalid`. A new (app, upstream) pair needs a spec minor. |
+
+**Offer and install (normative).**
+1. Portal and the CLI offer a package only for an agent whose harness option is in `AGENTIC_HARNESS_OPTION_IDS` AND in the package's `harnesses`, and only when the app is deployed and the agent has an edge to it. The offer is never pre-selected.
+2. The install is an explicit operator action on the agent machine (CLI). It writes only into the harness's own home of that agent (HH-8); it never writes harness config without the CLI §6 preview rule.
+3. An `agentic_system` row added to the registry later is not offered a package until a spec minor adds its id to `AGENTIC_HARNESS_OPTION_IDS` and a runtime that serves it.
+
+**Release order (strict schema, as §9.1 and §16.3).** A manifest with `harnessPackages` is INVALID for every reader whose pinned manifest package does not know the field (closed objects, §1). Order: (1) spec 0.1.90 and the manifest package release that implements M-HP-1..5 and the cases file; (2) re-pins of that manifest package in Core (catalog sync), the CI template `release-record` step (new `ci-v` tag with the documented dry run: every indexed manifest re-validates with an unchanged `manifestDigest`), the registry signer and the bridge; (3) the app's own SDK boot validator (miniapp-sdk on that manifest package); (4) only then may an app release declare `harnessPackages`.
+
 ## 11. Backups and export
 
 The SDK backup runner (inside the app container) runs on `backups.schedule` (5-field cron, UTC) and keeps `retain` archives on the backup volume. One archive `tb-backup-<UTC timestamp>.tar.gz` contains: `meta.json` (product, version, manifestDigest, sdk version), the SDK-managed database (app tables, receipts, holds, idempotency keys), each `backups.files[] {volume, path}` (paths in app data volumes), and one `services/<id>.<extension>` per deployed service with `backup`, produced by running `backup.dump` inside the service through `tb-exec` and streaming stdout over the private network. Restore runs `backup.restore` with the file on stdin. A restore test is part of conformance.
@@ -320,6 +350,7 @@ The SDK backup runner (inside the app container) runs on `backups.schedule` (5-f
 | Catalog entry, cost estimate | Core | identity, discovery, runtime, ui |
 | Deploy recipe (Railway services, volumes, env, order) | Core | runtime |
 | Per-app kit package (typed client + README for SDK harnesses) | SDK codegen in app CI | operations, harnessHints |
+| Harness package offer (Portal agent card, CLI) (v0.1.90) | Core catalog, CLI | harnessPackages |
 | Skills bundle inputs | app CI → Core | skills |
 | Docs (operations, settings, scopes reference) | SDK codegen | whole manifest |
 

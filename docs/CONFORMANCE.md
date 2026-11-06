@@ -438,3 +438,8 @@ Gated by the bridge's reported cap `owner_drafts`, never by version; a bridge wi
   - `B-OD.ins_in_body`: a body field `ins` → `400 input_invalid`, nothing forwarded.
   - `B-OD.refused_callers`: a service caller → `401`; a paused instance → `403 paused`.
   - `B-OD.no_portal`: no answer in 15 s → `503 portal_unavailable`. Standalone → `409 owner_drafts_unsupported`.
+
+## v0.1.90 rows (C392 L0, harness packages; the conformance PR adds them)
+- `M-HP.cases`: the manifest package refuses every `invalid` case of `examples/harness-packages.cases.json` with `harness_package_invalid` under `/harnessPackages` and the case's rule, and accepts every `valid` case (MANIFEST §10.1, M-HP-1..5).
+- `M-HP.absent`: a manifest without `harnessPackages` validates with an unchanged `manifestDigest`.
+- The harness rows (offer, pin, own home, the HH-5 exception points 1–4, forget text) are H-W1 rows in HARNESS-HOOKS §6; they run in the real harness (HH-0d).

@@ -63,6 +63,7 @@
     "needsTopology": { "type": "boolean", "default": false, "description": "v0.1.87 (C373, G-2): the app asks for the workspace grant picture (instance slice topology, display only); requires needsAgentDirectory: true (M-TP-1, validator rule); Core sends it only after the owner granted the consent topology at deploy or update." },
     "skills": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/skill" } },
     "harnessHints": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/harnessHint" } },
+    "harnessPackages": { "type": "array", "maxItems": 1, "items": { "$ref": "#/$defs/harnessPackage" }, "description": "v0.1.90 (C392 L0, C330(2), C345): at most one harness package per app, offered only to agents whose harness option is agentic_system (AGENTIC_HARNESS_OPTION_IDS) and listed in harnesses; always opt-in, no default-on field (HH-0b). Cross-field rules M-HP-1..5 (MANIFEST §10.1); schema failures under /harnessPackages are reported as harness_package_invalid." },
     "unlocks": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/unlock" } },
     "backups": { "$ref": "#/$defs/backups" },
     "artifacts": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/artifact" } },
@@ -524,6 +525,55 @@
         "harness": { "enum": ["generic", "claude_desktop", "codex_desktop", "tbd", "claude_agent_sdk", "eve", "tealbrick_cli"] },
         "instructions": { "type": "string", "minLength": 1, "maxLength": 1000 }
       }
+    },
+    "harnessPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "harnesses", "runtimes"],
+      "anyOf": [{ "required": ["hooks"] }, { "required": ["upstreams"] }],
+      "properties": {
+        "id": { "$ref": "#/$defs/snakeId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "harnesses": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "enum": ["claude-code", "eve", "tealbrick-cli"] }, "description": "AGENTIC_HARNESS_OPTION_IDS only (M-HP-1)." },
+        "runtimes": { "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": { "enum": ["claude-code", "hermes"] }, "description": "HARNESS_PACKAGE_RUNTIMES = the values of tealbrick hook --harness." },
+        "hooks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["module", "events"],
+          "properties": {
+            "module": { "type": "string", "maxLength": 214, "pattern": "^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$" },
+            "events": { "type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true, "items": { "enum": ["session_start", "prompt", "pre_compact", "stop", "session_end"] } }
+          }
+        },
+        "upstreams": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/harnessUpstream" } }
+      },
+      "allOf": [
+        { "description": "M-HP-2: runtime hermes needs harness tealbrick-cli (C393 Q4).", "if": { "required": ["runtimes"], "properties": { "runtimes": { "contains": { "const": "hermes" } } } }, "then": { "properties": { "harnesses": { "contains": { "const": "tealbrick-cli" } } } } },
+        { "description": "M-HP-2: runtime claude-code needs harness claude-code or tealbrick-cli.", "if": { "required": ["runtimes"], "properties": { "runtimes": { "contains": { "const": "claude-code" } } } }, "then": { "properties": { "harnesses": { "contains": { "enum": ["claude-code", "tealbrick-cli"] } } } } },
+        { "description": "M-HP-2: harness claude-code needs runtime claude-code.", "if": { "required": ["harnesses"], "properties": { "harnesses": { "contains": { "const": "claude-code" } } } }, "then": { "properties": { "runtimes": { "contains": { "const": "claude-code" } } } } },
+        { "description": "M-HP-2: no runtime serves harness eve today (no hook points, no plugin adapter); a later minor adds one.", "properties": { "harnesses": { "not": { "contains": { "const": "eve" } } } } },
+        { "description": "M-HP-3: a hermes_plugin upstream needs runtime hermes.", "if": { "required": ["upstreams"], "properties": { "upstreams": { "contains": { "properties": { "kind": { "const": "hermes_plugin" } }, "required": ["kind"] } } } }, "then": { "properties": { "runtimes": { "contains": { "const": "hermes" } } } } },
+        { "description": "M-HP-3: a claude_code_plugin upstream needs runtime claude-code.", "if": { "required": ["upstreams"], "properties": { "upstreams": { "contains": { "properties": { "kind": { "const": "claude_code_plugin" } }, "required": ["kind"] } } } }, "then": { "properties": { "runtimes": { "contains": { "const": "claude-code" } } } } },
+        { "description": "M-HP-3 (HH-5): at most one upstream takes the context-engine slot.", "properties": { "upstreams": { "contains": { "properties": { "takesContextEngineSlot": { "const": true } }, "required": ["takesContextEngineSlot"] }, "minContains": 0, "maxContains": 1 } } }
+      ]
+    },
+    "harnessUpstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repo", "commit", "licence", "kind", "takesContextEngineSlot", "dataOnAgentMachine", "erase"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "repo": { "type": "string", "maxLength": 160, "pattern": "^github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.{1,2}$)(?!.*\\.git$)[A-Za-z0-9._-]{1,100}$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "licence": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+( (AND|OR|WITH) [A-Za-z0-9.+-]+)*$", "maxLength": 128 },
+        "kind": { "enum": ["hermes_plugin", "claude_code_plugin"] },
+        "takesContextEngineSlot": { "type": "boolean" },
+        "dataOnAgentMachine": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "erase": { "type": "string", "minLength": 1, "maxLength": 300 }
+      },
+      "allOf": [
+        { "description": "M-HP-3 (HH-5): only a hermes_plugin can take a context-engine slot; Claude Code has none.", "if": { "required": ["takesContextEngineSlot"], "properties": { "takesContextEngineSlot": { "const": true } } }, "then": { "properties": { "kind": { "const": "hermes_plugin" } } } }
+      ]
     },
     "unlock": {
       "type": "object",

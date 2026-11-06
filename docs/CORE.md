@@ -2,6 +2,12 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.90 (C392 L0: harness packages for agentic harnesses; spec 0.1.90)
+- `AGENTIC_HARNESS_OPTION_IDS` = `claude-code`, `eve`, `tealbrick-cli` (the registry rows of kind `agentic_system`), `AgenticHarnessOptionId`, `isAgenticHarnessOptionId` (routes.ts).
+- Manifest `harnessPackages?: HarnessPackage[]` (≤ 1 per app, C330(2)): `{id, title, harnesses, runtimes, hooks?, upstreams?}`; vocabularies `HARNESS_PACKAGE_RUNTIMES`, `HARNESS_HOOK_EVENTS`, `HARNESS_UPSTREAM_KINDS`, `CONTEXT_ENGINE_SLOT_OWNERS`, patterns for upstream repo and commit (manifest.ts, schema). Rules M-HP-1..5, code `harness_package_invalid`, offer/install rules and release order: MANIFEST §10.1. Cases: `examples/harness-packages.cases.json`.
+- HARNESS-HOOKS: HH-5 narrow exception (Coordinator HH-5 ruling 2026-11-06: only the Knowledge package sets the slot, only to `lcm-x` at the pinned commit, only when empty or already `lcm-x`, per-agent opt-in, exact restore on uninstall); new HH-8 (third-party upstream: exact pin, own harness home, never a Knowledge engine, store on the agent machine, honest erase); §6 rows.
+- Additive in the spec. The manifest schema is closed, so an app declares the field only after the manifest package and its re-pins (MANIFEST §10.1 release order). Test: `test/harness-packages.test.ts`.
+
 ## Changelog → v0.1.89 (C380: `tb.access/1`, stop drafts, `agents.offboard`; spec 0.1.89)
 - New doc ACCESS.md (`tb.access/1`). New rows `agents.offboard`, `agents.rotate`, `agents.reinstate`, `bridge_api.owner_draft_request`, `_get`, `_withdraw`. `APP_DRAFT_OPS`. Bridge cap `owner_drafts`. Feed members `lifecycle`, `floor`. No manifest field, no standard op. Rules: CORE "v0.1.89" below.
 

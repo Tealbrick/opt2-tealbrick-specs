@@ -3,6 +3,7 @@
 // Data only: the `as const` vocabularies below are the ONE declaration of these literals.
 // `@opt2-tealbrick/manifest` re-exports them; no other package declares them.
 import type { DataPolicy, ModelRole } from "./models.ts";
+import type { AgenticHarnessOptionId } from "./routes.ts";
 
 // ---------- Shared vocabularies ----------
 
@@ -48,6 +49,25 @@ export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as 
 export const OPERATION_LISTINGS = ["default", "workflow"] as const;
 export const CATEGORIES = ["memory", "connectivity", "communication", "automation", "governance", "operations", "productivity", "developer"] as const;
 export const HARNESS_KINDS = ["generic", "claude_desktop", "codex_desktop", "tbd", "claude_agent_sdk", "eve", "tealbrick_cli"] as const;
+/** v0.1.90 (C392 L0): the hook runtimes of a harness package = the values of `tealbrick hook --harness` (CLI §7,
+ *  HARNESS-HOOKS). `claude-code` runs in Claude Code (option `claude-code`, or a `tealbrick-cli` install that uses Claude Code);
+ *  `hermes` runs in Hermes, which is reached ONLY through option `tealbrick-cli` (C393 Q4). */
+export const HARNESS_PACKAGE_RUNTIMES = ["claude-code", "hermes"] as const;
+/** v0.1.90 (C392 L0): the runner's harness hook events (HARNESS-HOOKS §2 event map); a package's `hooks.events` names a subset. */
+export const HARNESS_HOOK_EVENTS = ["session_start", "prompt", "pre_compact", "stop", "session_end"] as const;
+/** v0.1.90 (C392 L0, HH-8): the kinds of a third-party upstream a harness package installs at a pinned commit. A
+ *  `hermes_plugin` needs runtime `hermes`; a `claude_code_plugin` needs runtime `claude-code`. */
+export const HARNESS_UPSTREAM_KINDS = ["hermes_plugin", "claude_code_plugin"] as const;
+/** v0.1.90 (Coordinator HH-5 ruling 2026-11-06; HARNESS-HOOKS HH-5, MANIFEST M-HP-5): the ONLY (app, upstream) pair whose
+ *  upstream may take a harness's context-engine slot (`takesContextEngineSlot: true`): the `knowledge` app's package, upstream
+ *  `lcm-x` at its pinned commit. Any other app or upstream name → `harness_package_invalid`. A new pair needs a spec minor. */
+export const CONTEXT_ENGINE_SLOT_OWNERS = [{ app: "knowledge", upstream: "lcm-x" }] as const;
+/** v0.1.90 (C330(2)): at most ONE harness package per app (schema `maxItems`). */
+export const HARNESS_PACKAGES_MAX = 1 as const;
+/** v0.1.90: `upstreams[].repo` = an exact GitHub repo without scheme, `.git` suffix or path (C319a: pin the exact repo). */
+export const HARNESS_UPSTREAM_REPO_PATTERN = "^github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}/(?!\\.{1,2}$)(?!.*\\.git$)[A-Za-z0-9._-]{1,100}$" as const;
+/** v0.1.90: `upstreams[].commit` = the full 40-hex commit id, lower case (never a tag, branch or short id; C319a). */
+export const HARNESS_UPSTREAM_COMMIT_PATTERN = "^[0-9a-f]{40}$" as const;
 /** Standard operations every SDK app serves automatically (MANIFEST.md §5.4): one agent op, the rest person ops. Manifest ids never start with `tb_`. */
 export const STANDARD_OPERATIONS = ["tb.hold_status", "tb.holds_list", "tb.holds_decide", "tb.receipts_list", "tb.agents_list", "tb.scopes_set", "tb.keys_status", "tb.key_set", "tb.key_delete", "tb.export", "tb.holds_pending"] as const;
 /** v0.1.13 (G4): the ONE op a wildcard companion (`product: "*"`) may name (MANIFEST M-CP-3); needs owner consent at deploy (C82). */
@@ -97,6 +117,9 @@ export type PublicRoutePurpose = (typeof PUBLIC_ROUTE_PURPOSES)[number];
 export type OperationListing = (typeof OPERATION_LISTINGS)[number];
 export type Category = (typeof CATEGORIES)[number];
 export type HarnessKind = (typeof HARNESS_KINDS)[number];
+export type HarnessPackageRuntime = (typeof HARNESS_PACKAGE_RUNTIMES)[number];
+export type HarnessHookEvent = (typeof HARNESS_HOOK_EVENTS)[number];
+export type HarnessUpstreamKind = (typeof HARNESS_UPSTREAM_KINDS)[number];
 export type StandardOperationId = (typeof STANDARD_OPERATIONS)[number];
 export type ContractId = (typeof CONTRACT_IDS)[number];
 export type EventAudience = (typeof EVENT_AUDIENCES)[number];
@@ -155,6 +178,10 @@ export interface Manifest {
   needsTopology?: boolean;
   skills?: Skill[];
   harnessHints?: HarnessHint[];
+  /** v0.1.90 (C392 L0, C330(2), C345): at most ONE harness package (MANIFEST §10.1), offered ONLY to agents whose harness
+   *  option is in AGENTIC_HARNESS_OPTION_IDS and listed in `harnesses`. Always opt-in: no default-on field (HH-0b). A manifest
+   *  with this field needs a manifest package that knows it (strict schema; release order in MANIFEST §10.1). */
+  harnessPackages?: HarnessPackage[];
   unlocks?: Unlock[];
   backups: Backups;
   artifacts?: Artifact[];
@@ -571,6 +598,48 @@ export interface Skill {
 export interface HarnessHint {
   harness: HarnessKind;
   instructions: string;
+}
+
+/** v0.1.90 (C392 L0): the app's harness-facing package (MANIFEST §10.1). Needs `hooks`, `upstreams` or both. */
+export interface HarnessPackage {
+  id: SnakeId;
+  /** ≤ 80 chars; shown where the owner or operator turns the package on. */
+  title: string;
+  /** 1..3 unique ids from AGENTIC_HARNESS_OPTION_IDS; each needs a runtime that serves it (M-HP-2). */
+  harnesses: AgenticHarnessOptionId[];
+  /** 1..2 unique values of `tealbrick hook --harness`. */
+  runtimes: HarnessPackageRuntime[];
+  /** The app's own hook module run by the runner (HARNESS-HOOKS HH-0c); off until the operator turns it on (HH-0b, HH-7). */
+  hooks?: HarnessPackageHooks;
+  /** 1..4 third-party upstreams installed at a pinned commit (HARNESS-HOOKS HH-8). */
+  upstreams?: HarnessUpstream[];
+}
+
+export interface HarnessPackageHooks {
+  /** npm package name of the app's hook module, e.g. `@opt2-tealbrick/hooks-knowledge`. */
+  module: string;
+  /** 1..5 unique HARNESS_HOOK_EVENTS. */
+  events: HarnessHookEvent[];
+}
+
+/** v0.1.90 (HARNESS-HOOKS HH-8): a third-party harness plugin the package installs. Never a Knowledge engine (C393 Q6). */
+export interface HarnessUpstream {
+  /** `^[a-z0-9][a-z0-9._-]{0,63}$`, unique in the package: the plugin's install name (e.g. `lcm-x`). */
+  name: string;
+  /** HARNESS_UPSTREAM_REPO_PATTERN, e.g. `github.com/electricsheephq/lcm-x` (no scheme, C319a). */
+  repo: string;
+  /** HARNESS_UPSTREAM_COMMIT_PATTERN: the full 40-hex commit. */
+  commit: string;
+  /** SPDX licence id or expression (same pattern and list as `source.license`; `LicenseRef-*` refused). */
+  licence: string;
+  kind: HarnessUpstreamKind;
+  /** true = the upstream takes the harness's context-engine slot (HH-5): only a `hermes_plugin`, at most one per package, and
+   *  only a pair in CONTEXT_ENGINE_SLOT_OWNERS (`lcm-x` in the `knowledge` app's package; M-HP-5). */
+  takesContextEngineSlot: boolean;
+  /** ≤ 300 chars: what the upstream stores on the agent machine and where. */
+  dataOnAgentMachine: string;
+  /** ≤ 300 chars: what erase can and cannot do for this store (feeds the Knowledge forget report). */
+  erase: string;
 }
 
 // ---------- Backups, artifacts, routes, UI ----------
