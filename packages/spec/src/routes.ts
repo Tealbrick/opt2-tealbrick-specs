@@ -418,12 +418,12 @@ export const HARNESS_OPTION_IDS = ["tbd-default", "claude-desktop", "codex-deskt
 export type HarnessOptionId = (typeof HARNESS_OPTION_IDS)[number];
 export const isHarnessOptionId = (id: unknown): id is HarnessOptionId => typeof id === "string" && (HARNESS_OPTION_IDS as readonly string[]).includes(id);
 /**
- * v0.1.90 (C392 L0, C393 Q4): the harness option ids whose registry row (signed index `harnesses` section) has
- * `kind: "agentic_system"`. ONLY these may receive an app's harness package (manifest `harnessPackages[].harnesses`,
- * MANIFEST §10.1); never a `desktop` or `other` row (`tbd-default`, `claude-desktop`, `codex-desktop`, `generic-mcp`).
- * Hermes is no option id: it is reached through `tealbrick-cli` with `tealbrick hook --harness hermes` (C393 Q4). A subset
- * of HARNESS_OPTION_IDS (pinned by a test); the platform registry sync checks that the rows of kind `agentic_system` are
- * exactly this list (one list, L1).
+ * v0.1.90 (C392 L0, C393 Q4, C395): the harness option ids whose registry row (signed index `harnesses` section) has
+ * `kind: "agentic_system"`. An app's harness package (HARNESS-HOOKS "Harness package delivery") is never offered to a
+ * `desktop` or `other` row (`tbd-default`, `claude-desktop`, `codex-desktop`, `generic-mcp`). Package targets today are
+ * `claude-code` and `tealbrick-cli`; `eve` is agentic but has no hook points, so it is not a package target. Hermes is no
+ * option id: it is reached through `tealbrick-cli` with `--harness hermes` (C393 Q4). A subset of HARNESS_OPTION_IDS (pinned
+ * by a test); the platform registry sync checks that the rows of kind `agentic_system` are exactly this list (one list, L1).
  */
 export const AGENTIC_HARNESS_OPTION_IDS = ["claude-code", "eve", "tealbrick-cli"] as const satisfies readonly HarnessOptionId[];
 export type AgenticHarnessOptionId = (typeof AGENTIC_HARNESS_OPTION_IDS)[number];

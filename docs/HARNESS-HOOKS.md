@@ -1,10 +1,12 @@
 # HARNESS-HOOKS — harness hook points → app hook modules (harness wave 1)
 
-Status: docs; v0.1.90 adds the manifest field `harnessPackages` (MANIFEST §10.1), HH-5 amended and HH-8 (C392 L0). Sources: DECISION-LOG C313.1 (governance stays in Tealbrick), C319b (LCM keeps
+Status: docs; v0.1.90 adds the constant `AGENTIC_HARNESS_OPTION_IDS` (routes.ts), the HH-5 exception, HH-8 and §7 "Harness
+package delivery" (C392 L0, C395: run-time delivery, no manifest field). Sources: DECISION-LOG C313.1 (governance stays in Tealbrick), C319b (LCM keeps
 the context-engine slot), C329(2) (packs call apps through hooks, GBrain's event mapping), C330(2) (harness-facing
 packages), C338 (package ownership), **C345** (MCP stays the default; hooks are opt-in, OFF by default, app-specific, and
 ship per harness × app only after a real-harness test), **C392/C393 Q4, Q6** (an app's harness package may install a pinned
-third-party plugin such as LCM-X; Hermes via `tealbrick-cli --harness hermes`). Implemented by the runner `@opt2-tealbrick/hooks` (system,
+third-party plugin such as LCM-X; Hermes via `tealbrick-cli --harness hermes`), **C395** (the package is served by the app at
+run time, not declared in the manifest). Implemented by the runner `@opt2-tealbrick/hooks` (system,
 plumbing only), the app modules (e.g. `@opt2-tealbrick/hooks-knowledge`, owned by the Knowledge lead), `tealbrick hook`
 (CLI §7), `harness-claude` `sdkAppHooks`, and the Hermes adapter `tealbrick-hermes`. Harness facts: the harness profiles
 (coordination `leads/harness/HARNESS-PROFILE-<harness>.md`).
@@ -55,23 +57,26 @@ plumbing only), the app modules (e.g. `@opt2-tealbrick/hooks-knowledge`, owned b
   memory-provider slot. When a context engine runs, the per-prompt recall (`prompt`) is skipped; context is added at session
   start and after compaction only.
   **v0.1.90 exception (Coordinator HH-5 ruling 2026-11-06; C392, C393 Q6), narrow:**
-  1. Only the Knowledge harness package may set the slot, and only to `lcm-x` at the pinned commit (manifest
-     `CONTEXT_ENGINE_SLOT_OWNERS`, MANIFEST M-HP-5; HH-8). No other app, package, upstream or value.
+  1. Only the Knowledge harness package may set the slot, and only to `lcm-x` at the pinned commit (§7, HH-8). No other app,
+     package, upstream or value: the CLI refuses `takesContextEngineSlot: true` in a package from any other app or for any
+     other upstream name.
   2. The install sets the slot only when it is empty or already `lcm-x`. If another engine is set (e.g. lossless-claw,
      gbrain-context-engine, a user's own), the install refuses with a clear message naming that engine and does not
      overwrite it.
-  3. The owner opts in per agent; it is off by default (HH-0b). No workspace-wide or default-on switch.
+  3. The owner opts in per agent; it is off by default (HH-0b). No workspace-wide or default-on switch (§7 step 3).
   4. Uninstall restores the previous slot value exactly (the value, or its absence, recorded at install).
   While `lcm-x` holds the slot, the `prompt` recall is skipped exactly as for any context engine.
 - **HH-7 Off switches.** `TB_HOOKS_<APP>=0` (e.g. `TB_HOOKS_KNOWLEDGE=0`) switches one app's hooks off; `TB_HOOKS=0` (or `off`,
   `false`, `no`) in the harness environment switches every hook off. The runner applies both (apps read no env):
   no network call, nothing injected, exit 0 (Hermes answer `{"saved": 0, "skipped": "off"}`). It applies to `tealbrick hook`,
   the Agent SDK `knowledgeHooks` and the Hermes adapter.
-- **HH-8 Third-party upstream in a package (v0.1.90; C319a, C392, C393 Q6).** An app's harness package may install a
-  third-party harness plugin (`upstreams[]`, MANIFEST §10.1). Rules:
-  - **Exact pin.** The exact repo (`github.com/<owner>/<name>`) and the full 40-char commit, plus its SPDX licence. The install
-    fetches that commit only and checks the commit id after fetch; a tag, a branch, a fork or a look-alike repo is never used
-    (C319a: a look-alike malware repo was reported). A new upstream version = a new app release with a new pin.
+- **HH-8 Third-party upstream in a package (v0.1.90; C319a, C392, C393 Q6, C395).** An app's harness package (§7) may install
+  a third-party harness plugin (`upstreams[]` of the package document). Rules:
+  - **Exact pin.** The exact repo (`github.com/<owner>/<name>`), the full 40-char commit, the release tag that points to it,
+    and the SPDX licence. The CLI accepts only a repo on its own allow-list and only a commit that an allow-listed release tag
+    points to (§7 step 5). The install fetches that commit only and checks the commit id after fetch; a branch, a fork or a
+    look-alike repo is never used (C319a: a look-alike malware repo was reported). A new upstream version = a new app release
+    with a new pin.
   - **Own home only.** It installs only into the harness's own home of that agent (e.g. its own `HERMES_HOME`, the Claude Code
     plugin folder of that agent's user). Never into a global runtime (no global pip/npm/Python install, no shared interpreter
     change), never into a home shared with another agent or person.
@@ -81,8 +86,9 @@ plumbing only), the app modules (e.g. `@opt2-tealbrick/hooks-knowledge`, owned b
     package sends none of it to Tealbrick.
   - **Honest erase.** `erase` states what erase can and cannot do for that store (e.g. per session only, no per-person purge).
     The Knowledge forget report quotes it, and lists what the operator must do on the agent machine.
-  - **Slot.** An upstream takes a context-engine slot only under the HH-5 exception (Knowledge package, `lcm-x`, empty or own
-    slot, per-agent opt-in, exact restore on uninstall). Every other upstream leaves the slot as it is.
+  - **Slot.** An upstream takes a context-engine slot only under the HH-5 exception (Knowledge package, `lcm-x` at the pinned
+    commit, empty or already-`lcm-x` slot, per-agent opt-in, exact restore on uninstall). Every other upstream leaves the slot
+    as it is.
   - **Same gates.** Opt-in and off by default (HH-0b), kill switches (HH-7) also stop the package's hooks, and the real-harness
     gate (HH-0d) runs with the upstream installed.
 - **HH-6 Idempotent saves.** Each single-item save carries `_meta["tealbrick/idempotencyKey"] = "tbh-" + sha256(area + "\n" +
@@ -147,17 +153,68 @@ no `prompt` call · HH-6 same item twice → same idempotency key · HH-3b hung 
 HH-3e FIFO transcript → read nothing at once · HH-4b 1 MB adversarial text scrubs in < 100 ms · HH-7 `TB_HOOKS=0` /
 `TB_HOOKS_<APP>=0` → no call · Claude Code context ≤ 10,000 chars · HH-0d the real-harness matrix (ok, empty, slow, error,
 refusal, hold, oversized, app down, bridge down, paused, kill switch, hostile text, secret) passes in the real harness ·
-v0.1.90 (harness packages): H-W1-HP-1 the manifest package refuses every `invalid` case of
-`examples/harness-packages.cases.json` with `harness_package_invalid` and accepts every `valid` case · HP-2 Portal/CLI offer a
-package only to an agent whose harness option is in the package's `harnesses` (a `claude-desktop`, `codex-desktop`,
-`generic-mcp` or `tbd-default` agent is never offered one) · HP-3 the installed upstream's commit equals the manifest pin; a
-changed pin or a fetch of another commit stops the install · HP-4 install writes only inside the agent's harness home (file
-list before/after) · HH-8 the forget report quotes the package `erase` text ·
-HH-5 exception (Coordinator ruling 2026-11-06), one row per point: H-W1-HH-5.1 a package of any app other than `knowledge`, or
-an upstream other than `lcm-x`, with `takesContextEngineSlot: true` is refused (`harness_package_invalid`, M-HP-5), and the
-install never writes the slot for it · H-W1-HH-5.2 slot empty → set to `lcm-x`; slot `lcm-x` → unchanged; slot
-`lossless-claw` / `gbrain-context-engine` / a custom value → install refuses with a message naming it, slot and config bytes
-unchanged · H-W1-HH-5.3 a new agent has no package installed and the slot untouched until the owner turns it on for THAT
-agent; turning it on for agent A leaves agent B unchanged · H-W1-HH-5.4 install then uninstall → the slot value (or its
-absence) is byte-equal to the value before install, for each start state of HH-5.2 · while `lcm-x` holds the slot → no `prompt`
-call.
+v0.1.90 (harness packages, C395): H-W1-HP-1 the CLI offers a package only to an agent connected as `claude-code` or
+`tealbrick-cli` with a grant to the app (a `claude-desktop`, `codex-desktop`, `generic-mcp`, `tbd-default` or `eve` agent is
+never offered one), and installs nothing before the owner confirms for that agent · HP-2 allow-list: an upstream whose name is
+not on the CLI allow-list, or whose `repo` differs from the allow-listed repo (another owner, a fork, a look-alike name), is
+refused and nothing is fetched · HP-3 tag check: a `commit` that no release tag `vX.Y.Z` of the allow-listed repo points to, or
+a document `tag` that points to another commit, is refused; a non-40-hex commit is refused · HP-4 downgrade: a tag below the
+allow-list minimum is refused, even when it points to the given commit · HP-5 tarball: a vendored tarball whose sha256 differs
+from `tarballSha256` (or a document without `tarballSha256`) is refused offline · HP-6 the owner confirmation shows repo, tag
+and commit · HP-7 install writes only inside the agent's harness home (file list before/after) · HH-8 the forget report quotes
+the package `erase` text ·
+HH-5 exception (Coordinator ruling 2026-11-06), one row per point: H-W1-HH-5.1 `takesContextEngineSlot: true` from any app
+other than `knowledge`, or for an upstream other than `lcm-x`, is refused by the CLI and the slot is never written · H-W1-HH-5.2
+slot empty → set to `lcm-x`; slot `lcm-x` → unchanged; slot `lossless-claw` / `gbrain-context-engine` / a custom value →
+install refuses with a message naming it, slot and config bytes unchanged · H-W1-HH-5.3 a new agent has no package installed and
+the slot untouched until the owner turns it on for THAT agent; turning it on for agent A leaves agent B unchanged · H-W1-HH-5.4
+install then uninstall → the slot value (or its absence) is byte-equal to the value before install, for each start state of
+HH-5.2 · while `lcm-x` holds the slot → no `prompt` call.
+
+## 7. Harness package delivery (v0.1.90; C392 L0, C395)
+
+An app's harness package is NOT a manifest field. The app serves it at run time; the CLI installs it on the agent machine after
+the owner confirms. MCP stays the default integration (HH-0a); the package is an opt-in layer (HH-0b), gated per harness × app
+by HH-0d.
+
+**Package document.** A JSON document baked into the app image, so the signed index's image digest pins it. One per app
+(C330(2)). Members:
+
+| Member | Rule |
+|---|---|
+| `id` | snake id (`^[a-z][a-z0-9_]{1,39}$`). |
+| `title` | 1..80 chars; shown in the owner confirmation. |
+| `runtimes` | 1..2 unique of `claude-code`, `hermes` (the values of `tealbrick hook --harness`). |
+| `hooks` | optional `{module, events}`: `module` = npm name of the app's own hook module (e.g. `@opt2-tealbrick/hooks-knowledge`, C338, HH-0c); `events` = 1..5 unique of `session_start`, `prompt`, `pre_compact`, `stop`, `session_end` (§2). |
+| `upstreams[]` | optional, ≤ 4, each `{name, repo, commit, tag, licence, kind, takesContextEngineSlot, dataOnAgentMachine, erase, tarballSha256?}`: `name` = the CLI allow-list key (e.g. `lcm-x`); `repo` = `github.com/<owner>/<name>` (no scheme, no `.git`); `commit` = 40 lower-case hex; `tag` = `vX.Y.Z` (no pre-release); `licence` = SPDX id; `kind` = `hermes_plugin` (runtime `hermes`) or `claude_code_plugin` (runtime `claude-code`); `takesContextEngineSlot` boolean (HH-5: only `lcm-x` from `knowledge`); `dataOnAgentMachine` and `erase` 1..300 chars each (HH-8); `tarballSha256` = 64 lower-case hex, for vendored or air-gapped installs. |
+
+No default-on member exists. The CLI refuses a document that breaks a rule above and installs nothing from it (the install fails
+closed; the hooks, once installed, stay fail-open per HH-3).
+
+**Steps (normative).**
+1. **Serve.** The app serves the document through one of its own agent ops (Knowledge: `harness_package_get`, read). The op
+   returns the baked document unchanged; it takes no input that changes the document.
+2. **Who.** The CLI (`tealbrick`) fetches it through the bridge AS THE AGENT (K4/K5, HH-2), only for an agent connected as
+   `claude-code` or `tealbrick-cli` (option ids in `AGENTIC_HARNESS_OPTION_IDS`, routes.ts, except `eve`), with the runtime
+   chosen by `--harness claude-code | hermes`, and only when the agent has a grant to that app. A runtime not in the document's
+   `runtimes` → nothing to install. Hermes is reached only through `tealbrick-cli` (C393 Q4).
+3. **Owner confirms per agent.** Off by default. Nothing installs until the owner confirms for THAT agent. The confirmation shows
+   the package title, the hook events, and for each upstream: repo, tag, commit, licence, `dataOnAgentMachine`, `erase`, and
+   whether it takes the context-engine slot.
+4. **CLI allow-list (the CLI's own, hard-coded).** Upstream `name` → exact repo + minimum release tag. Today: `lcm-x` →
+   `github.com/electricsheephq/lcm-x`, minimum `v0.29.1`. An upstream whose name is not on the list, or whose `repo` differs from
+   the listed repo, is refused. Adding or changing an entry is a CLI release, never a document change.
+5. **Tag check (at install).** The CLI resolves the release tags of the allow-listed repo (annotated tags peeled to their
+   commit). It accepts `commit` only if the document's `tag` exists there, is a `vX.Y.Z` release tag, points to exactly that
+   commit, and is ≥ the allow-list minimum (SemVer order). Otherwise refused. This stops a compromised app from moving agents to
+   an old or unreleased commit.
+6. **Air-gapped.** A vendored tarball is accepted only if its sha256 equals the document's `tarballSha256`; a document without
+   `tarballSha256` cannot install offline. The allow-list (step 4) and the minimum tag (on the document's `tag`) still apply;
+   the confirmation states that the tag-to-commit link was not verified online.
+7. **Install.** Only into the agent's own harness home (HH-8); the slot only under the HH-5 exception; uninstall restores what
+   install changed, the slot exactly (HH-5 point 4).
+
+**Portal.** No catalog field. The Portal shows "package available" only through the app's existing manifest `harnessHints` text
+(kinds `tealbrick_cli`, `claude_agent_sdk`; MANIFEST §10, plain text, no commands).
+
+**Eve.** Eve is agentic (`AGENTIC_HARNESS_OPTION_IDS`) but has no hook points: it is not a package target.

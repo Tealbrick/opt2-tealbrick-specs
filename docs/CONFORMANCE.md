@@ -439,7 +439,10 @@ Gated by the bridge's reported cap `owner_drafts`, never by version; a bridge wi
   - `B-OD.refused_callers`: a service caller → `401`; a paused instance → `403 paused`.
   - `B-OD.no_portal`: no answer in 15 s → `503 portal_unavailable`. Standalone → `409 owner_drafts_unsupported`.
 
-## v0.1.90 rows (C392 L0, harness packages; the conformance PR adds them)
-- `M-HP.cases`: the manifest package refuses every `invalid` case of `examples/harness-packages.cases.json` with `harness_package_invalid` under `/harnessPackages` and the case's rule, and accepts every `valid` case (MANIFEST §10.1, M-HP-1..5).
-- `M-HP.absent`: a manifest without `harnessPackages` validates with an unchanged `manifestDigest`.
-- The harness rows (offer, pin, own home, the HH-5 exception points 1–4, forget text) are H-W1 rows in HARNESS-HOOKS §6; they run in the real harness (HH-0d).
+## v0.1.90 rows (C392 L0, C395: harness package delivery; the CLI and Knowledge PRs add them)
+Real-harness rows (HH-0d); the full list with the HH-5 points is HARNESS-HOOKS §6 (H-W1-HP-*, H-W1-HH-5.*).
+- `HP.allowlist`: an upstream name not on the CLI allow-list, or a `repo` other than the listed one (fork, other owner, look-alike name) → refused, nothing fetched.
+- `HP.tag_check`: a `commit` that no `vX.Y.Z` release tag of the listed repo points to, or a document `tag` that points to another commit, or a non-40-hex commit → refused at install.
+- `HP.downgrade`: a tag below the allow-list minimum → refused, even when the tag points to the given commit.
+- `HP.tarball`: offline, a vendored tarball whose sha256 differs from `tarballSha256`, or a document without `tarballSha256` → refused.
+- `HP.offer`: no package offered or installed for `claude-desktop`, `codex-desktop`, `generic-mcp`, `tbd-default` or `eve` agents, or without the owner's per-agent confirmation.
