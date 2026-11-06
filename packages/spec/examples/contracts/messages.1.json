@@ -71,6 +71,51 @@
       "nextCursor": null,
       "exhausted": true,
       "retryAfterS": 30
+    },
+    {
+      "rows": [
+        {
+          "id": "v1",
+          "conversation": "c3",
+          "sentAt": "2026-10-17T10:05:00Z",
+          "author": {
+            "kind": "person",
+            "handle": "slack:u024bexample",
+            "verified": "platform_id"
+          },
+          "text": "author.verified platform_id",
+          "attachments": [],
+          "untrusted": true
+        },
+        {
+          "id": "v2",
+          "conversation": "c3",
+          "sentAt": "2026-10-17T10:05:00Z",
+          "author": {
+            "kind": "person",
+            "handle": "email:anna@example.com",
+            "verified": "dkim_spf_aligned"
+          },
+          "text": "author.verified dkim_spf_aligned",
+          "attachments": [],
+          "untrusted": true
+        },
+        {
+          "id": "v3",
+          "conversation": "c3",
+          "sentAt": "2026-10-17T10:05:00Z",
+          "author": {
+            "kind": "person",
+            "handle": "email:mallory@example.org",
+            "verified": "none"
+          },
+          "text": "author.verified none",
+          "attachments": [],
+          "untrusted": true
+        }
+      ],
+      "nextCursor": null,
+      "exhausted": true
     }
   ],
   "invalid": [
@@ -179,6 +224,72 @@
               "handle": "123456789"
             },
             "text": "x",
+            "attachments": [],
+            "untrusted": true
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "unknown author.verified value",
+      "doc": {
+        "rows": [
+          {
+            "id": "m",
+            "conversation": "c3",
+            "sentAt": "2026-10-17T10:05:00Z",
+            "author": {
+              "kind": "person",
+              "handle": "telegram:1",
+              "verified": "yes"
+            },
+            "text": "author.verified x",
+            "attachments": [],
+            "untrusted": true
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "author.verified wrong case",
+      "doc": {
+        "rows": [
+          {
+            "id": "m",
+            "conversation": "c3",
+            "sentAt": "2026-10-17T10:05:00Z",
+            "author": {
+              "kind": "person",
+              "handle": "telegram:1",
+              "verified": "Platform_ID"
+            },
+            "text": "author.verified x",
+            "attachments": [],
+            "untrusted": true
+          }
+        ],
+        "nextCursor": null,
+        "exhausted": true
+      }
+    },
+    {
+      "why": "author.verified not a string",
+      "doc": {
+        "rows": [
+          {
+            "id": "m",
+            "conversation": "c3",
+            "sentAt": "2026-10-17T10:05:00Z",
+            "author": {
+              "kind": "person",
+              "handle": "telegram:1",
+              "verified": true
+            },
+            "text": "author.verified x",
             "attachments": [],
             "untrusted": true
           }
