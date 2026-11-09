@@ -334,7 +334,7 @@ export interface Workspace {
    *  own servers are not offered by this Portal (or to this account), or when the workspace already has infrastructure. Read only.
    *  v0.1.93 (D-26): Core no longer sends `zone`: the owner chooses the zone of each server (installer `--zone`, `Server.zone`)
    *  and the GUI asks for it. Readers MUST NOT require it (a Core older than 0.1.93 still sends its Portal-wide zone). Release
-   *  order: a GUI that tolerates the absence ships no later than the Core that stops sending it (one release set). */
+   *  order: a GUI that tolerates the absence ships BEFORE the Core that stops sending it. */
   serverInstall?: { portalUrl: string; channel: "stable" | "dev"; zone?: string } | null;
 }
 /** v0.1.40 (C223): `workspaces.delete` answer (a superset of `Ok`). `deleting` = provider services are still being removed;

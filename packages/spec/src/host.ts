@@ -559,5 +559,5 @@ export const HOST_CONFORMANCE = [
     expect: "Each answers 400 validation_failed with details.reason zone_required, zone_invalid, zone_invalid and zone_reserved; no device request and no server are made." },
   { id: "H-22", title: "the box refuses a pairing whose zone differs", rule: "pairing", target: "agent-unit",
     given: "A box installed with --zone a.example.test whose token result carries zone b.example.test, and one whose token result carries no zone.",
-    expect: "Both end the flow with an error before any plan is polled; the box keeps no server id; the error says to detach and pair again (or to update the Portal)." },
+    expect: "Both end the flow with an error before any plan is polled; the box keeps no server id; the error says to detach the server in Portal and pair again (or to update the Portal)." },
 ] as const satisfies readonly HostConformanceRow[];

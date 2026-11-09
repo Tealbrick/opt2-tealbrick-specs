@@ -186,7 +186,11 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
   (400 validation_failed: `zone_invalid` for the pattern, `zone_reserved` for the Portal's own host or any name under it), and
   `device.approve` uses the zone stored with the request. The token answer echoes it (`DeviceHostTokenResult.zone`); a box that
   sent a zone refuses a pairing whose echo differs or is missing (an older Core: update the Portal first). Different servers of
-  one Portal use different zones. A bridge host is never trusted by Core for anything: it only names the owner's box. DNS + certificates are the owner's job: `w<ws>.<zone>` and `w<ws>-keys.<zone>` must resolve to the box (or
+  one Portal use different zones. A bridge host is never trusted by Core for anything: it only names the owner's box. No Core,
+  gateway or GUI origin allow-list (CORS, cookies, redirects) may include a `Server.zone` host. `zone_reserved` compares the
+  normalised zone with the Portal's host name (no port). An agent that sent a zone and gets 400 validation_failed "zone is not
+  allowed" from `device.start` (a Core older than 0.1.93) stops with "this Portal is too old for --zone"; it never retries
+  without the zone. A pairing the box refuses after the owner approved it leaves a server in Portal: the owner detaches it there. DNS + certificates are the owner's job: `w<ws>.<zone>` and `w<ws>-keys.<zone>` must resolve to the box (or
   its edge) before the first bridge deploy, which gets its certificates by HTTP-01. Core never touches DNS.
 - Transition (v0.1.93): the operator may keep ONE Portal-wide transition default (the zone Core used before 0.1.93). At boot
   Core fills every server whose `zone` is still empty with it; without a default such a server keeps `Server.zone = null` and its

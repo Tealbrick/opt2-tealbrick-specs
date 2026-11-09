@@ -552,7 +552,7 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## v0.1.93 changes (zone per server, D-26)
 - `DeviceStartHostInput.zone` (optional in the type for older agents; `HOST_PATTERNS.zone`), `DeviceRequestHost.zone`, `Server.zone` (null only for an old server without a transition default), `DeviceHostTokenResult.zone` (echo): the zone of a server's bridge hosts is chosen by the owner at install and fixed at pairing (HOST.md §8). `device.start` scope host answers 400 validation_failed `details.reason = zone_required | zone_invalid | zone_reserved`.
-- `Workspace.serverInstall` no longer carries `zone`; readers MUST NOT require it (an older Core still sends it). The GUI asks the owner for the zone and writes it into the command. Release order: the tolerant GUI ships no later than the Core that stops sending it. null also when this Portal does not offer own servers to the account. Conformance rows H-20..H-22.
+- `Workspace.serverInstall` no longer carries `zone`; readers MUST NOT require it (an older Core still sends it). The GUI asks the owner for the zone and writes it into the command. Release order: the tolerant GUI ships before the Core that stops sending it. null also when this Portal does not offer own servers to the account. Conformance rows H-20..H-22.
 - The `/device` approval page shows the zone and the bridge address `w<ws>.<zone>` next to the workspace choice: `device.start` is public, so this is the owner's only check of the zone.
 
 ## v0.1.62 additions (pairing channel)
