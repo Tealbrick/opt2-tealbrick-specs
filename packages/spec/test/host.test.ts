@@ -233,10 +233,24 @@ test("credentials: K13 host key, host caller, device scope host only for tealbri
   assert.ok(!(DEVICE_FLOW.agentClientIds as readonly string[]).includes("tealbrick-host"));
 });
 
-test("conformance rows H-1..H-19, each bound to a policy rule", () => {
-  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 19 }, (_, i) => `H-${i + 1}`));
+test("conformance rows H-1..H-22, each bound to a policy rule", () => {
+  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 22 }, (_, i) => `H-${i + 1}`));
   for (const r of HOST_CONFORMANCE) {
     assert.ok(r.rule in HOST_POLICY, r.id);
     assert.ok(r.given.length > 20 && r.expect.length > 10, r.id);
   }
+});
+
+// v0.1.93 (D-26): the zone belongs to the server; the longest bridge host built from a valid zone is still a valid public host.
+test("zone pattern: owner zones pass, bad ones fail, and w<ULID>-keys.<zone> stays a public host", () => {
+  const zone = new RegExp(HOST_PATTERNS.zone, "u");
+  const host = new RegExp(HOST_PATTERNS.publicHost, "u");
+  for (const ok of ["example.com", "tbws.example.org", "a.b.example.co"]) assert.ok(zone.test(ok), ok);
+  for (const bad of ["", "com", "Example.com", "example.com.", ".example.com", "-a.example.com", "a..example.com", "a_b.example.com", `${"a.".repeat(100)}com`]) {
+    assert.ok(!zone.test(bad), bad);
+  }
+  const longest = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(8)}`;
+  assert.equal(longest.length, 200);
+  assert.ok(zone.test(longest));
+  assert.ok(host.test(`w${"0".repeat(26)}-keys.${longest}`));
 });

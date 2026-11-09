@@ -1,6 +1,6 @@
 # opt2 specs — HOST (customer server: pairing, signed plans, local policy, reports)
 
-Status: v0.1.58 (S1-0, frozen 2026-10-22; wording revised in v0.1.59; detach modes in v0.1.60). Sprint S1 "deploy outside Railway" (C308).
+Status: v0.1.58 (S1-0, frozen 2026-10-22; wording revised in v0.1.59; detach modes in v0.1.60; zone per server in v0.1.93). Sprint S1 "deploy outside Railway" (C308).
 Machine-readable source of truth: `packages/spec/src/host.ts` (types, `HOST_LIMITS`, `HOST_PATTERNS`, `HOST_POLICY`,
 `HOST_PLATFORM_ENV`, `HOST_BOX_OWNED_ENV`, `HOST_SECRET_VALUE_PATTERNS`, `HOST_CONFORMANCE`), route rows in `routes.ts`
 (`servers.*`, `host.*`, RT9), K13 + `TYP.hostAssertion` / `TYP.hostPlan` + `DEVICE_FLOW.hostClientIds` in `credentials.ts`,
@@ -25,14 +25,15 @@ signature only proves that Core made a plan. The box enforces a closed local pol
   agent connection or a Railway token.
 
 ## 2. Pairing = device flow with scope `host`
-1. `tealbrick server add --ssh root@<ip>` (CLI, owner's machine) installs the agent + the engine over SSH, then starts
-   `tealbrick host pair` on the box. No claim code in cloud-init in S1 (M7: metadata endpoint).
+1. `tealbrick server add --ssh root@<ip> --zone <zone>` (CLI, owner's machine) installs the agent + the engine over SSH, then starts
+   `tealbrick host pair` on the box. v0.1.93: `<zone>` is the owner's DNS zone for this server's bridge hosts (§8). No claim code in cloud-init in S1 (M7: metadata endpoint).
 2. The agent generates K13 and calls `device.start` (public) with `DeviceStartHostInput`
-   `{scope: "host", client_id: "tealbrick-host", machine_label, host_public_key, facts}`. `tealbrick-host` is the only client for
+   `{scope: "host", client_id: "tealbrick-host", machine_label, host_public_key, facts, zone}` (`zone` v0.1.93, §8). `tealbrick-host` is the only client for
    scope `host` and can never get scope owner or agent (`DEVICE_FLOW.hostClientIds`).
 3. The CLI shows `verification_uri_complete` + `user_code` (the agent relays them over the SSH session).
-4. The owner opens `/device` (browser). `device.lookup` returns `DeviceRequest.host = {publicKeyThumbprint, facts}`; the page
-   shows the facts and asks for ONE choice: the workspace (+ optional server name `label`).
+4. The owner opens `/device` (browser). `device.lookup` returns `DeviceRequest.host = {publicKeyThumbprint, facts, zone}`; the page
+   shows the facts and the zone, and asks for ONE choice: the workspace (+ optional server name `label`). With the workspace chosen
+   it shows the bridge address `w<ws>.<zone>`.
 5. `device.approve {userCode, ws, label?}` = in ONE transaction and ONE consent record: (a) create `srv_…` (state `pending`) and
    pin the key, (b) `workspaces.set_infrastructure {provider: "own_infra", destinationId: srv_…}` for that workspace (recorded as
    one applied draft, `DeviceDecision.draftId`; audit `device.approve` + `server.pair` + `workspace.set_infrastructure`), which
@@ -41,11 +42,11 @@ signature only proves that Core made a plan. The box enforces a closed local pol
    (409 conflict, `details.reason = infrastructure_set`; S1 never replaces — moving a workspace is a later migration feature),
    a paused or standalone workspace, a key already pinned for a live server (409 conflict).
 6. The agent polls `device.token` (RFC 8628). Result `DeviceHostTokenResult {scope: "host", server_id, workspace_id, key_thumbprint}`
-   — no token; the box checks `key_thumbprint` equals its own key and from now on signs host assertions. v0.1.62: the answer also carries `channel` (`"stable" | "dev"`, the chosen workspace's channel); the box uses it for every release-index check. Installed without an explicit channel, the box takes it; installed with an explicit channel that differs, the box refuses the pairing (detach and pair again). Core refuses a channel change of a workspace that has a paired server (409 conflict, `details.reason = server_channel_locked`); to change it, detach and pair again.
+   — no token; the box checks `key_thumbprint` equals its own key (v0.1.93: and `zone` equals its own zone, §8) and from now on signs host assertions. v0.1.62: the answer also carries `channel` (`"stable" | "dev"`, the chosen workspace's channel); the box uses it for every release-index check. Installed without an explicit channel, the box takes it; installed with an explicit channel that differs, the box refuses the pairing (detach and pair again). Core refuses a channel change of a workspace that has a paired server (409 conflict, `details.reason = server_channel_locked`); to change it, detach and pair again.
 - The device code is single-use and lives 10 min (K2); it is redeemed before the box can fetch any plan.
 
 ## 3. Server object
-`Server {id, workspaceId, label, state, facts, keyThumbprint, lastReportAt, lastSeq, services, firewall, createdAt, detachedAt}`
+`Server {id, workspaceId, label, state, facts, keyThumbprint, zone, lastReportAt, lastSeq, services, firewall, createdAt, detachedAt}`
 (host.ts). One server runs ONE workspace (one engine stack per workspace). State (Core computes it):
 `pending` paired, no report yet · `online` last report < 90 s ago, firewall ok, no service failed · `degraded` online but the
 firewall check failed or a service is `failed` / its health `failing` · `offline` no report for 90 s · `detached` terminal.
@@ -153,7 +154,7 @@ actions run before the first engine call; a refused plan changes nothing.
    host-path bind gets `docker update --restart=no` + `docker stop` (data kept) and is reported in `escapes` (code
    `escape_attempt`) until Core acknowledged it. Core marks the server `degraded` (24 h) and alerts.
 16. **publicHosts** — only the bridge (kind bridge, component null): `main = w<lower ws ULID>.<zone>`,
-   `keys = w<lower ws ULID>-keys.<zone>`, `zone` = the box's configured workspace zone.
+   `keys = w<lower ws ULID>-keys.<zone>`, `zone` = the box's configured workspace zone, the one it sent at pairing (= `Server.zone`).
 
 ## 6. Reports (metadata only — no log content, no env values, no secrets)
 `HostReport {server, at, lastSeq, results[], services[], facts, firewall, escapes?, queued?}`, schema `host-report.schema.json`,
@@ -177,8 +178,27 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
   self-registered own-infra form (`instances.register_own_infra`, no server) is unchanged.
 - `DeployRefs` for a server: `destinationId = srv_…`, `environmentId = ws_…`, `serviceId = privateHost = <serviceName>` (single label),
   `volumeIds` = the volume names, `domain` / `keysDomain` = the two bridge hosts, `deploymentId = plan:<seq>`.
-- Bridge hosts: `<label>.<zone>` and `<label>-keys.<zone>`, `label = "w" + lower-case(ws ULID)`, `zone` = Core config
-  `TB_SERVER_ZONE` (= the box's configured workspace zone). DNS + certificates are the box's / Platform's job (S1-6), not Core's.
+- Bridge hosts: `<label>.<zone>` and `<label>-keys.<zone>`, `label = "w" + lower-case(ws ULID)`, `zone` = `Server.zone`.
+  v0.1.93 (D-26): the zone belongs to the SERVER, not to the Portal. The owner chooses it at install (`--zone`), the box sends it in
+  `device.start` and keeps it in its config, Core stores it at `device.approve` and never changes it (a new zone = a new pairing).
+  Writers (installer, CLI, agent) lower-case the zone, drop one trailing dot, give an IDN as punycode and check
+  `HOST_PATTERNS.zone` before they send it (the pattern is the one source; ECMAScript regex). Core only checks, in `device.start`
+  (400 validation_failed: `zone_invalid` for the pattern, `zone_reserved` for the Portal's own host or any name under it), and
+  `device.approve` uses the zone stored with the request. The token answer echoes it (`DeviceHostTokenResult.zone`); a box that
+  sent a zone refuses a pairing whose echo differs or is missing (an older Core: update the Portal first). Different servers of
+  one Portal use different zones. A bridge host is never trusted by Core for anything: it only names the owner's box. No Core,
+  gateway or GUI origin allow-list (CORS, cookies, redirects) may include a `Server.zone` host. `zone_reserved` compares the
+  normalised zone with the Portal's host name (no port). An agent that sent a zone and gets 400 validation_failed "zone is not
+  allowed" from `device.start` (a Core older than 0.1.93) stops with "this Portal is too old for --zone"; it never retries
+  without the zone. A pairing the box refuses after the owner approved it leaves a server in Portal: the owner detaches it there. DNS + certificates are the owner's job: `w<ws>.<zone>` and `w<ws>-keys.<zone>` must resolve to the box (or
+  its edge) before the first bridge deploy, which gets its certificates by HTTP-01. Core never touches DNS.
+- Transition (v0.1.93): the operator may keep ONE Portal-wide transition default (the zone Core used before 0.1.93). At boot
+  Core fills every server whose `zone` is still empty with it; without a default such a server keeps `Server.zone = null` and its
+  bridge deploy fails (`provider_unavailable`) until the box pairs again with `--zone`. A `device.start` without `zone` (an agent
+  older than 0.1.93) gets the default, else `zone_required`. An old agent whose own configured zone differs from the default
+  gets every bridge plan refused (`schema_invalid`, §5.16): pair it again with a new agent. The operator removes the default when
+  every server row has a zone and no agent older than 0.1.93 pairs any more.
+- Whether a Portal offers own servers (and to which accounts) is a separate Core setting; it no longer depends on a zone.
 - Deploy is asynchronous: `deploy`/`update`/`remove` enqueue a plan; `observe` reads the server's last report (result for that seq,
   service state + health). `remove {deleteData: true}` is refused in S1 (stop + keep only).
 
@@ -186,7 +206,7 @@ remain), applies nothing new without a fresh valid plan, and never takes a destr
 H-1 bad signature refused · H-2 wrong server refused · H-3 replay (same seq) refused · H-4 expired refused · H-5 image not in
 index refused · H-6 downgrade refused (one-step rollback allowed) · H-7 undeclared env name refused (+ secret-like value) ·
 H-8 forbidden runtime settings refused · H-9 stop keeps the volume · H-10 TB_OWN_INFRA_ORIGINS matches the
-running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan · H-16 pairing by device flow · H-17 pairing key pin · H-18 public route for the bridge only · H-19 pairing takes the workspace channel. Each row names its `HOST_POLICY` rule and its target
+running tb- services · H-11 firewall probe from an app network · H-12 container outside the allowlist stopped · H-13 detach leave_running stops nothing · H-14 detach stop stops every service and keeps the volumes · H-15 no plan after a final plan · H-16 pairing by device flow · H-17 pairing key pin · H-18 public route for the bridge only · H-19 pairing takes the workspace channel · H-20 the server's zone comes from its pairing · H-21 Core refuses a pairing without a usable zone · H-22 the box refuses a pairing whose zone differs. Each row names its `HOST_POLICY` rule and its target
 (`agent-unit`, `box-probe`, `both`); `given` / `expect` are the test text.
 
 ## 10. Decisions on the draft's open items (2026-10-22)
