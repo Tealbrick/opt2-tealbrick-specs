@@ -332,8 +332,9 @@ export interface Workspace {
   deleting?: { since: IsoTime; lastError: { code: string; message: string } | null };
   /** v0.1.61: what the server install command needs (the command text belongs to the host agent's installer). null when
    *  own servers are not offered by this Portal (or to this account), or when the workspace already has infrastructure. Read only.
-   *  v0.1.93 (D-26): `zone` is no longer sent: the owner chooses the zone of each server (installer `--zone`, `Server.zone`).
-   *  Readers tolerate its absence; a Core older than 0.1.93 still sends its Portal-wide zone. */
+   *  v0.1.93 (D-26): Core no longer sends `zone`: the owner chooses the zone of each server (installer `--zone`, `Server.zone`)
+   *  and the GUI asks for it. Readers MUST NOT require it (a Core older than 0.1.93 still sends its Portal-wide zone). Release
+   *  order: a GUI that tolerates the absence ships no later than the Core that stops sending it (one release set). */
   serverInstall?: { portalUrl: string; channel: "stable" | "dev"; zone?: string } | null;
 }
 /** v0.1.40 (C223): `workspaces.delete` answer (a superset of `Ok`). `deleting` = provider services are still being removed;

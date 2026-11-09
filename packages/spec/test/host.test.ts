@@ -233,8 +233,8 @@ test("credentials: K13 host key, host caller, device scope host only for tealbri
   assert.ok(!(DEVICE_FLOW.agentClientIds as readonly string[]).includes("tealbrick-host"));
 });
 
-test("conformance rows H-1..H-20, each bound to a policy rule", () => {
-  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 20 }, (_, i) => `H-${i + 1}`));
+test("conformance rows H-1..H-22, each bound to a policy rule", () => {
+  assert.deepEqual(HOST_CONFORMANCE.map((r) => r.id), Array.from({ length: 22 }, (_, i) => `H-${i + 1}`));
   for (const r of HOST_CONFORMANCE) {
     assert.ok(r.rule in HOST_POLICY, r.id);
     assert.ok(r.given.length > 20 && r.expect.length > 10, r.id);
