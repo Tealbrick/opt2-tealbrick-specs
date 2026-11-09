@@ -70,6 +70,8 @@ export const HOST_PATTERNS = {
   healthPath: "^(/|(/[A-Za-z0-9_~-][A-Za-z0-9._~-]{0,63}){1,8}/?)$",
   /** one public host name (lower case, ≥ 2 labels) */
   publicHost: "^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+  /** v0.1.93: the DNS zone of a server's bridge hosts (lower case, ≥ 2 labels, no trailing dot, ≤ 200 so `w<ULID>-keys.<zone>` fits 253) */
+  zone: "^(?=.{4,200}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
   enrolCode: "^tbe_[A-Za-z0-9_-]{43}$",
 } as const;
 
@@ -142,6 +144,9 @@ export interface Server {
   facts: HostFacts;
   /** RFC 7638 thumbprint of the pinned host key (K13) */
   keyThumbprint: string;
+  /** v0.1.93: the DNS zone of this server's bridge hosts (`HOST_PATTERNS.zone`), fixed at pairing: the zone the box sent in
+   *  `device.start`. Servers paired before 0.1.93 carry the Portal-wide zone Core used then. A new zone = a new pairing. */
+  zone: string;
   lastReportAt: IsoTime | null;
   /** from the last report: the highest plan seq the box decided (applied or refused after a valid signature) */
   lastSeq: number;
@@ -178,6 +183,10 @@ export interface DeviceStartHostInput {
   host_public_key: Ed25519PublicJwk;
   /** shown on the approval page; Core stores them as the server's first facts */
   facts: HostFacts;
+  /** v0.1.93 (D-26): the DNS zone the owner chose for this server's bridge hosts (`HOST_PATTERNS.zone`, the installer's
+   *  `--zone`). Core stores it as `Server.zone`. Absent (an agent older than 0.1.93): Core uses its transition default when it
+   *  has one, else refuses with 400 validation_failed, `details.reason = zone_required` (HOST.md §8). */
+  zone?: string;
 }
 /** `device.token` result for scope host: no token. From now on the box signs K13 host assertions. */
 export interface DeviceHostTokenResult {
@@ -195,6 +204,9 @@ export interface DeviceHostTokenResult {
 export interface DeviceRequestHost {
   publicKeyThumbprint: string;
   facts: HostFacts;
+  /** v0.1.93: the zone this server will use (from device.start, or Core's transition default); the page shows the bridge address
+   *  `w<ws>.<zone>` so the owner confirms it with the workspace choice */
+  zone: string;
 }
 
 // ───────────────────────────── plans (signed by Core, CHECKED by the box — HOST.md §4) ─────────────────────────────
@@ -399,7 +411,7 @@ export const HOST_POLICY = {
   firewall: "Agent-owned rules, re-checked before every report and on every Docker network create event: traffic from any Docker bridge (br-+, docker0) to the host is DROPped by default (INPUT, IPv4 and IPv6), including :22, the engine API, other stacks' networks, IPv6 host addresses and 169.254.169.254; explicit allows only for the engine's own network to what it needs (the report says ok:false; firewall_failed on an action that needs it).",
   coreDown: "While Core is unreachable the box keeps the last applied state running, queues ≤ reportQueueMax reports, applies nothing without a fresh valid plan and takes no destructive action (HOST.md §7).",
   containEscapes: "Every report cycle the agent lists ALL containers on the box and compares each one's HostConfig (network/pid/ipc modes, privileged, capabilities, devices, binds and mounts) with what it expects: for an engine container the config recorded at install for that component's pinned image digest; for a tb- service the config the agent generated. Name and digest only IDENTIFY a container, they never exempt it. A container that deviates with a container:/host namespace mode, privileged, added capabilities, devices, a docker.sock or host-path bind gets `docker update --restart=no` and `docker stop` (data kept) and is reported in `escapes` (code escape_attempt) until Core acknowledged it.",
-  publicHosts: "`publicDomain` true only for release kind bridge, component null; then `publicHosts` = {main: \"w\" + lower(ws ULID) + \".\" + zone, keys: \"w\" + lower(ws ULID) + \"-keys.\" + zone}, `zone` = the box's configured workspace zone (schema_invalid otherwise).",
+  publicHosts: "`publicDomain` true only for release kind bridge, component null; then `publicHosts` = {main: \"w\" + lower(ws ULID) + \".\" + zone, keys: \"w\" + lower(ws ULID) + \"-keys.\" + zone}, `zone` = the box's configured workspace zone, the one it sent at pairing (= `Server.zone`, v0.1.93) (schema_invalid otherwise).",
 } as const;
 export type HostPolicyRule = keyof typeof HOST_POLICY;
 
@@ -533,4 +545,7 @@ export const HOST_CONFORMANCE = [
   { id: "H-19", title: "pairing takes the workspace channel", rule: "pairing", target: "agent-unit",
     given: "A box installed WITHOUT an explicit channel pairs into a workspace whose token answer carries channel dev (and one with stable); a box installed with an explicit channel stable pairs into a dev workspace; then a plan for a release of the other channel.",
     expect: "Without an explicit channel the box's channel equals the token answer's channel and the release-index check uses it (a release of the other channel is refused not_in_index); an explicit channel that differs ends the pairing with an error (detach and pair again); a token answer without a valid channel ends the flow with an error." },
+  { id: "H-20", title: "the server's zone comes from its pairing", rule: "publicHosts", target: "both",
+    given: "Two boxes paired with the same Portal, one installed with --zone a.example.test and one with --zone b.example.test; then a box whose device.start carries no zone against a Core without a transition default, and one with a zone that fails HOST_PATTERNS.zone.",
+    expect: "device.start carries each box's zone; Server.zone equals it; each bridge plan's publicHosts are w<ws>.<that zone> and w<ws>-keys.<that zone>; a plan with hosts in another zone is refused schema_invalid; the pairing without a zone and the one with an invalid zone are refused 400 validation_failed (details.reason zone_required / zone_invalid) and no server is made." },
 ] as const satisfies readonly HostConformanceRow[];

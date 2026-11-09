@@ -2,6 +2,9 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.93 (D-26, INC-20261109-01: the bridge zone belongs to the server; spec 0.1.93)
+- Core no longer has one Portal-wide zone for own servers. The owner chooses a zone per server (installer and `tealbrick server add` `--zone`); the box sends it in `device.start`, Core stores it as `Server.zone` and builds the bridge hosts from it. `HOST_PATTERNS.zone`; `DeviceStartHostInput.zone`, `DeviceRequestHost.zone`, `Server.zone`; `Workspace.serverInstall.zone` dropped (optional for readers). Transition default for old agents and servers: HOST.md §8. Conformance H-20. Details: HOST.md §2, §8; PORTAL-API.md "v0.1.93".
+
 ## Changelog → v0.1.92 (Martin 2026-11-06: one key per provider on the bridge key page; spec 0.1.92)
 - Bridge-local: one provider key per `MODEL_PROVIDERS` row (`pk:@<id>`), requirement keys linked by their declared `provider` fall back to it, conflicts are shown and never resolved silently, every save names its scope. Details: BRIDGE.md "v0.1.92 — one key per provider". New data in `models.ts`: `PROVIDER_DEFAULT_KEY_PREFIX`, `keyProviderOf`. No schema, Portal, SDK or manifest change.
 

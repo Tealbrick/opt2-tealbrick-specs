@@ -550,6 +550,10 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 ## v0.1.61 additions (own-server install)
 - `Workspace.serverInstall {portalUrl, channel, zone} | null` (read only): the values the server install command needs; null when this Portal offers no own servers or the workspace already has infrastructure. The command text belongs to the host agent's installer. Conformance rows H-16..H-18 (HOST.md).
 
+## v0.1.93 changes (zone per server, D-26)
+- `DeviceStartHostInput.zone` (optional in the type for older agents; `HOST_PATTERNS.zone`), `DeviceRequestHost.zone`, `Server.zone`: the zone of a server's bridge hosts is chosen by the owner at install and fixed at pairing (HOST.md §8). `device.start` scope host answers 400 validation_failed `details.reason = zone_required | zone_invalid`.
+- `Workspace.serverInstall` no longer carries `zone` (the field is optional for readers; an older Core still sends it). null also when this Portal does not offer own servers to the account. Conformance row H-20.
+
 ## v0.1.62 additions (pairing channel)
 - `DeviceHostTokenResult.channel` (`"stable" | "dev"`): the chosen workspace's release channel; the host agent uses it from pairing on. `workspaces.update {channel}` on a workspace with a paired (not detached) server answers 409 conflict, `details.reason = server_channel_locked` (detach and pair again to change it). Conformance row H-19.
 
