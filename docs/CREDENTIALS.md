@@ -237,7 +237,7 @@ Enforcement points: **B** = bridge (`gate()` step 1 on config `pause`; connectio
 | Credential | Storage | Use | Rotation |
 |---|---|---|---|
 | Railway OAuth refresh token (C3) / fallback pasted Railway workspace token | sealed in Core DB (§9.1), one per account link | Core deploy calls only | refresh token rotated and resealed on every use; pasted token: owner replaces |
-| Stripe webhook secret, Stripe secret key, Clerk secret key, Railway OAuth client secret, `TB_KEK` | Core service env (Railway sealed variables); never in DB, logs or responses | Core only | rolled at the provider, then env updated |
+| Paddle API key and notification-destination secret (v0.1.94; Stripe webhook secret and secret key until the Paddle migration completes), Clerk secret key, Railway OAuth client secret, `TB_KEK` | Core service env (Railway sealed variables); never in DB, logs or responses | Core only | rolled at the provider, then env updated |
 None of these is ever sent to a bridge, app, agent or browser.
 
 ## 17. Standalone issuer handover (leaving Portal; C16 B7)
@@ -254,7 +254,7 @@ None of these is ever sent to a bridge, app, agent or browser.
 | R-aud | `aud` mandatory, single string, `tb:` format, equal to the verifier's own reference; no warn-only path. | C2 |
 | R-no-1y-bearer | Longest bearer = 30 d (K3 with 24 h idle — 7 d for TBD sessions, C289 — K5 refresh), both digest-stored and server-revocable; signed tokens ≤ 12 h; proofs ≤ 60 s. | C7 |
 | R-no-shared-secret | No static secret is shared between two services (Core↔gateway, Core↔bridge, bridge↔app, app↔app). Every hop uses the caller's own credential or key-pair proof; Core trusts no identity header from the gateway. | C8 |
-| R-no-third-party-cred | Portal never hands a third-party credential (Railway, Stripe, Clerk, OAuth, API key) to an agent, app or bridge. | C8 + payload scan |
+| R-no-third-party-cred | Portal never hands a third-party credential (Railway, Stripe, Paddle, Clerk, OAuth, API key) to an agent, app or bridge. | C8 + payload scan |
 | R-enrol-only-secret | The enrolment code is the only secret Portal writes into a customer project: one-time, ≤ 24 h, worthless after redemption. Bridges and instances generate their own key pairs; Portal stores only public keys. Public values are fine (`TB_PORTAL_URL`, `TB_PORTAL_KEYS`, bridge URL, `TB_INSTANCE_ID`). Images are public: no registry token in customer projects. | C6, C8 |
 | R-owner-draft | K3 never applies and never obtains any code or K11; no K3-reachable output type carries a credential; apply needs K1 + one confirmation. | P2 + route-table check |
 | R-device-bound | A device request is approved only by a K1 person who presents its user code (digest match); no op lists pending requests or returns a clear user code. | `cred.dev.*` (§6) |

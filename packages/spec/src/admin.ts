@@ -17,7 +17,7 @@
 // the same Idempotency-Key. Every admin op writes one operator_audit row (hash chained, append-only, kept 3 years).
 import type { WorkspaceId } from "./credentials.ts";
 import type { ProductId } from "./manifest.ts";
-import type { AccountId, HttpMethod, IsoTime, Licence, LicenceId, OrderId, Page, PageQuery } from "./routes.ts";
+import type { AccountId, HttpMethod, IsoTime, Licence, LicenceId, OfferPriceChecks, OrderId, Page, PageQuery, PaymentProvider } from "./routes.ts";
 
 type Id<P extends string> = `${P}_${string}`;
 
@@ -100,7 +100,8 @@ export interface AdminMe {
 }
 
 export type CustomerState = "active" | "closed" | "suspended" | "banned";
-/** q: ≥ 3 characters of email or name, or an exact id (acc_, ws_, lic_, ord_, cmp_, user_, Stripe cus_/cs_/pi_). */
+/** q: ≥ 3 characters of email or name, or an exact id (acc_, ws_, lic_, ord_, cmp_, user_, Stripe cus_/cs_/pi_,
+ *  v0.1.94 Paddle ctm_/txn_). */
 export type CustomerSearchInput = PageQuery & { q: string };
 export interface CustomerSummary {
   id: AccountId;
@@ -259,6 +260,16 @@ export interface AdminHealth {
   jobs: AdminJobStatus[];
   workflows: AdminWorkflowStatus[];
   stripe: { refusedSessions30d: number; lastRefusedAt: IsoTime | null; webhookFailures24h: number; lastWebhookAt: IsoTime | null };
+  /** v0.1.94 (specs#74, portal-core#41): the Payment provider this Core runs on, its mode, its webhook and the Offer price
+   *  checks. Optional while Core is on Stripe; `stripe` above is deprecated and removed in the spec contract (specs#75). */
+  payments?: {
+    provider: PaymentProvider;
+    /** off = no key, or a live key refused */
+    mode: "test" | "live" | "off";
+    webhookFailures24h: number;
+    lastWebhookAt: IsoTime | null;
+    offerPriceChecks: OfferPriceChecks;
+  };
   /** bridges whose last contact is older than 1 h (count only) */
   bridges: { total: number; quiet1h: number };
   sources: { railway: boolean; glitchtip: boolean };

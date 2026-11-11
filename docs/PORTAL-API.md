@@ -26,7 +26,8 @@ Scope: every operation Portal Core exposes — to the Portal GUI (browser), the 
 | `bridge` | K7 bridge assertion (`tb-bridge-assert+jwt`, CREDENTIALS §10) | `TB-Assert: <jws>` (never `Authorization`), `aud = tb:portal`, bound to method + URL (+ body digest), ≤ 60 s, verified with the bridge public key from the Instance Registry | bridge id → workspace |
 | `device` | K2 device code | `device_code` in the body of `device.token` | device request |
 | `public` | none | — | none (rate class `public_strict`) |
-| `stripe-webhook` | Stripe signature | `Stripe-Signature` over the raw body, verified with the sealed webhook secret | Stripe |
+| `stripe-webhook` | Stripe signature (deprecated v0.1.94, removed in specs#75) | `Stripe-Signature` over the raw body, verified with the sealed webhook secret | Stripe |
+| `paddle-webhook` (v0.1.94) | Paddle signature | `Paddle-Signature: ts=<unix>;h1=<hex>[;h1=…]` = HMAC-SHA256 of `ts:` + raw body with the notification destination's secret (sealed), timestamp within 5 minutes, any `h1` may match (secret rotation) | Paddle (the secret belongs to one Paddle environment) |
 | `host` (v0.1.58) | K13 host assertion (`tb-host-assert+jwt`, HOST.md §1) | `TB-Assert: <jws>`, `aud = tb:portal`, bound to method + URL (+ body digest), ≤ 60 s, verified with the host key pinned at pairing; only on `host.*` rows (RT9) | server id → workspace |
 
 Rules:
@@ -59,7 +60,7 @@ One envelope everywhere (CORE §8): `{ "error": { "code": "<snake_case>", "messa
 | Status | Codes |
 |---|---|
 | 400 | `bad_request`, `validation_failed`, `idempotency_key_required`, `draft_invalid`, `draft_op_not_draftable`, `draft_ref_invalid`, `draft_ref_money`, `recipe_not_portable`, `policy_invalid`, `authorization_pending`, `slow_down`, `access_denied`, `expired_token` (RFC 8628 codes, carried as `error.code`) |
-| 401 | `unauthenticated`, `bridge_key_revoked`, `enrolment_code_invalid`, `stripe_signature_invalid`, `clerk_signature_invalid` (v0.1.4) |
+| 401 | `unauthenticated`, `bridge_key_revoked`, `enrolment_code_invalid`, `stripe_signature_invalid` (deprecated v0.1.94), `webhook_signature_invalid` (v0.1.94), `clerk_signature_invalid` (v0.1.4) |
 | 402 | `licence_required` |
 | 403 | `forbidden` (wrong auth class for the row), `account_disabled` (v0.1.4, C49), `mfa_required` (v0.1.32, C196), `access_restricted` (C328, Core additive) |
 | 404 | `not_found` |
@@ -212,7 +213,8 @@ Auth: B = browser, O = owner native session, pub = public, dev = device, brg = b
 | `licences.unpaid` | GET `/workspaces/{ws}/unpaid` | B,O | - | entitlement |
 | `checkout.create` | POST `/checkout` | B | DCI | entitlement |
 | `checkout.get` | GET `/orders/{ord}` | B | - | entitlement |
-| `stripe.webhook` | POST `/stripe/webhook` | stripe | - | entitlement |
+| `stripe.webhook` (deprecated v0.1.94) | POST `/stripe/webhook` | stripe | - | entitlement |
+| `paddle.webhook` (v0.1.94) | POST `/paddle/webhook` | paddle | - | entitlement |
 | `skills.get` | GET `/workspaces/{ws}/skills` | B,O | - | workspace |
 | `skills.override_put` | PUT `/workspaces/{ws}/skills/overrides/{skillKey}` | B | D | workspace |
 | `skills.override_delete` | DELETE `/workspaces/{ws}/skills/overrides/{skillKey}` | B | D | workspace |
@@ -549,6 +551,16 @@ Resolved since v0 and removed: id prefixes (CORE §1), connection method `pairin
 
 ## v0.1.61 additions (own-server install)
 - `Workspace.serverInstall {portalUrl, channel, zone} | null` (read only): the values the server install command needs; null when this Portal offers no own servers or the workspace already has infrastructure. The command text belongs to the host agent's installer. Conformance rows H-16..H-18 (HOST.md).
+
+## v0.1.94 changes (Paddle expand, specs#74)
+Expand step of the Stripe → Paddle migration (portal-core ADR-0002: the Payment provider is merchant of record; ADR-0003: Paddle replaces Stripe outright; spec portal-core#83). Everything here is additive; the deprecated Stripe pieces are removed in the contract (specs#75) once Core, GUI, SDK conformance, admin and QA no longer use them.
+- Route `paddle.webhook` (`POST /paddle/webhook`, auth class `paddle-webhook`, transport `raw`, rate `webhook`, `bodyLog: none`, not audited, registry Entitlement), input `PaddleEvent` `{event_id, event_type, occurred_at, notification_id?, data}`, output `WebhookAck`. Core verifies `Paddle-Signature` before any state change (401 `webhook_signature_invalid` otherwise), de-duplicates by `event_id` in the handling transaction, and never trusts the payload: it re-fetches the transaction and checks it against the Order. Events: `transaction.paid` / `transaction.completed` fulfil, `transaction.canceled` expires an open Order, `adjustment.created` / `adjustment.updated` move Licences (approved full refund → `refunded`, approved partial → `review`, chargeback or chargeback warning → `disputed`), others are acknowledged.
+- `webhook_signature_invalid` (401) replaces `stripe_signature_invalid`. Audit actor kind `payment_provider` replaces `stripe`.
+- Checkout: Core on Paddle takes no `buyer` (ignored when sent): no checkout boxes, and every Licence entitles from creation. `Checkout.url` is the Portal's own `/pay` page, where the GUI opens Paddle's overlay for the transaction Core created.
+- `Order`: on Paddle only `business.documents` and `business.acceptedAt` are sent (what the Account had accepted); `amountDiscount`, `promotionCode` and every other `OrderBusiness` field are deprecated (now optional). `Licence.activeFrom` is deprecated.
+- Health: `Health.commerce.provider?` (`PaymentProvider`, absent = stripe) and `Health.commerce.offerPriceChecks?` (`OfferPriceChecks` `{available, refused, failed, firstFailure: {offer, reason} | null}`); `AdminHealth.payments?` `{provider, mode: test | live | off, webhookFailures24h, lastWebhookAt, offerPriceChecks}` (portal-core#41). `AdminHealth.stripe` is deprecated.
+- Admin customer search also takes Paddle ids (`ctm_`, `txn_`).
+- Order of adoption: SDK conformance (sdk#72) checks whichever webhook row Core lists; Core serves `paddle.webhook` from portal-core#87.
 
 ## v0.1.93 changes (zone per server, D-26)
 - `DeviceStartHostInput.zone` (optional in the type for older agents; `HOST_PATTERNS.zone`), `DeviceRequestHost.zone`, `Server.zone` (null only for an old server without a transition default), `DeviceHostTokenResult.zone` (echo): the zone of a server's bridge hosts is chosen by the owner at install and fixed at pairing (HOST.md §8). `device.start` scope host answers 400 validation_failed `details.reason = zone_required | zone_invalid | zone_reserved`.
