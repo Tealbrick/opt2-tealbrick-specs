@@ -58,8 +58,10 @@ export type ProviderKey = string;
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 /** Maps to CREDENTIALS kinds: browser=K1 Clerk session; owner-cli=K3 `tbo_`; bridge=K7 bridge
  *  assertion; device=K2 device_code in body; public=no credential; stripe-webhook=Stripe signature.
- *  v0.1.58 (S1-0): host=K13 host assertion (`TB-Assert`, typ tb-host-assert+jwt), only on the host.* rows (RT9). */
-export type AuthClass = "browser" | "owner-cli" | "bridge" | "device" | "public" | "stripe-webhook" | "host";
+ *  v0.1.58 (S1-0): host=K13 host assertion (`TB-Assert`, typ tb-host-assert+jwt), only on the host.* rows (RT9).
+ *  v0.1.94 (specs#74, Paddle expand): paddle-webhook=`Paddle-Signature` header (HMAC-SHA256 of `ts:body` with the notification
+ *  destination's secret), only on paddle.webhook. stripe-webhook is deprecated and removed in the spec contract (specs#75). */
+export type AuthClass = "browser" | "owner-cli" | "bridge" | "device" | "public" | "stripe-webhook" | "paddle-webhook" | "host";
 /** gateway = forwarded by the generated GUI gateway at https://<portal>/api/v1/…; internal = Core
  *  private network only (the gateway never forwards it). v0.1.36 (C193): admin = only in ADMIN_ROUTES
  *  (`@opt2-tealbrick/spec/admin`), served only on Core's admin listener; never a ROUTES row (Core's main listener refuses
@@ -185,6 +187,9 @@ export type ErrorCode =
   | "draft_invalid" | "draft_op_not_draftable" | "draft_ref_invalid" | "draft_ref_money"
   | "draft_state" | "recipe_not_portable" | "authorization_pending" | "slow_down" | "access_denied"
   | "expired_token" | "enrolment_code_invalid" | "bridge_key_revoked" | "stripe_signature_invalid"
+  /** v0.1.94 (specs#74): 401, a payment-provider webhook without a valid signature (paddle.webhook). Replaces
+   *  stripe_signature_invalid, which is deprecated and removed in the spec contract (specs#75). */
+  | "webhook_signature_invalid"
   | "clerk_signature_invalid" | "account_disabled"
   | "offer_unavailable" | "checkout_failed" | "upstream_timeout"
   /** v0.1.56 (C296): Instance.lastError of a companion that could not start because a required key it uses is not set */
@@ -1156,7 +1161,8 @@ export interface Licence {
   assignment: { ws: WorkspaceId; workspaceName: string; assignedAt: IsoTime } | null;
   livemode: boolean;
   createdAt: IsoTime;
-  /** v0.1.34 (C200, Terms 9A.3): not-before time; the licence entitles only from then (isEntitled honours it). */
+  /** v0.1.34 (C200, Terms 9A.3): not-before time; the licence entitles only from then (isEntitled honours it).
+   *  @deprecated v0.1.94 (specs#74, portal-core ADR-0002): a Licence entitles from creation; removed in specs#75 */
   activeFrom?: IsoTime | null;
   /** v0.1.36 (C184/C203): purchase (Stripe order) or comp (complimentary, issued by an operator; UI word "Free licence").
    *  Absent = purchase. */
@@ -1189,11 +1195,17 @@ export const STAFF_COMP_DEFAULT_DAYS = 14;
  *  "I am buying for my trade, business or profession." (a VAT/tax ID given at Stripe also makes the buyer a business);
  *  `immediateSupply` = the consumer box "I ask Tealbrick to start supplying this licence immediately, before the 14-day
  *  withdrawal period ends. I acknowledge that I lose my right of withdrawal once supply has started." (only when not
- *  business; unticked → the purchase completes and the licence entitles only after the withdrawal period). */
+ *  business; unticked → the purchase completes and the licence entitles only after the withdrawal period).
+ *  @deprecated v0.1.94 (specs#74, portal-core ADR-0002): the Payment provider is merchant of record; checkout has no boxes. */
 export interface CheckoutBuyer { termsAccepted: true; business: boolean; immediateSupply?: boolean }
 /** v0.1.33 (C200): `buyer` is required by Core 0.1.33+ (400 validation_failed, details.reason buyer_required); optional in the
- *  type so a draft step can omit it: drafts.apply supplies it (DraftApplyInput.buyer). */
-export interface CheckoutInput { offerId: OfferId; ws?: WorkspaceId; returnPath: string; buyer?: CheckoutBuyer }
+ *  type so a draft step can omit it: drafts.apply supplies it (DraftApplyInput.buyer).
+ *  v0.1.94 (specs#74): Core on Paddle takes no `buyer` (ignored when sent); removed in the spec contract (specs#75). */
+export interface CheckoutInput {
+  offerId: OfferId; ws?: WorkspaceId; returnPath: string;
+  /** @deprecated v0.1.94 (specs#74): ignored by Core on Paddle; removed in specs#75 */
+  buyer?: CheckoutBuyer;
+}
 /** v0.1.9 (C60): Stripe customer portal (invoices, receipts). `returnPath` = path on the Portal origin (same rule as CheckoutInput). */
 export interface BillingPortalInput { returnPath: string }
 /** One-time Stripe portal link: bearer-like, never logged or stored (bodyLog none, not idempotent), browser only. */
@@ -1214,34 +1226,49 @@ export interface Order {
   paidAt: IsoTime | null;
   /** v0.1.32 (C196 ENG-2): the business evidence stored with the order; omitted by Core before 0.1.32. */
   business?: OrderBusiness;
-  /** v0.1.40 (C92): discount in minor units (0 = none) and the promotion code used at checkout */
+  /** v0.1.40 (C92): discount in minor units (0 = none) and the promotion code used at checkout.
+   *  @deprecated v0.1.94 (specs#74): no discounts on Paddle; removed in specs#75 */
   amountDiscount?: number;
+  /** @deprecated v0.1.94 (specs#74): no promotion codes on Paddle; removed in specs#75 */
   promotionCode?: string | null;
 }
 /** v0.1.32 (C196 ENG-2): Terms §1.2-1.3 evidence. `documents` = what the account had accepted when checkout started
  *  (Core refuses checkout without it: 409 terms_not_accepted). After payment: the business name Stripe collected, whether a
- *  tax ID was given (the tax ID itself stays at Stripe) and the checkout terms tick (`accepted`, null = not collected). */
+ *  tax ID was given (the tax ID itself stays at Stripe) and the checkout terms tick (`accepted`, null = not collected).
+ *  v0.1.94 (specs#74, portal-core ADR-0002): on Paddle only `documents` and `acceptedAt` stay (what the Account had accepted);
+ *  business details and invoices live at the Payment provider. Every other field is deprecated and removed in specs#75. */
 export interface OrderBusiness {
   documents: LegalDocumentRef[];
   acceptedAt: IsoTime;
-  name: string | null;
-  taxIdProvided: boolean | null;
-  checkoutTerms: "accepted" | null;
-  /** v0.1.33 (C200): the buyer type chosen before checkout; omitted on orders before 0.1.33 (business only then) */
+  /** @deprecated v0.1.94 (specs#74) */
+  name?: string | null;
+  /** @deprecated v0.1.94 (specs#74) */
+  taxIdProvided?: boolean | null;
+  /** @deprecated v0.1.94 (specs#74) */
+  checkoutTerms?: "accepted" | null;
+  /** v0.1.33 (C200): the buyer type chosen before checkout; omitted on orders before 0.1.33 (business only then) 
+   *  @deprecated v0.1.94 (specs#74) */
   buyerType?: "business" | "consumer";
-  /** v0.1.33 (C200): consumer orders: time of the immediate-supply request + acknowledgement tick (Terms 9A.3); null otherwise */
+  /** v0.1.33 (C200): consumer orders: time of the immediate-supply request + acknowledgement tick (Terms 9A.3); null otherwise 
+   *  @deprecated v0.1.94 (specs#74) */
   withdrawalWaiverAt?: IsoTime | null;
-  /** v0.1.34: the buyer ticked the business box (a VAT ID at Stripe can make buyerType business without it) */
+  /** v0.1.34: the buyer ticked the business box (a VAT ID at Stripe can make buyerType business without it) 
+   *  @deprecated v0.1.94 (specs#74) */
   businessDeclared?: boolean;
-  /** v0.1.34: time of the acceptance box ticked again at checkout */
+  /** v0.1.34: time of the acceptance box ticked again at checkout 
+   *  @deprecated v0.1.94 (specs#74) */
   checkoutAcceptedAt?: IsoTime;
-  /** v0.1.34: the order's licences entitle from this time (consumer without immediate supply); null = at once */
+  /** v0.1.34: the order's licences entitle from this time (consumer without immediate supply); null = at once 
+   *  @deprecated v0.1.94 (specs#74) */
   licenceActiveFrom?: IsoTime | null;
 }
 /** v0.1.33 (C200): the order evidence covers consumers too. */
 export type OrderBuyer = OrderBusiness;
 export interface UnpaidCount { ws: WorkspaceId; count: number; products: ProductId[] }
-/** Raw Stripe event body; verified with the sealed webhook secret before parsing. */
+/** v0.1.94 (specs#74): raw Paddle notification body; verified with the notification destination's secret (`Paddle-Signature`)
+ *  before parsing. Paddle events carry no mode: the secret belongs to one Paddle environment. */
+export interface PaddleEvent { event_id: string; event_type: string; occurred_at: IsoTime; notification_id?: string; data: Record<string, unknown> }
+/** Raw Stripe event body; verified with the sealed webhook secret before parsing. @deprecated v0.1.94 (specs#74) */
 export interface StripeEvent { id: string; type: string; livemode: boolean; data: { object: Record<string, unknown> } }
 export interface WebhookAck { received: true }
 /** v0.1.4 (C49): Clerk webhook event (svix-signed; verified with the Clerk webhook signing secret held sealed in Core). */
@@ -1560,7 +1587,8 @@ export type AuditListInput = PageQuery & { ws?: WorkspaceId; action?: AuditActio
 export interface AuditEvent {
   id: AuditEventId;
   at: IsoTime;
-  actor: { kind: "person" | "owner_session" | "bridge" | "stripe" | "system"; id: string };
+  /** v0.1.94 (specs#74): `payment_provider` = the Payment provider's webhook (Paddle); `stripe` is deprecated (specs#75) */
+  actor: { kind: "person" | "owner_session" | "bridge" | "stripe" | "payment_provider" | "system"; id: string };
   action: AuditAction;
   ws: WorkspaceId | null;
   subject: string | null;
@@ -1587,8 +1615,20 @@ export interface RouteRegistryDoc { digest: Digest; routes: readonly RouteOp[] }
 export interface Health {
   ok: boolean; version: string; db: "ok" | "down"; deployWorker?: DeployWorkerHealth;
   /** v0.1.37 (ADM-8): what Core already returned untyped (CORE-02): Stripe mode + paid sessions refused in the last 30 days */
-  commerce?: { livemode: boolean; refusedSessions: number; lastRefusedAt: IsoTime | null };
+  commerce?: {
+    livemode: boolean; refusedSessions: number; lastRefusedAt: IsoTime | null;
+    /** v0.1.94 (specs#74): which Payment provider this Core runs on; absent = stripe (before the Paddle migration) */
+    provider?: PaymentProvider;
+    /** v0.1.94 (specs#74, portal-core#41): the outcome of the last Offer price check */
+    offerPriceChecks?: OfferPriceChecks;
+  };
 }
+/** v0.1.94 (specs#74): `stripe` until the Paddle migration completes (portal-core ADR-0003), then `paddle` only. */
+export type PaymentProvider = "stripe" | "paddle";
+/** v0.1.94 (specs#74, portal-core#41): Offer price checks at the last index sync. `refused` = the provider price does not match
+ *  the Offer (amount, currency, tax, one-time); `failed` = the check could not run (permission, network). `firstFailure.reason`
+ *  is a short code, never a key or a provider message. */
+export interface OfferPriceChecks { available: number; refused: number; failed: number; firstFailure: { offer: string; reason: string } | null }
 export interface DeployWorkerHealth {
   /** the sweep ran < 90 s ago */
   alive: boolean;
@@ -1638,7 +1678,7 @@ export interface SchemaMap {
   TicketResult: TicketResult;
   Licence: Licence; LicenceListInput: LicenceListInput; LicenceList: LicenceList; LicenceRef: LicenceRef;
   StaffCompInput: StaffCompInput; LicenceTargetInput: LicenceTargetInput; LicenceChange: LicenceChange; CheckoutInput: CheckoutInput; Checkout: Checkout; BillingPortalInput: BillingPortalInput; BillingPortalSession: BillingPortalSession;
-  OrderRef: OrderRef; Order: Order; UnpaidCount: UnpaidCount; StripeEvent: StripeEvent; WebhookAck: WebhookAck; PortalSigningKeys: PortalSigningKeys; ClerkEvent: ClerkEvent;
+  OrderRef: OrderRef; Order: Order; UnpaidCount: UnpaidCount; StripeEvent: StripeEvent; PaddleEvent: PaddleEvent; WebhookAck: WebhookAck; PortalSigningKeys: PortalSigningKeys; ClerkEvent: ClerkEvent;
   SkillsInput: SkillsInput; SkillBundle: SkillBundle; SkillOverrideInput: SkillOverrideInput; SkillKeyRef: SkillKeyRef;
   SkillFile: SkillFile; ZipFile: ZipFile; DesktopDownload: DesktopDownload;
   OwnerSessionList: OwnerSessionList; OwnerSessionRef: OwnerSessionRef;
@@ -1816,7 +1856,11 @@ export const ROUTES = [
   /** v0.1.9 (C60): errors 409 conflict (details.reason no_billing_customer) when the account never bought; 502 checkout_failed when Stripe refuses. */
   { opId: "billing.portal", method: "POST", path: "/billing/portal", auth: B, exposure: "gateway", transport: "json_slow", query: NOQ, input: "BillingPortalInput", output: "BillingPortalSession", rate: "sensitive", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
   { opId: "checkout.get", method: "GET", path: "/orders/{ord}", auth: B, exposure: "gateway", transport: "json", query: NOQ, input: "OrderRef", output: "Order", rate: "read", bodyLog: "meta", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
+  /** @deprecated v0.1.94 (specs#74): replaced by paddle.webhook; removed in the spec contract (specs#75) */
   { opId: "stripe.webhook", method: "POST", path: "/stripe/webhook", auth: ["stripe-webhook"], exposure: "gateway", transport: "raw", query: NOQ, input: "StripeEvent", output: "WebhookAck", rate: "webhook", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
+  /** v0.1.94 (specs#74, portal-core ADR-0003): Paddle notifications. The handler verifies `Paddle-Signature` before any state change
+   *  (401 webhook_signature_invalid otherwise), de-duplicates by event id and never trusts the payload (re-fetches the transaction). */
+  { opId: "paddle.webhook", method: "POST", path: "/paddle/webhook", auth: ["paddle-webhook"], exposure: "gateway", transport: "raw", query: NOQ, input: "PaddleEvent", output: "WebhookAck", rate: "webhook", bodyLog: "none", audit: null, draftable: false, confirm: false, idempotent: false, registry: "entitlement" },
   /** v0.1.4 (C49): public class; the handler verifies the svix signature (clerk_signature_invalid otherwise) before any state change. */
   { opId: "clerk.webhook", method: "POST", path: "/clerk/webhook", auth: ["public"], exposure: "gateway", transport: "raw", query: NOQ, input: "ClerkEvent", output: "WebhookAck", rate: "webhook", bodyLog: "none", audit: "account.disable", draftable: false, confirm: false, idempotent: false, registry: "workspace" },
 

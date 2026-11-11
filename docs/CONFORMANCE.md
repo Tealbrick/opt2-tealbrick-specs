@@ -14,7 +14,7 @@ Status: v0.1, Lead · Specs, 2026-10-11. Package: `@opt2-tealbrick/conformance` 
 | App, standalone mode | `tb-conformance app --standalone` | none (app is its own issuer) |
 | Bridge (deployed form) | `tb-conformance bridge --url <bridge>` | fake Portal, fake app(s) generated from the example manifests, fake agent |
 | Bridge (relay form, CLI) | `tb-conformance relay --cmd "tealbrick bridge serve --stdio"` | fake deployed bridge |
-| Portal Core | `tb-conformance core --url <gateway>` | fake bridge (enrol/pull/ack), fake device client, Stripe test fixtures |
+| Portal Core | `tb-conformance core --url <gateway>` | fake bridge (enrol/pull/ack), fake device client, payment-provider webhook fixtures (Stripe; signed Paddle events from v0.1.94) |
 | Manifest | `tb-conformance manifest <file>` | none (schema + cross-field rules + generators) |
 
 ## 3. Fakes are generated from the specs (cannot drift)

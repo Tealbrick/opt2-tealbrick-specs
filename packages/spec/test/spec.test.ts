@@ -697,3 +697,45 @@ test("v0.1.74 (QA-SPEC56-3): the variant helpers fail closed on bad input", asyn
   assert.deepEqual([...holdFamilySet({ holdFamily: "first_contact", holdFamilies: ["outward"] })].sort(), ["first_contact", "outward"]);
 });
 
+
+test("v0.1.94 (Paddle expand, specs#74): Paddle webhook row beside Stripe's; buyer, discount and licence-start fields optional; payments health", async () => {
+  const routes = await import("../src/routes.ts");
+  const row = routes.ROUTES.find((r) => r.opId === "paddle.webhook");
+  assert.ok(row, "paddle.webhook row");
+  // every field pinned (the shape Core's handler and the gateway rely on)
+  assert.deepEqual(
+    { ...row, auth: [...row.auth], query: [...row.query] },
+    {
+      opId: "paddle.webhook", method: "POST", path: "/paddle/webhook", auth: ["paddle-webhook"], exposure: "gateway", transport: "raw", query: [],
+      input: "PaddleEvent", output: "WebhookAck", rate: "webhook", bodyLog: "none", audit: null, draftable: false, confirm: false,
+      idempotent: false, registry: "entitlement",
+    },
+  );
+  // expand: the Stripe row stays until the spec contract
+  assert.ok(routes.ROUTES.some((r) => r.opId === "stripe.webhook"));
+  // the new vocabulary is part of the unions (checked by typecheck)
+  const auth: import("../src/routes.ts").AuthClass = "paddle-webhook";
+  const code: import("../src/routes.ts").ErrorCode = "webhook_signature_invalid";
+  const actor: import("../src/routes.ts").AuditEvent["actor"]["kind"] = "payment_provider";
+  assert.deepEqual([auth, code, actor], ["paddle-webhook", "webhook_signature_invalid", "payment_provider"]);
+  const event: import("../src/routes.ts").PaddleEvent = { event_id: "evt_1", event_type: "transaction.completed", occurred_at: "2026-11-12T00:00:00Z", data: { id: "txn_1" } };
+  assert.equal(event.event_type, "transaction.completed");
+  // checkout without buyer; an Order and a Licence without the deprecated fields
+  const checkout: CheckoutInput = { offerId: "off_01M4NAHN4CAF3GZ38J2YDHHJSX" as CheckoutInput["offerId"], returnPath: "/w/ws_1" };
+  assert.equal(checkout.buyer, undefined);
+  const order: Order = {
+    id: "ord_1" as Order["id"], offerId: checkout.offerId, state: "paid", amountSubtotal: 9900, amountTax: 2079, amountTotal: 11979, currency: "usd",
+    licenceIds: [], assignTo: null, createdAt: "2026-11-12T00:00:00Z", paidAt: "2026-11-12T00:01:00Z",
+    business: { documents: [{ doc: "terms", version: "1.1" }], acceptedAt: "2026-11-01T00:00:00Z" },
+  };
+  assert.deepEqual(Object.keys(order.business ?? {}), ["documents", "acceptedAt"]);
+  const licence: Pick<import("../src/routes.ts").Licence, "activeFrom"> = {};
+  assert.equal(licence.activeFrom, undefined);
+  // admin health names the payment provider and counts the Offer price checks (portal-core#41)
+  const payments: NonNullable<import("../src/admin.ts").AdminHealth["payments"]> = {
+    provider: "paddle", mode: "test", webhookFailures24h: 0, lastWebhookAt: null,
+    offerPriceChecks: { available: 8, refused: 0, failed: 1, firstFailure: { offer: "off_01M4NAHN4CAF3GZ38J2YDHHJSX", reason: "permission" } },
+  };
+  const commerce: NonNullable<import("../src/routes.ts").Health["commerce"]> = { livemode: false, refusedSessions: 0, lastRefusedAt: null, provider: "paddle", offerPriceChecks: payments.offerPriceChecks };
+  assert.equal(commerce.provider, payments.provider);
+});
