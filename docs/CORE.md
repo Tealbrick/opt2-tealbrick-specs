@@ -363,7 +363,7 @@ Bridge key store (sealed, bridge volume) holds workspace default keys (manifest 
 | I14 | Free caps claim shape: `caps: { write?: Cap, outward?: Cap, destructive?: Cap }`, `Cap = { max: integer ≥ 0, per: "hour" \| "day" }`; counted by the app per (agent, effect) over a sliding window from receipts. Agent Policy defaults for Free agents: write 500/hour, outward 30/hour, destructive 20/day; default held families = `DEFAULT_HELD_FAMILIES` (destructive, money, first_contact; v0.1.15 C105). `money` has no cap: always held. |
 | I15 | `instances.remove` needs browser confirmation and an explicit `deleteData` (default false: service stopped, volumes and backups kept). Core never deletes customer data implicitly. |
 | I16 | Own-infrastructure bridge enrolment (PRD §3.5, J3) is live in opt2 under an "Advanced" panel; there is no Coolify provider (C308: Openship is the own-server engine; own servers pair through the host agent, HOST.md). |
-| I17 | Offers are reviewed data shipped in the signed release index (`-platform`) and verified against the Payment provider (Stripe; Paddle from v0.1.94, `paddlePrice`) at Core start; no env-var offer lists. |
+| I17 | Offers are reviewed data shipped in the signed release index (`-platform`) and verified against the Payment provider (Stripe; Paddle from v0.1.94) at Core start; no env-var offer lists. |
 | I18 | `drafts.validate` exists (owner-cli + browser, read-class): validates a draft against the route table and current state without applying. |
 
 ## v0.1.43 — the workspace views service (LA-1, C232)
