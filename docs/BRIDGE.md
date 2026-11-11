@@ -10,7 +10,7 @@ Scope: what the bridge is and is not, the state it keeps, its two forms, its pub
 | The bridge DOES | The bridge does NOT |
 |---|---|
 | verify every caller (agent session, agent assertion, instance assertion, person ticket, pairing code) | run agents, agent loops or schedules |
-| run `gate()` (CORE §7) on every routed call, for every harness and path | call any model (no LLM, STT, TTS, embedding) |
+| run `gate()` (CORE §7) on every routed call, for every harness and path | call any model (no LLM, STT, TTS, embedding); the ONE provider call is the model list of the key page (§15.2) |
 | run the hook chain (before → context → after) | hold app data, holds, receipts, caps counters or scope assignments (apps do, via the SDK) |
 | forward calls to apps on the private network with grant + call proof | decide run/hold (the app's `authorize()` does) or count anything |
 | serve MCP (tools from grants, skills as resources) | check licences (Core withholds grants/tickets instead) |
@@ -546,7 +546,8 @@ v0.1.92: the page layout and the save scopes of "v0.1.92 — one key per provide
 - Data policy choice: `local` only for a base URL that passes §15.3; `zdr` only for a provider with `zdrOffered: true` and only with the owner's tick "I confirm a zero-data-retention contract with this provider" (stores `zdrAttestedAt`); else `standard`.
 - Embeddings: changing provider, model or `dims` of a set binding warns "Apps must re-index their memory after this change; each app asks you first" before submit (MANIFEST §7.1).
 - Local first (C336 Q3): for a role with a `local` provider choice, local providers are listed first; when the entered base URL passes §15.3 the policy defaults to `local`.
-- No "test" call: the bridge never calls a provider (§1.1). An app that gets a provider error reports it as attention.
+- No "test" call: the bridge never calls a model (§1.1). An app that gets a provider error reports it as attention.
+- Model list (bridge 0.2.18, Martin 2026-11-11): the Model field is a list of what the provider offers, not a typed name. The page script asks `POST /keys?list=1` (action `models_list`, page session + csrf, own rate limit) when a model form opens or its provider, address or key changes. The bridge then makes its ONE provider call: the provider's list-models address (OpenAI-compatible `GET <base>/models`, Anthropic `/v1/models`, Gemini `/v1beta/models`) with the key that setting would use (the provider key or the picked older named key; never a key typed but not saved). Rules: the base URL passes §15.3 first; a link-local, cloud metadata or unspecified host is never called (any scheme); no redirect; 10 s; answer ≤ 4 MB; at most 4 lists at a time. The page gets model names only (each must pass the `model` pattern), filtered to the role; never the key, the provider's status or its error text. Nothing is stored. A provider without a list address (Azure OpenAI deployments, Voyage AI), a failed list and a page without the script use the typed name.
 
 ### 15.3 Data policy check
 One algorithm for every base URL and every "Own hosts" entry. Test data: `packages/spec/examples/local-check.cases.json` (the bridge, SDK and `tb-exec` test against every row).
