@@ -661,6 +661,38 @@ export type PublicHandler = (
   },
 ) => Promise<Response>;
 
+// ── v0.1.95 (SDK-API §23): person UI served by a companion service ──
+/** The header that carries a {@link PersonAssertion} from the SDK to the companion (private network only). */
+export declare const PERSON_ASSERTION_HEADER: "TB-Person";
+/** Seconds a {@link PersonAssertion} is valid after `iat`. */
+export declare const PERSON_ASSERTION_TTL_S: 60;
+/**
+ * `TB-Person` = base64url(JSON(PersonAssertion)) "." base64url(HMAC-SHA256(secret, <first part as ASCII>)).
+ * Minted by the SDK per proxied request (HTTP) or upgrade (WebSocket), after the session check. The companion checks
+ * the MAC in constant time, `v`, `iat <= now + 5` and `now < exp`; it trusts no other identity source.
+ */
+export interface PersonAssertion {
+  v: 1;
+  per: PersonId;
+  ws: WorkspaceId;
+  ins: InstanceId;
+  /** epoch s */
+  iat: number;
+  /** epoch s = iat + PERSON_ASSERTION_TTL_S */
+  exp: number;
+  /** the path prefix the browser sees: "/a/<product>" */
+  base: string;
+  /** unique per assertion (ULID); the companion may refuse a repeat */
+  jti: string;
+}
+export interface UiProxy {
+  /** the companion's private base URL (`http://host:port`), read by the app from its own env (`{{services.<id>.url}}`) */
+  target: string;
+  /** a secret shared with that companion only (a `generate: "secret"` env of the service, read through
+   *  `{{services.<id>.env.<NAME>}}`); at least 32 characters, never logged */
+  secret: string;
+}
+
 // ── App definition ──
 export interface AppEvents {
   agentAdded?(agent: SliceAgent, ctx: EventContext): Promise<void>;
@@ -692,6 +724,8 @@ export interface AppDefinition<A extends string = never> {
    *  Non-null → `AppStatus.attention` and readiness `degraded` (when health is otherwise `ok`). Call `ctx.statusChanged()`
    *  when it changes. */
   attention?(db: Db): Promise<AppAttention | null>;
+  /** v0.1.95 (SDK-API §23): serve the person UI from a companion service instead of `dist/ui`; needs manifest `ui` */
+  uiProxy?: UiProxy;
 }
 export interface App {
   readonly manifest: Manifest;

@@ -2,6 +2,9 @@
 
 Status: v0.1 (Lead · Specs, 2026-10-11). Authority order: PRD-V2 > DECISION-LOG > this file > the per-topic specs. Every other spec in `specs/` MUST agree with this file; if it cannot, it raises the conflict in its "Open questions" section instead of deviating.
 
+## Changelog → v0.1.95 (SDK-API §23: person UI served by a companion; spec 0.1.95)
+- An app may serve its person UI from one of its own companion services (`AppDefinition.uiProxy {target, secret}`). The SDK keeps the session, the CSRF rule and its own `/tb/` routes; every other path under `/a/<product>/`, any method and WebSocket upgrades, goes to the companion with a short-lived HMAC person assertion (`TB-Person`, `PersonAssertion`). SDK-only: no manifest, schema, bridge, Core or Portal change (the bridge already forwards every method and WebSocket upgrade on `/a/<product>/`, BRIDGE §9). Details: SDK-API.md §23.
+
 ## Changelog → v0.1.94 (specs#74: Paddle expand; spec 0.1.94)
 - Expand step of the Stripe → Paddle migration (portal-core ADR-0002, ADR-0003; spec portal-core#83). Additive: the Paddle pieces sit beside Stripe's, every consumer moves over on its own, and the Stripe pieces leave in the contract (specs#75). New route `paddle.webhook` (`POST /paddle/webhook`, auth class `paddle-webhook` = `Paddle-Signature`, raw, rate `webhook`), input `PaddleEvent`; error `webhook_signature_invalid` (401); audit actor kind `payment_provider`; `PaymentProvider`, `OfferPriceChecks`; `Health.commerce.provider` / `.offerPriceChecks` and `AdminHealth.payments` (portal-core#41). Deprecated (removed in specs#75): `stripe.webhook`, `stripe-webhook`, `stripe_signature_invalid`, actor `stripe`, `StripeEvent`, `CheckoutBuyer` / `CheckoutInput.buyer`, `Order.amountDiscount` / `.promotionCode`, every `OrderBusiness` field but `documents` and `acceptedAt` (now optional), `Licence.activeFrom`. Details: PORTAL-API.md "v0.1.94".
 
