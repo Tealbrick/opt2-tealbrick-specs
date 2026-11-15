@@ -5,7 +5,7 @@ import { Ajv2020 } from "ajv/dist/2020.js";
 import { SPEC_VERSION } from "../src/index.ts";
 import { STANDARD_OPERATIONS } from "../src/manifest.ts";
 import { type AccountMe, AUDIT_ACTIONS, type CheckoutInput, type DraftApplyInput, HARNESS_OPTION_IDS, isHarnessOptionId, type Order, type ReleaseIndexEntry, type ReleaseIndexKind, ROUTES, type TermsAcceptInput } from "../src/routes.ts";
-import type { BackupHealth, DynamicHandlers, DynamicHoldView, Health } from "../src/sdk.ts";
+import type { AppDefinition, BackupHealth, DynamicHandlers, DynamicHoldView, Health, PersonAssertion, UiProxy } from "../src/sdk.ts";
 
 const dir = new URL("../schemas/", import.meta.url);
 const load = (f: string) => JSON.parse(readFileSync(new URL(f, dir), "utf8"));
@@ -738,4 +738,12 @@ test("v0.1.94 (Paddle expand, specs#74): Paddle webhook row beside Stripe's; buy
   };
   const commerce: NonNullable<import("../src/routes.ts").Health["commerce"]> = { livemode: false, refusedSessions: 0, lastRefusedAt: null, provider: "paddle", offerPriceChecks: payments.offerPriceChecks };
   assert.equal(commerce.provider, payments.provider);
+});
+
+test("v0.1.95 (SDK-API §23): uiProxy on AppDefinition and the TB-Person assertion shape", () => {
+  const proxy = { target: "http://engine.internal:3000", secret: "x".repeat(48) } satisfies UiProxy;
+  const def: Pick<AppDefinition, "uiProxy"> = { uiProxy: proxy };
+  const a = { v: 1, per: "per_01", ws: "ws_01", ins: "ins_01", iat: 1, exp: 61, base: "/a/kanban", jti: "01J" } as unknown as PersonAssertion;
+  assert.equal(def.uiProxy?.target, proxy.target);
+  assert.equal(a.exp - a.iat, 60);
 });
