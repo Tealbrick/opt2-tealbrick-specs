@@ -234,6 +234,8 @@ export type ErrorCode =
   | "workflow_grant_missing" | "workflow_grant_withdrawn" | "workflow_grants_unsupported" | "workflow_grants_full"
   /** v0.1.89 (C380): 409 `owner_drafts_full`, 409 `owner_drafts_unsupported` (standalone); 409 `agent_offboarded` (`details.offboardedAt`; on reinstate after the window `details.reason` "reinstate_window_closed") */
   | "owner_drafts_full" | "owner_drafts_unsupported" | "agent_offboarded"
+  /** v0.1.96 (BRIDGE §9.5, MANIFEST M-PR-5): 409, a deploy would give the workspace a second socket route (`details.product` = the app that has it) */
+  | "socket_route_conflict"
   | "internal";
 /** CORE §8: the one error envelope. */
 export interface ErrorEnvelope { error: { code: ErrorCode; message: string; requestId: string; details?: Record<string, unknown> } }

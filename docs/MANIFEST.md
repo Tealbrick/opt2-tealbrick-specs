@@ -91,7 +91,7 @@ Keys a service needs are the `settings.keys[]` whose `usedBy` names the service 
 
 `generate: "secret"` ("not ours" per CORE I3, not a credential kind) asks the provider to generate a random value at first deploy (Railway: `${{secret(48)}}`) for credentials between an app and its own services (e.g. a database password). Portal never reads, stores or relays the value. Other containers reference it by `{{services.<id>.env.<NAME>}}`.
 
-Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` (`http://<private host>:<port>`), `{{services.<id>.host}}`, `{{services.<id>.port}}`, `{{services.<id>.env.<NAME>}}`. The deploy recipe omits an entry whose referenced service is not deployed (its `when` is false).
+Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` (`http://<private host>:<port>`), `{{services.<id>.host}}`, `{{services.<id>.port}}`, `{{services.<id>.env.<NAME>}}`, and (v0.1.96, §12 socket route) `{{bridge.socketHost}}` (the host name of the workspace socket origin, no scheme, no port) and `{{bridge.socketUrl}}` (`https://<socket host>`, no path). The two `bridge` templates must be the WHOLE value of an entry, so M-DOC-2 stays true (the manifest holds no literal URL); an app that needs the `wss://` form builds it in code. The deploy recipe omits an entry whose referenced service is not deployed (its `when` is false).
 
 | Rule | Check |
 |---|---|
@@ -104,6 +104,7 @@ Env value templates (the only `{{…}}` forms allowed): `{{services.<id>.url}}` 
 | M-RT-7 | `helper.port` ≠ service `port` → `helper_port`. |
 | M-RT-8 | `when` follows M-ST-3 (enum/boolean fields only). |
 | M-RT-9 | `validateAppFiles` (CI, CLI, v0.1.11): each `build.context` is a directory and each `build.dockerfile` a file under the REPO root, none escaping it (§3) → `build_path_invalid`. |
+| M-RT-10 | v0.1.96: a `{{bridge.socketHost}}` or `{{bridge.socketUrl}}` template is a whole value (no text around it), only in an `env[].value` of the app or of a service, and only when the manifest declares a socket route (§12, M-PR-3) → `env_ref_invalid`. |
 
 ## 5. Operations
 
@@ -299,12 +300,17 @@ The SDK backup runner (inside the app container) runs on `backups.schedule` (5-f
 
 - `artifacts[] {id, version, sha256, url}`: pinned data the app downloads (e.g. a connector catalog). Assets are GitHub release assets of the app repo; the app verifies `sha256` before use.
 - `publicRoutes[] {path, purpose}`: the bridge exposes only these at `https://<bridge>/p/<product><path>`, unauthenticated; the app verifies them (OAuth `state`, provider signature). `oauth_callback` accepts GET; `webhook` accepts POST.
+- `publicRoutes[] {path: "/", purpose: "socket", service, http?, maxConnections?, idleSeconds?, maxBodyMiB?}` (v0.1.96): a socket route. It is NOT served at `/p/<product>`; it is served by the bridge on the socket origin (BRIDGE §9.5) and reaches the companion service `service` (a `runtime.services[]` id) through the SDK (SDK-API §24). `service` authenticates its own clients; the bridge adds no check. `http: true` also lets plain HTTP requests through (default false: WebSocket upgrades only). `maxConnections` 1 to 2000 (default 500), `idleSeconds` 60 to 3600 (default 600), `maxBodyMiB` 1 to 128 (default 16; only with `http: true`). The limits are `SOCKET_ROUTE_LIMITS`.
 - `ui {launchPath, configurePath?}`: paths under `https://<bridge>/a/<product>/`. A launch ticket opens `launchPath` (double-click on the canvas opens `configurePath` if present). This is the only settings/frontend entry the GUI needs; a new app needs zero GUI change. No `ui` → the app has no person UI: no double-click, no Configure, no launch ticket (the GUI hides them).
 
 | Rule | Check |
 |---|---|
 | M-AR-1 | Artifact ids unique; `url` starts with `<source.repo>/releases/download/` → `artifact_invalid`. |
 | M-PR-1 | Public route paths unique → `route_duplicate`. |
+| M-PR-3 | v0.1.96: a socket route has `path` `/` and a `service`; `http`, `maxConnections`, `idleSeconds`, `maxBodyMiB` exist only on a socket route and stay in `SOCKET_ROUTE_LIMITS`; `maxBodyMiB` needs `http: true`; a manifest with a socket route has no `viewer` route → `socket_route_invalid`. |
+| M-PR-4 | `service` names a declared `runtime.services[]` id, and that service has an `env` entry whose whole value is `{{services.<id>.url}}` on the APP (`runtime.env`; the SDK reads its target from it, SDK-API §24) → `socket_service_unknown`. |
+| M-PR-5 | At most ONE socket route per manifest → `socket_route_duplicate`. (Per workspace: Core, `socket_route_conflict`, CORE §8.) |
+| M-PR-6 | A manifest with a socket route lists `socket_origin` in `requires.bridgeCaps` → `socket_cap_required`. |
 
 ## 13. One validator package
 
@@ -515,3 +521,9 @@ their summary (every detail read is authorized per call).
 - Consumers MUST NOT grant any trust-based permission (for example Knowledge Relationships `reply` trust) to an author whose `verified` is absent or `none`.
 - A producer MUST NOT set `platform_id` for an email or phone handle, and MUST set `dkim_spf_aligned` only after its own check.
 - Fixture `examples/contracts/messages.1.json` has one valid row per value and three invalid values. Producers (Connect) and consumers (Observer, Knowledge) adopt this in their own releases.
+
+## v0.1.96 — socket route (`publicRoutes[].purpose: "socket"`; BRIDGE §9.5; SDK-API §24)
+- `PUBLIC_ROUTE_PURPOSES` gains `"socket"`. New optional members of `publicRoutes[]` (socket route only): `service`, `http`, `maxConnections`, `idleSeconds`, `maxBodyMiB`. The schema enforces every shape rule it can express (path `/`, `service` required, members only on a socket route, ranges, `maxBodyMiB` needs `http: true`, at most one socket route, no viewer route beside it, `requires.bridgeCaps` has `socket_origin`). The validator adds M-PR-4 and M-RT-10 (they need the service list). New codes: `socket_route_invalid`, `socket_service_unknown`, `socket_route_duplicate`, `socket_cap_required` (`SOCKET_ROUTE_RULES`).
+- Templates `{{bridge.socketHost}}` and `{{bridge.socketUrl}}` (§4): whole value only; rendered by Core (or the box, HOST.md, once it learns the socket host) at deploy.
+- A manifest that uses `purpose: "socket"` needs manifest validator and schema from spec 0.1.96 on (strict schema): its release states `requires.bridge` and `requires.bridgeCaps: ["socket_origin"]`.
+- Fixture `examples/socket-route.cases.json`: one row per case with the expected schema result and, for a refusal, the rule and code.

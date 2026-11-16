@@ -693,6 +693,24 @@ export interface UiProxy {
   secret: string;
 }
 
+// ── v0.1.96 (SDK-API §24): socket forwarder ──
+/** What the SDK serves for a manifest socket route (`/s/<product>/*`); the bridge side is bridge.ts `SOCKET_ORIGIN`. */
+export const SOCKET_FORWARD = {
+  /** the app cap the SDK reports (`APP_CAPS`) when it serves §24 */
+  cap: "socket_forward",
+  /** mount prefix on the app listener, private network only: `/s/<product>/*` */
+  pathPrefix: "/s/",
+  /** the header whose value becomes the service's `Host` */
+  hostFrom: "x-forwarded-host",
+  /** no answer from the service to the request or upgrade within this many seconds → 503 `socket_unavailable` */
+  serviceWaitS: 15,
+  retryAfterS: 5,
+  /** codes the SDK answers with (boot errors: `socket_target_missing`, `socket_target_invalid`) */
+  errors: { unavailable: "socket_unavailable", hostMissing: "socket_host_missing", targetMissing: "socket_target_missing", targetInvalid: "socket_target_invalid" },
+  /** request headers removed before the service sees them (names lower case; `prefixes` match the start of the name); `authorization` stays */
+  stripRequestHeaders: { names: ["cookie", "forwarded", "x-real-ip"], prefixes: ["tb-", "proxy-"] },
+} as const;
+
 // ── App definition ──
 export interface AppEvents {
   agentAdded?(agent: SliceAgent, ctx: EventContext): Promise<void>;

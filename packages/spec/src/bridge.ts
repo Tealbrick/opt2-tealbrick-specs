@@ -475,7 +475,9 @@ export type AppState = "ok" | "degraded" | "down" | "needs_keys" | "unclaimed" |
 /** v0.1.89 (C380): + `owner_drafts` = the bridge implements BRIDGE §8.8: the three relays to Core for an app's stop request.
  *  v0.1.88 (C378): + `acting_agents` = the bridge implements BRIDGE §8.7 in full: context `tb.acting`, `POST /tb/v1/acting-tickets`,
  *  `CallEnvelope.acting`, `POST /tb/v1/policy-recheck`. Without it the SDK refuses those calls locally (`bridge_cap_missing`) and a policy app reads every app call as having no acting agent. */
-export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents", "owner_drafts"] as const;
+/** v0.1.96: + `socket_origin` = the bridge implements BRIDGE §9.5: the third public origin (`TB_SOCKET_PUBLIC_URL`) that passes
+ *  WebSocket (and, with `http: true`, HTTP) bytes to the app's `/s/<product>/*` forwarder. Declared only when that env is set. */
+export const BRIDGE_CAPS = ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents", "owner_drafts", "socket_origin"] as const;
 /** Spec follow-up (QA-SPEC49-11, C349): the largest signed config (compact JWS, bytes) Core emits for an owner change. A change
  *  that would pass it is refused (`validation_failed`, details.reason `config_too_large`); kill-path changes (pause, resume,
  *  revoke, grant or connection removal) are never refused and only shrink or keep the size. Headroom to the bridge's 4 MB
@@ -570,6 +572,9 @@ export interface StatusReport {
     /** v0.1.82 (C373 P1): AppStatus.caps as the app instance last reported it (claim, then every push), normalised by the
      *  APP_CAPS rules (unknown entries dropped; a malformed value → omitted = none). Core's workflow-grant gate reads it. */
     caps?: AppCap[];
+    /** v0.1.96 (BRIDGE §9.5): socket route counters since the previous report: `open` = tunnels open now, `refused` = new
+     *  upgrades and requests refused by a limit or a pause. Counts only. Omitted when the app has no socket route. */
+    sockets?: { open: number; refused: number };
   }[];
   /** presence booleans only — never values */
   keys: { name: string; ins: InstanceId; set: boolean }[];
@@ -976,7 +981,8 @@ export type ProofClaimCap = (typeof PROOF_CLAIM_CAPS)[number];
  *  the app as a TARGET verifies the `wfl` claim (its verifier knows it, CREDENTIALS v0.1.82). Core mints a wfl grant only when
  *  the bridge cap and BOTH app caps are present. A cap can only turn the gate ON: it never widens a grant (C5 S1-1, CORE
  *  v0.1.82 sticky gate). */
-export const APP_CAPS = ["person_op", "app_workflow_grants", "grant_wfl"] as const;
+/** v0.1.96: `socket_forward` = the app serves the SDK-API §24 forwarder `/s/<product>/*` (needs a manifest socket route). */
+export const APP_CAPS = ["person_op", "app_workflow_grants", "grant_wfl", "socket_forward"] as const;
 export type AppCap = (typeof APP_CAPS)[number];
 export const APP_CAPS_LIMITS = { maxEntries: 16, maxLength: 32 } as const;
 /** v0.1.70 (C354): the bridge's fixed refusals in a person-op result (status 409, body `{error: {code}}`), nothing forwarded. */
@@ -1394,3 +1400,34 @@ export interface BridgeIdentityRecord {
 
 // Re-exported refs so implementers import bridge-facing identity types from one place.
 export type { AgentRef, BridgeRef, InstanceRef };
+
+/** v0.1.96 (BRIDGE §9.5): the cap name of the socket origin (one of BRIDGE_CAPS). */
+export const SOCKET_ORIGIN_CAP = "socket_origin" as const;
+/** v0.1.96 (BRIDGE §9.5 item 5, item 4): fixed numbers and header rules of the socket origin. Per route limits (`maxConnections`,
+ *  `idleSeconds`, `maxBodyMiB`) are manifest `SOCKET_ROUTE_LIMITS`. */
+export const SOCKET_ORIGIN = {
+  /** the app path prefix the SDK mounts: `/s/<product>` + the path the client asked for (SDK-API §24) */
+  forwardPrefix: "/s/",
+  /** open sockets per client address, counted apart from the main listener */
+  openPerClient: 20,
+  /** new upgrades per client per minute (over → 429) */
+  upgradesPerClientPerMin: 30,
+  /** requests per client per minute when the route has `http: true` (over → 429) */
+  httpPerClientPerMin: 120,
+  /** the upgrade handshake must finish within this many seconds */
+  handshakeS: 15,
+  requestLineMaxBytes: 8192,
+  headersMaxBytes: 16384,
+  /** `Retry-After` of a 503 (app or service not ready, route full) */
+  retryAfterS: 5,
+  /** open tunnels of a paused instance close within this many seconds of the config swap */
+  pauseCloseS: 5,
+  /** request headers the bridge removes before it forwards (names lower case; `prefixes` match the start of the name) */
+  stripRequestHeaders: { names: ["cookie", "forwarded", "x-real-ip"], prefixes: ["tb-", "x-forwarded-", "proxy-"] },
+  /** request headers that stay although §9.1 and §9.2 strip them */
+  keepRequestHeaders: ["authorization"],
+  /** request headers the bridge sets (one value each; a client value never survives) */
+  setRequestHeaders: ["x-forwarded-proto", "x-forwarded-host", "x-forwarded-for"],
+  /** the paths the bridge answers itself on the socket origin */
+  ownPaths: ["/healthz", "/readyz"],
+} as const;

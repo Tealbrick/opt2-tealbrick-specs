@@ -354,7 +354,7 @@ test("v0.1.83 (C373): documents/1 — text cap, deleted rows, page cap, https-on
 
 test("v0.1.43 (LA-1, LR-1): viewer route purpose, workflow listing, slice viewUrl, StatusReport.views", async () => {
   const m = await import("../src/manifest.ts");
-  assert.deepEqual([...m.PUBLIC_ROUTE_PURPOSES], ["oauth_callback", "webhook", "viewer"]);
+  assert.deepEqual([...m.PUBLIC_ROUTE_PURPOSES], ["oauth_callback", "webhook", "viewer", "socket"]); // + socket (v0.1.96)
   assert.deepEqual([...m.OPERATION_LISTINGS], ["default", "workflow"]);
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
@@ -566,7 +566,7 @@ test("v0.1.57 (C274c/C274d): manifest events, the reserved tb. namespace, the ev
 
   const { BRIDGE_CAPS, BRIDGE_INTERNAL_PATHS, EVENT_MCP_METHODS, PLATFORM_EVENTS } = await import("../src/bridge.ts");
   // v0.1.63 adds model_roles (BRIDGE §15); v0.1.64 (C326) adds person_ops (BRIDGE §16)
-  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents", "owner_drafts"]); // + hook_tool, secret_output (C336), hold_families (C354a), app_hold_status, app_call_context (C367), app_workflow_grants (C373) + hook_recipients (C373 G-6)
+  assert.deepEqual([...BRIDGE_CAPS], ["owner_rows", "events", "model_roles", "person_ops", "hook_tool", "secret_output", "hold_families", "app_hold_status", "app_call_context", "app_workflow_grants", "hook_recipients", "acting_agents", "owner_drafts", "socket_origin"]); // + hook_tool, secret_output (C336), hold_families (C354a), app_hold_status, app_call_context (C367), app_workflow_grants (C373) + hook_recipients (C373 G-6)
   assert.equal(BRIDGE_INTERNAL_PATHS.events, "/tb/v1/events");
   assert.deepEqual(Object.values(EVENT_MCP_METHODS), ["tealbrick/events/list", "tealbrick/events/poll", "tealbrick/events/stream", "notifications/tealbrick/event"]);
   for (const [type, d] of Object.entries(PLATFORM_EVENTS)) {
@@ -746,4 +746,59 @@ test("v0.1.95 (SDK-API §23): uiProxy on AppDefinition and the TB-Person asserti
   const a = { v: 1, per: "per_01", ws: "ws_01", ins: "ins_01", iat: 1, exp: 61, base: "/a/kanban", jti: "01J" } as unknown as PersonAssertion;
   assert.equal(def.uiProxy?.target, proxy.target);
   assert.equal(a.exp - a.iat, 60);
+});
+
+test("v0.1.96 (socket origin): socket route shape, cases, caps, limits, templates", async () => {
+  const m = await import("../src/manifest.ts");
+  const b = await import("../src/bridge.ts");
+  const sdk = await import("../src/sdk.ts");
+  assert.deepEqual([...m.PUBLIC_ROUTE_PURPOSES], ["oauth_callback", "webhook", "viewer", "socket"]);
+  assert.deepEqual(m.SOCKET_ROUTE_LIMITS, { path: "/", maxConnections: { default: 500, min: 1, max: 2000 }, idleSeconds: { default: 600, min: 60, max: 3600 }, maxBodyMiB: { default: 16, min: 1, max: 128 } });
+  assert.deepEqual({ ...m.SOCKET_ROUTE_RULES }, { "M-PR-3": "socket_route_invalid", "M-PR-4": "socket_service_unknown", "M-PR-5": "socket_route_duplicate", "M-PR-6": "socket_cap_required", "M-RT-10": "env_ref_invalid" });
+  assert.deepEqual({ ...m.BRIDGE_ENV_TEMPLATES }, { socketHost: "{{bridge.socketHost}}", socketUrl: "{{bridge.socketUrl}}" });
+  assert.ok((b.BRIDGE_CAPS as readonly string[]).includes(b.SOCKET_ORIGIN_CAP));
+  assert.equal(b.SOCKET_ORIGIN_CAP, "socket_origin");
+  assert.ok((b.APP_CAPS as readonly string[]).includes(sdk.SOCKET_FORWARD.cap));
+  assert.equal(b.SOCKET_ORIGIN.forwardPrefix, sdk.SOCKET_FORWARD.pathPrefix);
+  assert.equal(b.SOCKET_ORIGIN.retryAfterS, sdk.SOCKET_FORWARD.retryAfterS);
+  // the bridge keeps Authorization (9.1 and 9.2 strip it) and never lets a client X-Forwarded-* through; the SDK strips no X-Forwarded-*
+  assert.deepEqual([...b.SOCKET_ORIGIN.keepRequestHeaders], ["authorization"]);
+  assert.ok(b.SOCKET_ORIGIN.stripRequestHeaders.prefixes.includes("x-forwarded-"));
+  assert.ok(b.SOCKET_ORIGIN.stripRequestHeaders.prefixes.includes("tb-"));
+  assert.ok(!sdk.SOCKET_FORWARD.stripRequestHeaders.prefixes.includes("x-forwarded-" as never));
+  assert.ok(!(b.SOCKET_ORIGIN.stripRequestHeaders.names as readonly string[]).includes("authorization"));
+  assert.ok(!(sdk.SOCKET_FORWARD.stripRequestHeaders.names as readonly string[]).includes("authorization"));
+  const status: NonNullable<import("../src/bridge.ts").StatusReport["apps"][number]["sockets"]> = { open: 3, refused: 1 };
+  assert.equal(status.open + status.refused, 4);
+  const code: import("../src/routes.ts").ErrorCode = "socket_route_conflict";
+  assert.equal(code, "socket_route_conflict");
+
+  const ajv = new Ajv2020({ strict: false, allErrors: true });
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) ajv.addSchema(load(f));
+  const validate = ajv.getSchema(load("manifest.schema.json").$id);
+  assert.ok(validate);
+  const ex = JSON.parse(readFileSync(new URL("../examples/notes.manifest.json", import.meta.url), "utf8"));
+  const doc = JSON.parse(readFileSync(new URL("../examples/socket-route.cases.json", import.meta.url), "utf8")) as {
+    cases: { name: string; set: Record<string, unknown>; serviceEnvAdd?: unknown[]; appEnvAdd?: unknown[]; schemaValid: boolean; rule?: string; code?: string }[];
+  };
+  assert.ok(doc.cases.length >= 20);
+  const rules = m.SOCKET_ROUTE_RULES as Record<string, string>;
+  let refusedByValidatorOnly = 0;
+  for (const c of doc.cases) {
+    const manifest = structuredClone(ex);
+    Object.assign(manifest, c.set);
+    if (c.serviceEnvAdd) manifest.runtime.services[0].env = [...(manifest.runtime.services[0].env ?? []), ...c.serviceEnvAdd];
+    if (c.appEnvAdd) manifest.runtime.env = [...manifest.runtime.env, ...c.appEnvAdd];
+    assert.equal(validate(manifest), c.schemaValid, `${c.name}: ${JSON.stringify(validate.errors)}`);
+    if (c.rule && c.rule !== "schema") assert.equal(rules[c.rule], c.code, c.name);
+    if (c.rule === "schema") assert.equal(c.code, "schema_invalid", c.name);
+    if (c.schemaValid && c.rule) refusedByValidatorOnly++;
+    // a refusal always names its rule and code; an accepted case names neither
+    assert.equal(c.rule === undefined, c.code === undefined, c.name);
+    if (c.schemaValid && !c.rule) assert.ok(!c.name.startsWith("a "), c.name);
+  }
+  assert.equal(refusedByValidatorOnly, 3);
+  assert.ok(doc.cases.some((c) => c.schemaValid && !c.rule));
+  const socket: import("../src/manifest.ts").PublicRoute = { path: "/", purpose: "socket", service: "search", http: true, maxConnections: 500, idleSeconds: 600, maxBodyMiB: 16 };
+  assert.equal(socket.purpose, "socket");
 });

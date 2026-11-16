@@ -22,7 +22,7 @@ test("isAgenticHarnessOptionId: true for each agentic id only", () => {
   for (const id of HARNESS_OPTION_IDS) assert.equal(isAgenticHarnessOptionId(id), (AGENTIC_HARNESS_OPTION_IDS as readonly string[]).includes(id), id);
 });
 
-test("SPEC_VERSION 0.1.95 matches package.json", () => {
-  assert.equal(SPEC_VERSION, "0.1.95");
+test("SPEC_VERSION 0.1.96 matches package.json", () => {
+  assert.equal(SPEC_VERSION, "0.1.96");
   assert.equal(SPEC_VERSION, JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
 });

@@ -66,7 +66,23 @@
     "unlocks": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/unlock" } },
     "backups": { "$ref": "#/$defs/backups" },
     "artifacts": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/artifact" } },
-    "publicRoutes": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/publicRoute" } },
+    "publicRoutes": {
+      "type": "array",
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/publicRoute" },
+      "description": "v0.1.96: at most one socket route (M-PR-5) and none beside a viewer route (M-PR-3).",
+      "not": {
+        "anyOf": [
+          { "contains": { "required": ["purpose"], "properties": { "purpose": { "const": "socket" } } }, "minContains": 2 },
+          {
+            "allOf": [
+              { "contains": { "required": ["purpose"], "properties": { "purpose": { "const": "socket" } } } },
+              { "contains": { "required": ["purpose"], "properties": { "purpose": { "const": "viewer" } } } }
+            ]
+          }
+        ]
+      }
+    },
     "ui": { "$ref": "#/$defs/ui" },
     "contracts": {
       "type": "object",
@@ -84,6 +100,21 @@
       "items": { "$ref": "#/$defs/eventDecl" }
     }
   },
+  "allOf": [
+    {
+      "description": "v0.1.96 (M-PR-6): a manifest with a socket route needs the bridge cap socket_origin in requires.bridgeCaps.",
+      "if": {
+        "required": ["publicRoutes"],
+        "properties": { "publicRoutes": { "contains": { "required": ["purpose"], "properties": { "purpose": { "const": "socket" } } } } }
+      },
+      "then": {
+        "required": ["requires"],
+        "properties": {
+          "requires": { "required": ["bridgeCaps"], "properties": { "bridgeCaps": { "contains": { "const": "socket_origin" } } } }
+        }
+      }
+    }
+  ],
   "$defs": {
     "contractId": { "enum": ["messages/1", "fleet.directory_feed/1", "documents/1"] },
     "productId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,31}$" },
@@ -583,7 +614,22 @@
       "required": ["path", "purpose"],
       "properties": {
         "path": { "$ref": "#/$defs/appPath" },
-        "purpose": { "enum": ["oauth_callback", "webhook", "viewer"] }
+        "purpose": { "enum": ["oauth_callback", "webhook", "viewer", "socket"] },
+        "service": { "type": "string", "pattern": "^(?!tb-)[a-z][a-z0-9-]{1,31}$", "description": "v0.1.96 (socket route only): the runtime.services[] id that receives the bytes (M-PR-4)." },
+        "http": { "type": "boolean", "description": "v0.1.96 (socket route only): also pass plain HTTP; default false = WebSocket upgrades only." },
+        "maxConnections": { "type": "integer", "minimum": 1, "maximum": 2000, "description": "v0.1.96 (socket route only): open sockets for this route; default 500 (SOCKET_ROUTE_LIMITS)." },
+        "idleSeconds": { "type": "integer", "minimum": 60, "maximum": 3600, "description": "v0.1.96 (socket route only): close a tunnel with no byte for this long; default 600." },
+        "maxBodyMiB": { "type": "integer", "minimum": 1, "maximum": 128, "description": "v0.1.96 (socket route only, needs http: true): largest request body in MiB; default 16." }
+      },
+      "if": { "required": ["purpose"], "properties": { "purpose": { "const": "socket" } } },
+      "then": {
+        "required": ["service"],
+        "properties": { "path": { "const": "/" } },
+        "if": { "required": ["http"], "properties": { "http": { "const": true } } },
+        "else": { "properties": { "maxBodyMiB": false } }
+      },
+      "else": {
+        "properties": { "service": false, "http": false, "maxConnections": false, "idleSeconds": false, "maxBodyMiB": false }
       }
     },
     "ui": {
