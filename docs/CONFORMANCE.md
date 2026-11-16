@@ -442,3 +442,22 @@ Gated by the bridge's reported cap `owner_drafts`, never by version; a bridge wi
 ## v0.1.90 rows (C392 L0, C395: harness package delivery; the CLI and Knowledge PRs add them)
 The canonical list, with the check text, is HARNESS-HOOKS §6 (real-harness rows, HH-0d). Same ids, no second naming:
 H-W1-HP-1 offer · H-W1-HP-2 runtime mapping · H-W1-HP-3 runtime missing from `runtimes` · H-W1-HP-4 owner confirmation per agent (with the offline line) · H-W1-HP-5 allow-list refusal · H-W1-HP-6 tag check · H-W1-HP-7 downgrade (floor and installed tag) · H-W1-HP-8 offline tarball sha256 · H-W1-HP-9 own home · H-W1-HP-10 malformed document · H-W1-HP-11 unknown values · H-W1-HP-12 the op takes no input · H-W1-HP-13 kill switch · H-W1-HP-14 forget/erase text · H-W1-HH-5.1 … H-W1-HH-5.4 the HH-5 exception points.
+
+## v0.1.96 rows (socket origin; the conformance PR adds them)
+Gated by the bridge's reported cap `socket_origin` (BRIDGE) and the app's reported cap `socket_forward` (SDK); a target without it skips the group (noted, not failed). The bridge target sets `TB_SOCKET_PUBLIC_URL` (a third host name that reaches the same public listener) and sends every socket request with that `Host`.
+- B-SO (bridge, BRIDGE §9.5), against a fake companion service that echoes the request line, headers and frames.
+  - `B-SO-1`: an upgrade on the socket origin reaches the service with `Host` = the socket host.
+  - `B-SO-2`: `Authorization` arrives; a client `Cookie`, `TB-*`, `Forwarded`, `X-Forwarded-*`, `X-Real-IP` and `Proxy-*` do not; `X-Forwarded-Proto` is `https`, `X-Forwarded-Host` the socket host, `X-Forwarded-For` one value set by the bridge.
+  - `B-SO-3`: the 21st open socket of one client address → 429.
+  - `B-SO-4`: a tunnel idle for `idleSeconds` is closed; a byte in either direction resets the timer.
+  - `B-SO-5`: a pause in a new config closes open tunnels within 5 s and new upgrades answer 503 `paused`.
+  - `B-SO-6`: the main origin and the keys origin answer 404 for the socket route; the socket origin answers 404 for `/mcp`, `/oauth/*`, `/keys`, `/a/*`, `/p/*`.
+  - `B-SO-7`: the bridge refuses to start when `TB_SOCKET_PUBLIC_URL` has the host of `TB_PUBLIC_URL` or `TB_KEYS_PUBLIC_URL`.
+  - `B-SO-8`: without `http: true` a plain `GET` and a `POST` → 404; with it, a body over `maxBodyMiB` → 413.
+- A-SO (SDK, SDK-API §24).
+  - `A-SO-1`: `/s/<product>/x?y=1` reaches the service as `/x?y=1`; method, body and `Authorization` unchanged; `Host` = `X-Forwarded-Host`; a request without `X-Forwarded-Host` → 400 `socket_host_missing`.
+  - `A-SO-2`: an upgrade is a raw pipe in both directions (text and binary frames, close).
+  - `A-SO-3`: the service down → 503 `socket_unavailable` + `Retry-After: 5`.
+  - `A-SO-4`: boot errors `socket_target_missing`, `socket_target_invalid`; no socket route → `/s/…` is 404 and `socket_forward` is not in `caps`.
+- M-SO (manifest validator): every row of `examples/socket-route.cases.json` gives its expected result, rule and code.
+

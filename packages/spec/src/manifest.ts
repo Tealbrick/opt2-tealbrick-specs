@@ -42,7 +42,28 @@ export const VOLUME_PURPOSES = ["data", "backup"] as const;
 /** v0.1.43 (LA-1, C232): + `viewer` — a prefix route served ONLY on the workspace views service origin (tb-views), never on
  *  the bridge main or keys origin. MANIFEST M-PR-2: at most one viewer route, path `/v`; the segment `_d` right after
  *  `/v/<product>/` is reserved for untrusted documents (sandbox CSP enforced by tb-views). */
-export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer"] as const;
+/** v0.1.96 (BRIDGE §9.5): + `socket` — a route served ONLY on the workspace socket origin (`TB_SOCKET_PUBLIC_URL`), never at
+ *  `/p/<product>`; it reaches the companion service named by `service`. MANIFEST M-PR-3 to M-PR-6, M-RT-10. */
+export const PUBLIC_ROUTE_PURPOSES = ["oauth_callback", "webhook", "viewer", "socket"] as const;
+/** v0.1.96 (MANIFEST §12): bounds and defaults of the optional members of a socket route. `maxBodyMiB` needs `http: true`. */
+export const SOCKET_ROUTE_LIMITS = {
+  /** the only valid `path` of a socket route (a prefix: every path of the socket origin belongs to it) */
+  path: "/",
+  maxConnections: { default: 500, min: 1, max: 2000 },
+  idleSeconds: { default: 600, min: 60, max: 3600 },
+  maxBodyMiB: { default: 16, min: 1, max: 128 },
+} as const;
+/** v0.1.96: the validator rules and codes of a socket route (MANIFEST §12 / §4). `socket_route_conflict` (two socket routes in
+ *  one workspace) is a Core deploy error, not a manifest issue (routes.ts `ErrorCode`). */
+export const SOCKET_ROUTE_RULES = {
+  "M-PR-3": "socket_route_invalid",
+  "M-PR-4": "socket_service_unknown",
+  "M-PR-5": "socket_route_duplicate",
+  "M-PR-6": "socket_cap_required",
+  "M-RT-10": "env_ref_invalid",
+} as const;
+/** v0.1.96 (MANIFEST §4, M-RT-10): the env templates that name the workspace socket origin; each must be the whole `env[].value`. */
+export const BRIDGE_ENV_TEMPLATES = { socketHost: "{{bridge.socketHost}}", socketUrl: "{{bridge.socketUrl}}" } as const;
 /** v0.1.43 (LR-1, C234): `workflow` = an agent op that is listed in tools/list and passes gate() ONLY when the grant's `wf`
  *  names it (machine ops). `default` (or absent) = today's rule. */
 export const OPERATION_LISTINGS = ["default", "workflow"] as const;
@@ -594,6 +615,16 @@ export interface Artifact {
 export interface PublicRoute {
   path: string;
   purpose: PublicRoutePurpose;
+  /** v0.1.96, `purpose: "socket"` only: the `runtime.services[]` id that receives the bytes (M-PR-4) */
+  service?: string;
+  /** v0.1.96, socket route only: also pass plain HTTP (default false = WebSocket upgrades only) */
+  http?: boolean;
+  /** v0.1.96, socket route only: open sockets for this route (SOCKET_ROUTE_LIMITS) */
+  maxConnections?: number;
+  /** v0.1.96, socket route only: close a tunnel with no byte for this long (SOCKET_ROUTE_LIMITS) */
+  idleSeconds?: number;
+  /** v0.1.96, socket route only, needs `http: true`: largest request body in MiB (SOCKET_ROUTE_LIMITS) */
+  maxBodyMiB?: number;
 }
 
 export interface Ui {

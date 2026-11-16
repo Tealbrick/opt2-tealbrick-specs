@@ -1,0 +1,470 @@
+{
+  "description": "v0.1.96 (MANIFEST \u00a712 M-PR-3 to M-PR-6, \u00a74 M-RT-10): socket route cases. `set` replaces top-level members of examples/notes.manifest.json (its service `search` is the declared service); `serviceEnvAdd` / `appEnvAdd` append env entries to service `search` / to runtime.env. `schemaValid` = the result of manifest.schema.json. `rule` + `code` = the refusal the manifest validator (@opt2-tealbrick/manifest) gives; absent = the manifest is accepted. A case with `schemaValid: true` and a rule is refused by the validator only.",
+  "cases": [
+    {
+      "name": "minimal socket route",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "name": "full socket route beside a webhook, template in a service env",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/inbound/email",
+            "purpose": "webhook"
+          },
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "http": true,
+            "maxConnections": 2000,
+            "idleSeconds": 60,
+            "maxBodyMiB": 128
+          }
+        ],
+        "requires": {
+          "bridge": "0.1.40",
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "serviceEnvAdd": [
+        {
+          "name": "RELAY_URL",
+          "value": "{{bridge.socketUrl}}"
+        },
+        {
+          "name": "RELAY_HOST",
+          "value": "{{bridge.socketHost}}"
+        }
+      ],
+      "schemaValid": true
+    },
+    {
+      "name": "http false and no maxBodyMiB",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "http": false,
+            "maxConnections": 1,
+            "idleSeconds": 3600
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": true
+    },
+    {
+      "name": "path is not /",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/ws",
+            "purpose": "socket",
+            "service": "search"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "socket route without service",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "service on a webhook route",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/inbound/email",
+            "purpose": "webhook",
+            "service": "search"
+          }
+        ]
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "http on a webhook route",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/inbound/email",
+            "purpose": "webhook",
+            "http": true
+          }
+        ]
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "maxBodyMiB without http",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "maxBodyMiB": 16
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "maxBodyMiB with http false",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "http": false,
+            "maxBodyMiB": 16
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "maxConnections 0",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "maxConnections": 0
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "maxConnections 2001",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "maxConnections": 2001
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "idleSeconds 59",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "idleSeconds": 59
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "idleSeconds 3601",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "idleSeconds": 3601
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "maxBodyMiB 129",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "http": true,
+            "maxBodyMiB": 129
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "an unknown member on a socket route",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search",
+            "origin": "x"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "schema",
+      "code": "schema_invalid"
+    },
+    {
+      "name": "a socket route beside a viewer route",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/v",
+            "purpose": "viewer"
+          },
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-3",
+      "code": "socket_route_invalid"
+    },
+    {
+      "name": "service id not declared",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "relay"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": true,
+      "rule": "M-PR-4",
+      "code": "socket_service_unknown"
+    },
+    {
+      "name": "two socket routes",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search"
+          },
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-5",
+      "code": "socket_route_duplicate"
+    },
+    {
+      "name": "no requires",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search"
+          }
+        ]
+      },
+      "schemaValid": false,
+      "rule": "M-PR-6",
+      "code": "socket_cap_required"
+    },
+    {
+      "name": "requires without the cap",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "socket",
+            "service": "search"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "secret_output"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "M-PR-6",
+      "code": "socket_cap_required"
+    },
+    {
+      "name": "purpose misspelt",
+      "set": {
+        "publicRoutes": [
+          {
+            "path": "/",
+            "purpose": "sockets",
+            "service": "search"
+          }
+        ],
+        "requires": {
+          "bridgeCaps": [
+            "socket_origin"
+          ]
+        }
+      },
+      "schemaValid": false,
+      "rule": "schema",
+      "code": "schema_invalid"
+    },
+    {
+      "name": "socket template without a socket route",
+      "set": {},
+      "serviceEnvAdd": [
+        {
+          "name": "RELAY_URL",
+          "value": "{{bridge.socketUrl}}"
+        }
+      ],
+      "schemaValid": true,
+      "rule": "M-RT-10",
+      "code": "env_ref_invalid"
+    },
+    {
+      "name": "socket template in the app env without a socket route",
+      "set": {},
+      "appEnvAdd": [
+        {
+          "name": "RELAY_HOST",
+          "value": "{{bridge.socketHost}}"
+        }
+      ],
+      "schemaValid": true,
+      "rule": "M-RT-10",
+      "code": "env_ref_invalid"
+    }
+  ]
+}
